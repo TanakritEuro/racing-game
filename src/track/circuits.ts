@@ -10,6 +10,7 @@ export const TEST_CIRCUIT: TrackDef = {
   name: 'Proving Ground',
   width: 12,
   runoff: { width: 8, surface: 'grass' },
+  scenery: { seed: 3, trees: 500, pits: { from: 40, to: 200, side: 'left' } },
   // Inside each corner, and on the outside of its exit.
   kerbs: [
     { from: 288, to: 328, side: 'left' },
@@ -66,6 +67,16 @@ export const HARROWMERE: TrackDef = withCornerKerbs(
     width: 13,
     runoff: { width: 15, surface: 'grass' },
     terrain: { hills: 12, seed: 7 },
+    scenery: {
+      seed: 7,
+      trees: 1600,
+      pits: { from: 150, to: 450, side: 'left' },
+      grandstands: [
+        { from: 120, to: 220, side: 'right' },
+        { from: 300, to: 400, side: 'right' },
+        { from: 1000, to: 1080, side: 'left' },
+      ],
+    },
     points: [
       { x: 0, z: 0, y: 0 },
       { x: 400, z: 0, y: 1 },
@@ -107,6 +118,16 @@ export const SALTMARSH: TrackDef = withHairpinGravel(
       width: 10,
       runoff: { width: 10, surface: 'grass' },
       terrain: { hills: 1.5, seed: 11 },
+      scenery: {
+        seed: 11,
+        trees: 350,
+        pits: { from: 20, to: 260, side: 'left' },
+        grandstands: [
+          { from: 40, to: 130, side: 'right' },
+          { from: 420, to: 480, side: 'left' },
+          { from: 1590, to: 1660, side: 'left' },
+        ],
+      },
       points: [
         { x: 150, z: 0 },
         { x: 350, z: 0 },
@@ -171,6 +192,15 @@ export const RIDGEBACK: TrackDef = withHairpinGravel(
       width: 12,
       runoff: { width: 12, surface: 'grass' },
       terrain: { hills: 25, seed: 23 },
+      scenery: {
+        seed: 23,
+        trees: 2600,
+        pits: { from: 100, to: 400, side: 'left' },
+        grandstands: [
+          { from: 150, to: 260, side: 'right' },
+          { from: 2300, to: 2420, side: 'left' },
+        ],
+      },
       points: scaled(1.2, [
         { x: 0, z: 0, y: 0 },
         { x: 300, z: 0, y: 2 },

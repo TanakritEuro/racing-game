@@ -7,6 +7,7 @@
 // grade), "left" across the road (rolled by the banking) and "up" out of the road.
 // Everything you drive on is a strip across that frame (track/geometry.ts).
 
+import type { SceneryDef } from './scenery';
 import type { TerrainDef } from './terrain';
 
 export interface ControlPoint {
@@ -46,6 +47,8 @@ export interface TrackDef {
   gravel?: readonly (Span & { width?: number })[];
   /** The landscape around the circuit. Default: flat. */
   terrain?: TerrainDef;
+  /** Trees, grandstands and pits. Default: none. */
+  scenery?: SceneryDef;
 }
 
 /** One sample along the centreline. */

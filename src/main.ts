@@ -11,7 +11,9 @@ import { interpolatePose } from './render/interpolate';
 import { Minimap } from './render/minimap';
 import { createStage, followSun } from './render/scene';
 import { Telemetry } from './render/telemetry';
+import { createSceneryView } from './render/scenery';
 import { createTrackView } from './render/trackView';
+import { layoutScenery } from './track/scenery';
 import { loadSettings, saveSettings } from './settings';
 import { Simulation } from './sim';
 import { CIRCUITS } from './track/circuits';
@@ -43,6 +45,7 @@ const sim = new Simulation(track);
 
 const stage = createStage(canvas);
 stage.scene.add(createTrackView(track, sim.physics.terrain));
+if (circuit.scenery) stage.scene.add(createSceneryView(layoutScenery(track, sim.physics.terrain, circuit.scenery)));
 const carView = new CarView(
   sim.car.def,
   sim.car.wheels.map((w) => w.mount),
