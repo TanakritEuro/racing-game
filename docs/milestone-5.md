@@ -1,6 +1,6 @@
 # Milestone 5 plan: AI drivers
 
-## Status: proposed, waiting for your OK
+## Status: approved as written, being built
 
 Goal: race against up to seven AI cars. Each circuit gets a computed racing line and a
 speed profile from the car's own grip, power and braking. The AI drives the same `KESTREL`

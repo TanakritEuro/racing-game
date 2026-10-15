@@ -48,6 +48,11 @@ describe.each(CIRCUITS.map((def) => [def.name, def] as const))('%s', (_, def) =>
     for (let i = 0; i * spacing < 150; i++) expect(Math.abs(curvature(track, i))).toBeLessThan(1 / 300);
   });
 
+  it('has its grid on a straight', () => {
+    // Eight cars two by two reach ~40 m behind the line: nothing tighter than a 200 m bend there.
+    for (let i = 1; i * spacing < 50; i++) expect(Math.abs(curvature(track, n - i))).toBeLessThan(1 / 200);
+  });
+
   it('puts its kerbs and gravel on the track', () => {
     for (const span of [...(def.kerbs ?? []), ...(def.gravel ?? [])]) {
       expect(span.from).toBeGreaterThanOrEqual(0);
