@@ -70,7 +70,7 @@ describe('car', () => {
     // 47 % on the front axle.
     expect((car.wheels[0].load + car.wheels[1].load) / total).toBeCloseTo(0.47, 2);
     // Sitting on the springs, clear of the bump stops.
-    for (const w of car.wheels) expect(w.suspensionLength).toBeGreaterThan(KESTREL.suspension.bumpStop.length + 0.05);
+    for (const w of car.wheels) expect(w.suspensionLength).toBeGreaterThan(KESTREL.suspension.front.bumpStop.length + 0.05);
   });
 
   it('stays still at rest without jitter or creep', () => {
@@ -228,7 +228,7 @@ describe('car', () => {
     expect(sim.car.speed).toBeLessThan(-1);
   });
 
-  it('holds 0.85–1.0 g on the skidpad, running out of front grip first', async () => {
+  it('holds 0.9–1.05 g on the skidpad, running out of front grip first', async () => {
     const s = await createSim(SKIDPAD);
     // Settle at 15 m/s, then creep the target speed up until the car can't hold the circle.
     let target = 15;
@@ -236,6 +236,7 @@ describe('car', () => {
     let index: number | undefined;
     let best = 0;
     let atBest = { front: 0, rear: 0 };
+    let frontTransferShare = 0;
     const window: number[] = [];
     for (let i = 0; i < 75 * 120; i++) {
       if (i > 15 * 120) target += 0.1 / 120;
@@ -247,17 +248,74 @@ describe('car', () => {
       window.push((v.x * v.x + v.z * v.z) / Math.hypot(p.x, p.z) / 9.81);
       if (window.length > 120) window.shift();
       const g = window.reduce((a, b) => a + b, 0) / window.length;
+      if (i === 30 * 120) {
+        // At ~0.65 g: the front axle's share of the lateral load transfer.
+        const [fl, fr, rl, rr] = s.car.wheels;
+        const front = Math.abs(fl.load - fr.load);
+        frontTransferShare = front / (front + Math.abs(rl.load - rr.load));
+      }
       if (window.length === 120 && Math.abs(lateralOffset(s.track, index, p.x, p.z)) < 5 && g > best) {
         best = g;
         const [fl, fr, rl, rr] = s.car.wheels;
         atBest = { front: Math.abs(fl.slipAngle + fr.slipAngle) / 2, rear: Math.abs(rl.slipAngle + rr.slipAngle) / 2 };
       }
     }
-    expect(best).toBeGreaterThan(0.85);
-    expect(best).toBeLessThan(1.0);
-    // Understeer at the limit: the fronts are at their peak slip angle, the rears below theirs.
-    expect(atBest.front).toBeGreaterThan(atBest.rear * 1.3);
+    expect(best).toBeGreaterThan(0.9);
+    expect(best).toBeLessThan(1.05);
+    // The anti-roll bars put ~45 % of the lateral load transfer on the front axle...
+    expect(frontTransferShare).toBeGreaterThan(0.4);
+    expect(frontTransferShare).toBeLessThan(0.5);
+    // ...and the car still understeers mildly at the limit: fronts at their peak slip angle, rears below.
+    expect(atBest.front).toBeGreaterThan(atBest.rear * 1.2);
     expect(atBest.front).toBeGreaterThan(0.8 * s.car.wheels[0].tyre.peakSlipAngle);
+  });
+
+  it('makes the expected downforce at each axle at 200 km/h', async () => {
+    const cruise = async (lift: { front: number; rear: number }) => {
+      const s = await createSim(LONG_OVAL, { ...KESTREL, aero: { ...KESTREL.aero, lift } });
+      const driver = followLine(s, 200 / 3.6);
+      run(s, driver, 30);
+      const loads = { front: 0, rear: 0, speed: 0 };
+      for (let i = 0; i < 120; i++) {
+        s.step(driver());
+        const [fl, fr, rl, rr] = s.car.wheels;
+        loads.front += (fl.load + fr.load) / 120;
+        loads.rear += (rl.load + rr.load) / 120;
+        loads.speed += s.car.speed / 120;
+      }
+      return loads;
+    };
+    const lift = KESTREL.aero.lift;
+    const withAero = await cruise(lift);
+    const without = await cruise({ front: 0, rear: 0 });
+    expect(withAero.speed * 3.6).toBeCloseTo(200, -1);
+    const q = 0.5 * 1.2 * withAero.speed ** 2;
+    expect(withAero.front - without.front).toBeCloseTo(-lift.front * q, -1.5);
+    expect(withAero.rear - without.rear).toBeCloseTo(-lift.rear * q, -1.5);
+    // All of it reaches the tyres: total load is the weight plus the downforce.
+    const total = withAero.front + withAero.rear;
+    expect(Math.abs(total - (WEIGHT - (lift.front + lift.rear) * q)) / total).toBeLessThan(0.02);
+  });
+
+  it('rolls less with its anti-roll bars', async () => {
+    const roll = async (antiRoll: { front: number; rear: number }) => {
+      const def = {
+        ...KESTREL,
+        suspension: {
+          front: { ...KESTREL.suspension.front, antiRoll: antiRoll.front },
+          rear: { ...KESTREL.suspension.rear, antiRoll: antiRoll.rear },
+        },
+      };
+      const s = await createSim(SKIDPAD, def);
+      run(s, followLine(s, 15, { maxThrottle: 0.4 }), 20);
+      // Roll: the car's right axis tilting out of the horizontal.
+      const q = s.car.rotation;
+      return Math.abs(Math.asin(2 * (q.x * q.y + q.w * q.z)));
+    };
+    const withBars = await roll({ front: KESTREL.suspension.front.antiRoll, rear: KESTREL.suspension.rear.antiRoll });
+    const without = await roll({ front: 0, rear: 0 });
+    expect(withBars).toBeLessThan(0.75 * without);
+    expect(without).toBeGreaterThan(0.01);
   });
 
   it('turns without rolling over and keeps the forces finite', () => {

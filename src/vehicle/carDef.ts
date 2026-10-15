@@ -19,6 +19,12 @@ export interface SuspensionDef {
   rebound: number;
   /** Below this suspension length (m) a much stiffer bump stop adds its force (N/m). */
   bumpStop: { length: number; stiffness: number };
+  /**
+   * Anti-roll bar (N/m): force per metre of difference between the axle's two wheels'
+   * travel, pushing the more compressed side up and the other down. Stiffer at one end
+   * moves more of the cornering load transfer there, so that end gives up grip first.
+   */
+  antiRoll: number;
 }
 
 export interface TyreDef extends TyreModel {
@@ -52,7 +58,7 @@ export interface CarDef {
   mountHeight: number;
   /** Front wheel angle at full lock (rad). */
   steeringLock: number;
-  suspension: SuspensionDef;
+  suspension: { front: SuspensionDef; rear: SuspensionDef };
   tyres: { front: TyreDef; rear: TyreDef };
   engine: EngineDef;
   clutch: ClutchDef;
@@ -62,6 +68,8 @@ export interface CarDef {
   aero: {
     /** Drag coefficient × frontal area, C_d·A (m²). */
     dragArea: number;
+    /** Lift coefficient × area at each axle, C_L·A (m²): negative is downforce. */
+    lift: { front: number; rear: number };
   };
   /** Where the bumper and hood cameras sit, in car local space (they look along -Z). */
   cameras: { bumper: Vec3; hood: Vec3 };

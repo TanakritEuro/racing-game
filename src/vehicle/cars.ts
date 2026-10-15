@@ -16,6 +16,15 @@ const SPORT_TYRE: TyreDef = {
   rollingResistance: 0.015,
 };
 
+/** Springs and dampers for a firm road car: ~1.4 Hz ride. */
+const SPORT_SUSPENSION = {
+  restLength: 0.35,
+  stiffness: 26000,
+  bump: 2600, // ~0.45 of critical
+  rebound: 4000, // ~0.7 of critical
+  bumpStop: { length: 0.1, stiffness: 150_000 },
+};
+
 /**
  * Kestrel: a light rear-wheel-drive coupé, the reference car. Targets: 1250 kg, 47 %
  * on the front axle, 150 kW, about 6 s to 100 km/h, 245 km/h and about 1 g of lateral grip.
@@ -31,11 +40,10 @@ export const KESTREL: CarDef = {
   mountHeight: -0.1,
   steeringLock: 0.6,
   suspension: {
-    restLength: 0.35,
-    stiffness: 26000, // ~1.4 Hz ride frequency
-    bump: 2600, // ~0.45 of critical
-    rebound: 4000, // ~0.7 of critical
-    bumpStop: { length: 0.1, stiffness: 150_000 },
+    // A stiffer rear bar: the front takes ~45 % of the lateral load transfer, for mild
+    // understeer at the limit and ~0.98 g on the skidpad.
+    front: { ...SPORT_SUSPENSION, antiRoll: 10_000 },
+    rear: { ...SPORT_SUSPENSION, antiRoll: 16_000 },
   },
   tyres: { front: SPORT_TYRE, rear: SPORT_TYRE },
   engine: {
@@ -79,6 +87,8 @@ export const KESTREL: CarDef = {
   },
   aero: {
     dragArea: 0.62,
+    // ~560 N of downforce at 200 km/h, 40 % of it at the front: steadier at speed.
+    lift: { front: -0.12, rear: -0.18 },
   },
   cameras: {
     bumper: { x: 0, y: -0.05, z: -2.2 },

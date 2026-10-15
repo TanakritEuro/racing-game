@@ -108,6 +108,11 @@ export interface Pose {
 }
 
 const vec = (): Vec3 => ({ x: 0, y: 0, z: 0 });
+/** Wheel indices of each axle, left then right. */
+const AXLES = [
+  [0, 1],
+  [2, 3],
+] as const;
 
 export class Car {
   readonly body: RAPIER.RigidBody;
@@ -127,6 +132,7 @@ export class Car {
   private readonly carForward = vec();
   private readonly heading = vec();
   private readonly force = vec();
+  private readonly aeroPoint = vec();
   private readonly tyreForce: TyreForce = { fx: 0, fy: 0 };
 
   constructor(
@@ -171,7 +177,7 @@ export class Car {
           driven: !isFront, // rear-wheel drive
           mount: { x: side * def.trackHalf, y: def.mountHeight, z: isFront ? -def.wheelbaseHalf : def.wheelbaseHalf },
           tyre,
-          suspensionLength: def.suspension.restLength,
+          suspensionLength: (isFront ? def.suspension.front : def.suspension.rear).restLength,
           contact: false,
           surface: null,
           load: 0,
@@ -207,7 +213,7 @@ export class Car {
 
   /** Put the car at `pose`, at rest, with the wheels just touching the ground. */
   reset(pose: Pose): void {
-    const S = this.def.suspension;
+    const S = this.def.suspension.front;
     const y = pose.position.y - this.def.mountHeight + S.restLength + this.def.tyres.front.radius - 0.03;
     this.body.setTranslation({ x: pose.position.x, y, z: pose.position.z }, true);
     this.body.setRotation({ x: 0, y: Math.sin(pose.yaw / 2), z: 0, w: Math.cos(pose.yaw / 2) }, true);
@@ -216,7 +222,7 @@ export class Car {
     this.steerAngle = 0;
     this.drivetrain.reset();
     this.wheels.forEach((w, i) => {
-      w.suspensionLength = S.restLength;
+      w.suspensionLength = (w.front ? this.def.suspension.front : this.def.suspension.rear).restLength;
       w.omega = w.slipRatio = w.slipAngle = 0;
       w.locked = false;
       this.work[i].spin.omega = 0;
@@ -289,13 +295,13 @@ export class Car {
     const pedalBrake = drivetrain.brakePedal;
 
     // 1. Suspension, contact frames and contact patch velocities.
-    const S = this.def.suspension;
     const B = this.def.brakes;
     const sinSteer = Math.sin(this.steerAngle);
     const cosSteer = Math.cos(this.steerAngle);
     for (let i = 0; i < 4; i++) {
       const wheel = this.wheels[i];
       const work = this.work[i];
+      const S = wheel.front ? this.def.suspension.front : this.def.suspension.rear;
       const radius = wheel.tyre.radius;
       const m = wheel.mount;
       const ox = pos.x + right.x * m.x + up.x * m.y - fwd.x * m.z;
@@ -341,10 +347,6 @@ export class Car {
       p.x = ox - up.x * toi;
       p.y = oy - up.y * toi;
       p.z = oz - up.z * toi;
-      this.force.x = up.x * load;
-      this.force.y = up.y * load;
-      this.force.z = up.z * load;
-      body.addForceAtPoint(this.force, p, false);
 
       // Tyre frame on the contact plane. Steered wheels turn about the car's up axis (positive = right).
       const h = this.heading;
@@ -370,10 +372,53 @@ export class Car {
       work.vLong = dot(v, tf);
       work.vLat = dot(v, tr);
 
+    }
+
+    // Anti-roll bars: each axle's bar pushes its more compressed wheel's side up and the
+    // other down, in proportion to the difference in travel. Only with both wheels down.
+    for (const [l, r] of AXLES) {
+      const left = this.wheels[l];
+      const right = this.wheels[r];
+      if (!left.contact || !right.contact) continue;
+      const S = left.front ? this.def.suspension.front : this.def.suspension.rear;
+      const bar = S.antiRoll * (right.suspensionLength - left.suspensionLength);
+      left.load = Math.max(0, left.load + bar);
+      right.load = Math.max(0, right.load - bar);
+    }
+
+    // Apply the suspension forces; the tyres' grip follows from the loads.
+    for (let i = 0; i < 4; i++) {
+      const wheel = this.wheels[i];
+      const work = this.work[i];
+      if (!wheel.contact) continue;
+      const load = wheel.load;
+      this.force.x = up.x * load;
+      this.force.y = up.y * load;
+      this.force.z = up.z * load;
+      body.addForceAtPoint(this.force, work.point, false);
       const surface = wheel.surface === 'grass' ? TUNING.surfaces.grass : TUNING.surfaces.asphalt;
       work.grip = surface.grip;
-      work.rollingDrag = (wheel.tyre.rollingResistance + surface.drag) * load * radius;
+      work.rollingDrag = (wheel.tyre.rollingResistance + surface.drag) * load * wheel.tyre.radius;
       wheel.gripLimit = gripLimit(wheel.tyre, load, surface.grip);
+    }
+
+    // Downforce (negative lift) on the body at each axle, from the airspeed along the car.
+    const lift = this.def.aero.lift;
+    const q = 0.5 * AIR_DENSITY * speed * speed;
+    for (const [z, area] of [
+      [-this.def.wheelbaseHalf, lift.front],
+      [this.def.wheelbaseHalf, lift.rear],
+    ]) {
+      if (area === 0) continue;
+      const f = this.force;
+      f.x = up.x * q * area;
+      f.y = up.y * q * area;
+      f.z = up.z * q * area;
+      const p = this.aeroPoint;
+      p.x = pos.x + up.x * this.def.mountHeight - fwd.x * z;
+      p.y = pos.y + up.y * this.def.mountHeight - fwd.y * z;
+      p.z = pos.z + up.z * this.def.mountHeight - fwd.z * z;
+      body.addForceAtPoint(f, p, false);
     }
 
     // 2. Substeps: tyre forces, wheel spin, slip relaxation.
