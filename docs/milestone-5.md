@@ -1,6 +1,52 @@
 # Milestone 5 plan: AI drivers
 
-## Status: approved as written, being built
+## Status: built, in playtesting
+
+Approved as proposed: up to 7 opponents, 3 laps, you mid-grid; three difficulties with a
+seeded spread and no rubber-banding; full contact, no penalties, every car held on its brakes
+until the lights go out; mode and options by URL and Tab.
+
+Measured: a hard AI's flying laps are about 1:46 at Harrowmere, 1:34 at Saltmarsh, 1:45 at
+Ridgeback and 0:53 at the Proving Ground, within ~4 % of what its speed profile predicts.
+Easy is 5–10 % slower. An eight-car race costs ~1 ms per physics step in the production
+build (2–3 ms in the dev server), so ~2 ms of each 60 fps frame. A racing line takes
+80–200 ms to compute when a circuit loads.
+
+Where the build differs from the plan below:
+
+- **Steering is Stanley-style, not pure pursuit.** Pure pursuit either weaved (short
+  look-ahead) or cut every corner by a metre or two (long look-ahead). The driver now steers
+  at the front axle: the angle the line's curvature needs, plus heading and cross-track
+  corrections, less any yaw rate beyond the line's (which damps a slide early). It never uses
+  more lock than the front tyres can use at that speed (the keyboard assist's `usableLock`),
+  except when catching a slide.
+- **The envelope is calibrated against the car.** Lateral and braking grip at 0.9 of the
+  tyres' peak at the static load (the measured skidpad and ABS stops); the engine and wheels'
+  rotating inertia (worth ~200 kg in first gear); 0.88 of the ideal acceleration for
+  gearshifts; only the rear tyres' share of the grip to put power down; and braking that
+  tapers off the harder the car is cornering. This car oversteers if it brakes hard at high
+  cornering load, which had the first AI spinning on corner entry.
+- **Sliding:** off the brakes, a steady gentle throttle, full lock allowed. Lifting made the
+  rear-drive car spin.
+- **Off the line, the corners tighten.** When traffic or a mistake puts the car off its line,
+  it slows for the tighter (inside) path, looking far enough ahead to brake for it.
+- **Traffic additions:** a car overlapping one slightly ahead concedes and drops in behind
+  (two cars side by side into a hairpin otherwise squeezed each other into the gravel); a car
+  stays a car's width away for 5 m after passing rather than cutting straight back across; a
+  stopped or crashed car beside the road is driven round, never followed; traffic never
+  sends a car off the road.
+- **Stuck:** slower than 1.5 m/s for 5 s, or more than 3 m off the road for 8 s (a gravel
+  trap, a wide run-off), and it is put back on the track; that lap is invalid.
+- **On the grid** your car is held on the brakes and the handbrake, so you can rev without
+  creeping. The AI doesn't drive until the lights go out.
+- **Gaps** are timed at checkpoints every 20 m. The results table is provisional until
+  everyone has finished; a car still running 90 s after the winner is classified where it is.
+- **Race laps aren't time-trial bests** (they aren't saved, and the ghost is hidden in races).
+  P replays your last race lap, without the other cars.
+- **Debug options:** `?line` draws the racing line coloured by target speed; `?autopilot`
+  hands your car to the AI (in either mode).
+- Tests added beyond the plan: `skill.test.ts` (spread, determinism, mistakes);
+  `traffic.test.ts` also runs a lap with eight cars.
 
 Goal: race against up to seven AI cars. Each circuit gets a computed racing line and a
 speed profile from the car's own grip, power and braking. The AI drives the same `KESTREL`
