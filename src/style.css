@@ -45,6 +45,20 @@ body {
   font-weight: 700;
 }
 
+#minimap {
+  position: absolute;
+  left: 16px;
+  bottom: 40px;
+  width: 180px;
+  height: 180px;
+  border-radius: 8px;
+  background: rgba(10, 14, 20, 0.35);
+}
+
+#lap.invalid {
+  color: #ff6b5e;
+}
+
 #dash {
   position: absolute;
   right: 24px;

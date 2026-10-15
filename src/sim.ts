@@ -45,11 +45,21 @@ export class Simulation {
     this.time += PHYSICS_STEP;
     this.steps++;
     const p = this.car.position;
-    this.timer.update(p.x, p.z, this.time);
+    this.timer.update(p.x, p.z, this.time, this.offTrack);
   }
 
-  /** Put the car back on the track at the nearest point, facing the right way, stopped. */
+  /**
+   * Track limits: every wheel touching the ground is beyond the kerbs (on grass or gravel).
+   * Kerbs count as track; a wheel in the air doesn't decide either way.
+   */
+  get offTrack(): boolean {
+    const wheels = this.car.wheels;
+    return wheels.some((w) => w.contact) && wheels.every((w) => !w.contact || w.surface === 'grass' || w.surface === 'gravel');
+  }
+
+  /** Put the car back on the track at the nearest point, facing the right way, stopped. Voids the lap. */
   recover(): void {
+    this.timer.invalidate();
     const p = this.car.position;
     const i = nearestSample(this.track, p.x, p.z, this.timer.index);
     this.car.reset(poseOnTrack(this.track.samples[i]));

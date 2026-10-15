@@ -8,6 +8,7 @@ import { formatLapTime } from './race/timing';
 import { CarView } from './render/carView';
 import { CameraRig } from './render/cameras';
 import { interpolatePose } from './render/interpolate';
+import { Minimap } from './render/minimap';
 import { createStage, followSun } from './render/scene';
 import { Telemetry } from './render/telemetry';
 import { createTrackView } from './render/trackView';
@@ -50,6 +51,7 @@ const input = new PlayerInput();
 const steering = input.steering;
 let controls = NO_CONTROLS;
 const telemetry = new Telemetry(document.body);
+const minimap = new Minimap(document.querySelector<HTMLDivElement>('#hud')!, track);
 const params = new URLSearchParams(location.search);
 telemetry.visible = params.has('telemetry');
 // ?debug exposes the simulation in the console, for poking at it while developing.
@@ -102,8 +104,9 @@ function updateHud(): void {
   light(hud.tc, sim.car.aids.tc, sim.car.tcActive);
   light(hud.assist, steering.assist, false);
   const t = sim.timer;
-  hud.lap.textContent = t.current(sim.time) === null ? 'OUT LAP' : `LAP ${t.laps + 1}  ${formatLapTime(t.current(sim.time))}`;
-  hud.last.textContent = `LAST ${formatLapTime(t.lastLap)}`;
+  hud.lap.textContent = t.current(sim.time) === null ? 'OUT LAP' : `LAP ${t.laps + 1}  ${formatLapTime(t.current(sim.time))}${t.invalid ? '  INVALID' : ''}`;
+  hud.lap.classList.toggle('invalid', t.invalid);
+  hud.last.textContent = `LAST ${formatLapTime(t.lastLap)}${t.lastLap !== null && !t.lastValid ? ' (invalid)' : ''}`;
   hud.best.textContent = `BEST ${formatLapTime(t.bestLap)}`;
 }
 
@@ -130,6 +133,7 @@ function frame(now: number): void {
   // Draw the car the right fraction of the way into the step that hasn't happened yet.
   interpolatePose(sim.previous, sim.current, accumulator / PHYSICS_STEP, drawn);
   carView.update(drawn);
+  minimap.update(drawn);
   cameras.update(drawn, dt);
   followSun(stage.sun, carView.root.position);
   updateHud();
