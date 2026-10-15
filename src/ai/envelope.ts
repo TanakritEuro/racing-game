@@ -18,8 +18,16 @@ export interface CarEnvelope {
   /** Drag per unit of speed squared, over mass (1/m), and rolling resistance (fraction of g). */
   drag: number;
   rolling: number;
+  /** Share of the grip the driven wheels have for accelerating (the rear axle's load share). */
+  traction: number;
   /** Highest drive force at the wheels at speed v (N), in the best gear. */
   driveForce(v: number): number;
+  /**
+   * Highest acceleration the engine gives at speed v (m/s²), before drag: the drive force
+   * over the car's mass plus the engine and wheels it has to spin up (in first gear the
+   * engine alone adds the equivalent of ~200 kg).
+   */
+  driveAccel(v: number): number;
 }
 
 const G = -GRAVITY;
@@ -36,6 +44,23 @@ export function carEnvelope(def: CarDef): CarEnvelope {
   const { engine, gearbox, clutch } = def;
   const radius = def.tyres.rear.radius;
   const rpmPerSpeed = 60 / (2 * Math.PI * radius);
+  const wheelInertia = 2 * (def.tyres.front.inertia + def.tyres.rear.inertia);
+  // Best gear at speed v: its drive force and the mass it accelerates.
+  const best = (v: number) => {
+    let force = 0;
+    let accel = 0;
+    for (const ratio of gearbox.ratios) {
+      const overall = ratio * gearbox.finalDrive;
+      const rpm = Math.abs(v) * rpmPerSpeed * overall;
+      if (rpm > engine.limiterRpm) continue;
+      // Below the launch speed the clutch slips with the engine held at its launch rpm.
+      const f = (fullThrottleTorque(engine, Math.max(rpm, clutch.launchRpm)) * overall * gearbox.efficiency) / radius;
+      const mass = def.mass + (engine.inertia * overall * overall + wheelInertia) / (radius * radius);
+      force = Math.max(force, f);
+      accel = Math.max(accel, f / mass);
+    }
+    return { force, accel };
+  };
   return {
     mass: def.mass,
     lateralMu: mu * E.lateral,
@@ -43,18 +68,9 @@ export function carEnvelope(def: CarDef): CarEnvelope {
     downforce: (0.5 * AIR_DENSITY * lift) / def.mass,
     drag: (0.5 * AIR_DENSITY * def.aero.dragArea) / def.mass,
     rolling: def.tyres.rear.rollingResistance,
-    driveForce(v: number): number {
-      let best = 0;
-      for (const ratio of gearbox.ratios) {
-        const overall = ratio * gearbox.finalDrive;
-        const rpm = Math.abs(v) * rpmPerSpeed * overall;
-        if (rpm > engine.limiterRpm) continue;
-        // Below the launch speed the clutch slips with the engine held at its launch rpm.
-        const torque = fullThrottleTorque(engine, Math.max(rpm, clutch.launchRpm));
-        best = Math.max(best, (torque * overall * gearbox.efficiency) / radius);
-      }
-      return best;
-    },
+    traction: 1 - frontShare + E.tractionTransfer,
+    driveForce: (v) => best(v).force,
+    driveAccel: (v) => best(v).accel * E.power,
   };
 }
 

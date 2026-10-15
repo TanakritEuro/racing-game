@@ -33,11 +33,12 @@ export function speedProfile(line: RacingLine, env: CarEnvelope, { pace = 1, max
     const d = line.distance[j] - line.distance[i];
     return d > 0 ? d : d + line.length;
   };
-  // Grip left for accelerating or braking at speed s at sample i, with the cornering it's doing.
-  const spare = (i: number, s: number, mu: number) => {
+  // Grip left for accelerating or braking at speed s at sample i, with the cornering it's
+  // doing; `taper` gives up more of it the harder the car corners.
+  const spare = (i: number, s: number, mu: number, taper = 0) => {
     const grip = gripAt(env, mu, s, G + s * s * line.vertical[i]);
-    const lateral = s * s * Math.abs(line.curvature[i]);
-    return Math.sqrt(Math.max(0, grip * grip - lateral * lateral));
+    const load = Math.min(1, (s * s * Math.abs(line.curvature[i])) / Math.max(grip, 1e-6));
+    return grip * Math.sqrt(1 - load * load) * (1 - taper * load);
   };
 
   // Start both passes from the slowest corner: nothing there can be any faster.
@@ -49,7 +50,7 @@ export function speedProfile(line: RacingLine, env: CarEnvelope, { pace = 1, max
     const i = (slowest + c) % n;
     const j = (i + 1) % n;
     const s = v[i];
-    const drive = Math.min(env.driveForce(s) / env.mass, spare(i, s, lateralMu));
+    const drive = Math.min(env.driveAccel(s), env.traction * spare(i, s, lateralMu));
     const a = drive - env.drag * s * s - env.rolling * G - G * line.grade[i];
     v[j] = Math.min(v[j], Math.sqrt(Math.max(0, s * s + 2 * a * step(i))));
   }
@@ -58,7 +59,7 @@ export function speedProfile(line: RacingLine, env: CarEnvelope, { pace = 1, max
     const j = (slowest - c + n) % n;
     const i = (j - 1 + n) % n;
     const s = v[j];
-    const a = spare(j, s, brakingMu) + env.drag * s * s + env.rolling * G + G * line.grade[i];
+    const a = spare(j, s, brakingMu, TUNING.ai.envelope.trailBraking) + env.drag * s * s + env.rolling * G + G * line.grade[i];
     v[i] = Math.min(v[i], Math.sqrt(Math.max(0, s * s + 2 * Math.max(0, a) * step(i))));
   }
   return v;

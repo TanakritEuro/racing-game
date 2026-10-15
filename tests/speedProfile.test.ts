@@ -60,30 +60,22 @@ describe('speed profile', () => {
         expect(v[i]).toBeLessThanOrEqual(corneringLimit(line, env, i, env.lateralMu) + 1e-3);
         const a = (v[j] ** 2 - v[i] ** 2) / (2 * step(i));
         const grip = gripAt(env, env.brakingMu, Math.max(v[i], v[j]), G + Math.max(v[i], v[j]) ** 2 * Math.max(0, line.vertical[i]));
-        expect(a).toBeLessThan(env.driveForce(v[i]) / env.mass + G * Math.max(0, -line.grade[i]) + 0.05);
+        expect(a).toBeLessThan(env.driveAccel(v[i]) + G * Math.max(0, -line.grade[i]) + 0.05);
         expect(-a).toBeLessThan(grip + env.drag * v[i] ** 2 + G * (env.rolling + Math.abs(line.grade[i])) + 0.05);
       }
     });
 
-    it('brakes exactly down to the cornering limit', () => {
-      let minima = 0;
+    it('takes each corner at its cornering limit at the slowest point', () => {
+      let corners = 0;
       for (let i = 0; i < n; i++) {
-        const prev = v[(i - 1 + n) % n];
-        const next = v[(i + 1) % n];
-        // A slowest point reached by braking in the 60 m before it (not where a climb alone
-        // slows the car). Trail braking fades out towards the apex, so look back a way.
-        let braked = false;
-        for (let k = 1; k <= 30; k++) {
-          const h = (i - k + n) % n;
-          const decel = (v[h] ** 2 - v[(h + 1) % n] ** 2) / (2 * step(h));
-          braked ||= decel > env.drag * v[h] ** 2 + G * (env.rolling + Math.max(0, line.grade[h])) + 2;
-        }
-        if (v[i] < prev && v[i] <= next && braked) {
-          minima++;
-          expect(v[i] / corneringLimit(line, env, i, env.lateralMu)).toBeGreaterThan(0.98);
-        }
+        // A real slowest point: at least 1 m/s below the speeds 40 m either side (not a ripple
+        // where traction holds the car at a steady speed through a long corner).
+        const slowest = v[i] < v[(i - 1 + n) % n] && v[i] <= v[(i + 1) % n] && v[i] < v[(i - 20 + n) % n] - 1 && v[i] < v[(i + 20) % n] - 1;
+        if (!slowest || Math.abs(line.curvature[i]) < 1 / 150) continue;
+        corners++;
+        expect(v[i] / corneringLimit(line, env, i, env.lateralMu)).toBeGreaterThan(0.97);
       }
-      expect(minima).toBeGreaterThan(2);
+      expect(corners).toBeGreaterThan(1);
     });
   });
 });

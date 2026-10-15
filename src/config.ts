@@ -123,6 +123,20 @@ export const TUNING = {
        */
       lateral: 0.9,
       braking: 0.9,
+      /**
+       * Braking while cornering gives up this share of the friction circle's braking per unit
+       * of cornering load (as a fraction of the grip): trail braking unloads the rear, and this
+       * car oversteers if it brakes hard while cornering hard.
+       */
+      trailBraking: 0.6,
+      /**
+       * Accelerating: only the driven (rear) tyres push, so only their share of the grip left
+       * over from cornering is there for it: the rear axle's static share, plus this much for
+       * the load that moves onto it under acceleration.
+       */
+      tractionTransfer: 0.08,
+      /** Share of the engine's ideal acceleration the car really gets: gearshifts cut the drive, and the automatic shifts late. Measured on the long oval. */
+      power: 0.88,
     },
     line: {
       /** Room kept from the edge of the usable road (m), and how much of a kerb the line may use. */
@@ -141,5 +155,31 @@ export const TUNING = {
     },
     /** Top of the speed profile on a straight (m/s), past the car's real top speed. */
     maxSpeed: 90,
+    /** The AI driver (`ai/driver.ts`). */
+    driver: {
+      /**
+       * Steering: the line's curvature is read this many seconds ahead (the rack takes time to
+       * turn); heading error gain; cross-track gain (1/s), its softening (m/s) at low speed and
+       * the most it may steer (rad): little when slow, so a car far off the line (on the grid)
+       * joins it gently, more by `speed` (m/s);
+       * yaw-rate damping (s): steer less into a turn when the car is rotating faster than the line.
+       */
+      feedForward: 0.12,
+      headingGain: 1,
+      crossTrackGain: 4,
+      crossTrackSoftening: 6,
+      crossTrackMax: { slow: 0.12, fast: 0.35, speed: 20 },
+      yawDamping: 0.08,
+      /** Speed control: how far ahead it reads the profile (s), and how hard it corrects an error in speed (1/s). */
+      speedLead: 0.25,
+      speedGain: 2,
+      /** Throttle held when the target is just met (cruising), as a fraction of full. */
+      cruiseThrottle: 0.15,
+      /** Sliding: body slip angle (rad) past which it comes off the brakes and holds this much throttle while the steering catches the car. */
+      slideAngle: 0.13,
+      slideThrottle: 0.25,
+      /** Stuck: slower than this (m/s) for this long (s) and it asks to be put back on the track. */
+      stuck: { speed: 1.5, time: 5 },
+    },
   },
 };

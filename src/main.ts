@@ -22,8 +22,7 @@ import { formatLapTime } from './race/timing';
 import { Replay, REPLAY_SPEEDS } from './replay/replay';
 import { TvCameraView } from './render/tvCameras';
 import { placeTvCameras } from './track/cameras';
-import { carEnvelope } from './ai/envelope';
-import { racingLine } from './ai/racingLine';
+import { circuitAi, createAiDriver } from './ai/driver';
 import { speedProfile } from './ai/speedProfile';
 import { createLineView } from './render/lineView';
 import { bestKey, openBestStore } from './storage/bests';
@@ -85,11 +84,13 @@ const params = new URLSearchParams(location.search);
 telemetry.visible = params.has('telemetry');
 // ?line draws the AI's racing line, coloured by its target speed.
 if (params.has('line')) {
-  const line = racingLine(track, sim.car.def.halfExtents.x);
-  stage.scene.add(createLineView(track, line, speedProfile(line, carEnvelope(sim.car.def))));
+  const { line, env } = circuitAi(track, sim.car.def);
+  stage.scene.add(createLineView(track, line, speedProfile(line, env)));
 }
+// ?autopilot hands your car to the AI (for watching it, and checking it).
+const autopilot = params.has('autopilot') ? createAiDriver(track, sim.car.def) : null;
 // ?debug exposes the simulation in the console, for poking at it while developing.
-if (params.has('debug')) Object.assign(window, { sim, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay });
+if (params.has('debug')) Object.assign(window, { sim, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay, autopilot });
 
 // Bests from earlier visits: the ghost, the delta and the sector colours carry on from them.
 const store = await openBestStore();
@@ -261,7 +262,13 @@ function frame(now: number): void {
   }
   if (pad.reset) recover();
   while (accumulator >= PHYSICS_STEP) {
-    step(input.controls(sim.car, PHYSICS_STEP));
+    if (autopilot) {
+      step(autopilot.drive(sim.car, PHYSICS_STEP));
+      if (autopilot.stuck) {
+        recover();
+        autopilot.recovered();
+      }
+    } else step(input.controls(sim.car, PHYSICS_STEP));
     accumulator -= PHYSICS_STEP;
   }
 
