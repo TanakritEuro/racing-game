@@ -155,6 +155,29 @@ export const TUNING = {
     },
     /** Top of the speed profile on a straight (m/s), past the car's real top speed. */
     maxSpeed: 90,
+    /**
+     * Difficulty (`ai/skill.ts`): the range each skill is spread over across a field. pace:
+     * share of the car's grip used; braking: extra metres before each braking point;
+     * precision: how far it wanders off the line (m, standard deviation); mistakes: chance of
+     * a mistake at each corner; aggression: 0–1, how small a gap it goes for.
+     */
+    difficulty: {
+      easy: { pace: [0.8, 0.87], braking: [8, 16], precision: [0.4, 0.8], mistakes: [0.03, 0.06], aggression: [0.2, 0.5] },
+      medium: { pace: [0.87, 0.93], braking: [3, 8], precision: [0.25, 0.5], mistakes: [0.015, 0.03], aggression: [0.4, 0.7] },
+      hard: { pace: [0.94, 0.98], braking: [0, 3], precision: [0.1, 0.25], mistakes: [0.004, 0.012], aggression: [0.6, 0.9] },
+    },
+    /** Mistakes: what can go wrong at a corner, and how wandering off the line is paced. */
+    mistakes: {
+      /** A corner counts where the profile drops by this much (m/s) within `lookahead` (m). */
+      cornerDrop: 5,
+      lookahead: 60,
+      /** Overcooking it: target speed raised by this factor for this many metres. */
+      overcook: { factor: [1.06, 1.12], length: 80 },
+      /** Running wide: aiming this far to the outside (m) for this many metres. */
+      wide: { offset: [1, 2], length: 70 },
+      /** The line wanders back and forth with this time constant (s). */
+      wanderTime: 2.5,
+    },
     /** The AI driver (`ai/driver.ts`). */
     driver: {
       /**
