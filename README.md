@@ -1,7 +1,9 @@
 # Racing
 
 A 3D racing game for the browser with real car physics, built with Three.js, Rapier and TypeScript.
-Three invented circuits: fast Harrowmere, tight Saltmarsh and hilly Ridgeback.
+Three invented circuits: fast Harrowmere, tight Saltmarsh and hilly Ridgeback. Time trial
+with sectors, a live delta, a ghost of your best lap (kept in the browser) and replays from
+trackside cameras.
 
 ```bash
 npm install
@@ -23,6 +25,9 @@ Open http://localhost:5173.
 | C | Camera: chase, bumper, hood |
 | N | Next circuit (or open with `?track=harrowmere`, `saltmarsh`, `ridgeback`, `proving-ground`) |
 | R | Put the car back on the track (voids the lap) |
+| Backspace | Restart from the grid (an out lap) |
+| G | Ghost of your best lap on or off |
+| P / Shift+P | Replay the last lap / the best lap. In a replay: Space pause, ← / → skip, 1–4 speed (¼× to 2×), Esc back to driving |
 | T | Telemetry overlay (or open with `?telemetry`) |
 
 Gamepads work too: left stick steers, RT/LT throttle and brake, A handbrake, RB/LB shift,

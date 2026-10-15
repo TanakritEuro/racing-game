@@ -24,7 +24,7 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 ## Current state
 
 Milestones 1–3 (tyres and drivetrain, handling and controls, tracks) are done; **Milestone 4
-(time trial and ghosts) is planned** (`docs/milestone-4.md`).
+(time trial and ghosts) is built and in playtesting** (`docs/milestone-4.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -43,7 +43,14 @@ drivetrain (engine torque curve, limiter, engine braking, six-speed gearbox, aut
 manual, automatic clutch, limited-slip diff). Handbrake, ABS and traction control
 (`vehicle/aids.ts`, on by default, toggleable). The wheel and drivetrain maths runs in 8
 substeps per physics step. Grass has less grip and more drag. Lap timing (`race/timing.ts`)
-with an out lap, last and best laps.
+with an out lap, last and best laps, three sectors per lap (best sectors purple, faster than
+the best lap's green, slower yellow) and a live delta to the best lap measured at every track
+sample. A time-trial session (`race/session.ts`) records every lap as transforms at 30 Hz
+(`race/recording.ts`); the best valid lap is raced as a translucent ghost and kept per
+circuit and car in IndexedDB (`storage/bests.ts`, dropped if the layout's fingerprint
+changes; in memory if IndexedDB refuses). Replays of the last or best lap play from
+trackside TV cameras placed with terrain line of sight (`track/cameras.ts`), at 0.25×–2×,
+paused or skipped; live driving waits meanwhile.
 
 Keyboard steering goes through an assist (`drivers/steeringAssist.ts`: speed-sensitive lock,
 counter-steer help, toggleable); gamepads steer the rack directly with analogue triggers
@@ -54,7 +61,9 @@ slip, forces, brake torque, ABS and friction circles, RPM, gear, clutch, TC, ped
 Keys: W/S or arrows to accelerate and brake (brake to a stop, release, and press again to
 reverse in automatic), A/D or arrows to steer, Space handbrake, E/Q to shift up/down, M
 automatic/manual, Z ABS, X traction control, V steering assist, C camera, R to put the car
-back on the track, N next circuit, T telemetry. Gamepad: left stick, RT/LT, A handbrake, RB/LB shift, Y
+back on the track, Backspace restart from the grid, N next circuit, G ghost on/off, P replay
+the last lap (Shift+P the best; in a replay Space pause, ←/→ skip 2 s, 1–4 speed, Esc back),
+T telemetry. Gamepad: left stick, RT/LT, A handbrake, RB/LB shift, Y
 camera, View/Back reset.
 
 Measured (tests): 0–100 km/h in ~6.5 s (aids on), ~235 km/h top speed, ~0.98 g on a 40 m
@@ -139,17 +148,24 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   limiter, and the substep solver coupling engine, clutch, diff, brakes and driven wheels.
 - `src/track/` — `track.ts` (spline, samples and frames, side profiles, nearest sample,
   lateral offset), `geometry.ts` (strips and sweeps: road, kerbs, run-off, barriers),
-  `terrain.ts` (heightfield), `corners.ts` (corners from curvature, kerb and gravel
+  `terrain.ts` (heightfield), `cameras.ts` (replay TV camera posts and their stretches), `corners.ts` (corners from curvature, kerb and gravel
   placement), `scenery.ts` (seeded tree and building layout), `circuits.ts` (the circuits).
-- `src/race/timing.ts` — lap timer, track limits and time formatting.
+- `src/race/timing.ts` — lap timer, sectors, live delta, track limits and time formatting.
+- `src/race/recording.ts` — lap recordings (30 Hz frames of pose and readouts), sampling
+  between frames, encode / decode; `session.ts` — `TimeTrial`: records laps, keeps the
+  best as the ghost, restarts, loads stored bests.
+- `src/storage/bests.ts` — each circuit and car's best lap in IndexedDB (memory fallback).
+- `src/replay/replay.ts` — the replay player (speed, pause, skip, hand back to live).
+- `src/vehicle/pose.ts` — `CarPose` and interpolation between physics steps.
 - `src/render/` — `scene.ts` (renderer, sky, sun), `trackView.ts`, `carView.ts`
-  (placeholder car), `cameras.ts` (chase, bumper, hood), `interpolate.ts` (drawing between
-  physics steps), `telemetry.ts` (`?telemetry` overlay), `terrainView.ts`, `scenery.ts`,
-  `minimap.ts`.
+  (placeholder car), `cameras.ts` (chase, bumper, hood), `tvCameras.ts` (replay camera),
+  `ghostView.ts` (translucent ghost car), `telemetry.ts` (`?telemetry` overlay),
+  `terrainView.ts`, `scenery.ts`, `minimap.ts`.
+- `src/ui/timingHud.ts` — lap, delta, sector splits, last and best.
 - `src/input/` — `keyboard.ts`, `gamepad.ts`, `index.ts` (`PlayerInput`: both devices → `Controls`).
 - `src/settings.ts` — player settings in localStorage.
 - `src/main.ts` — entry point and frame loop; `?track=<id>`, `?telemetry`, `?debug`
-  (exposes `sim` in the console).
+  (exposes `sim`, `session()`, `step(controls)` and `replay()` in the console).
 - `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
   line-following test driver (offset, curvature speed profile); `tracks.ts` has test-only
   layouts (skidpads, long oval, hill, kerbed oval, grass and gravel pads).

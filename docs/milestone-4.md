@@ -1,6 +1,28 @@
 # Milestone 4 plan: time trial and ghosts
 
-## Status: proposed, waiting for your OK
+## Status: built, in playtesting
+
+Approved as proposed: transform ghosts, the keys below, the all-time best lap as the only ghost.
+
+Where the build differs from the plan below:
+
+- **`CarPose` moved to `vehicle/pose.ts`** (it was in `car.ts` and `render/interpolate.ts`),
+  because recordings, the ghost and replays all use it.
+- **Fingerprint tests live in `recording.test.ts`**, and there are `bests.test.ts` (stored
+  bests: same layout only, memory fallback, sectors merged) and `replay.test.ts`. IndexedDB
+  itself was checked in the browser: set a best, reload, the ghost and delta are back.
+- **Bests are saved after a new best lap or a new best sector**, not every lap. The HUD
+  says "Bests are not kept in this browser" when IndexedDB refuses.
+- **TV cameras are placed greedily**: from the first stretch no camera covers, posts 10–90 m
+  ahead on either side are tried and the one that sees furthest on is kept (range 180 m,
+  terrain line of sight, every post clear of all barriers). That gives contiguous
+  stretches, so a cut happens exactly when the car leaves one (4 cameras on the Proving
+  Ground, 9–14 on the others). Trees and grandstands don't count as blocking the view.
+- **←/→ skip 2 s** per press (held keys repeat) rather than a continuous scrub.
+- **Replaying the last lap shows the best lap's ghost alongside**, on the same clock.
+- **Live driving pauses during a replay** and carries on where it was afterwards.
+- `?debug` also exposes `step(controls)` (one physics step with the session and saving),
+  because the browser checks drive laps from the console.
 
 Goal: a proper time trial. Each lap is split into three sectors with a live delta to your
 best lap; your best lap per circuit and car is kept between visits and raced as a ghost;
