@@ -3,13 +3,17 @@ import type { Controls } from './vehicle/car';
 /**
  * Keyboard → Controls. Keys are digital, so steering is smoothed inside the car's
  * simulation (`TUNING.steering`); analogue gamepad input comes in Milestone 2.
+ * E / Q shift up / down: each press is one shift request, taken by the next physics step.
  */
 export class Keyboard {
   private readonly down = new Set<string>();
+  private pendingShift: -1 | 0 | 1 = 0;
 
   constructor() {
     window.addEventListener('keydown', (e) => {
       if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
+      if (!e.repeat && e.code === 'KeyE') this.pendingShift = 1;
+      if (!e.repeat && e.code === 'KeyQ') this.pendingShift = -1;
       this.down.add(e.code);
     });
     window.addEventListener('keyup', (e) => this.down.delete(e.code));
@@ -20,6 +24,14 @@ export class Keyboard {
     return codes.some((c) => this.down.has(c));
   }
 
+  /** The shift requested since the last call, if any; clears it. */
+  takeShift(): -1 | 0 | 1 {
+    const shift = this.pendingShift;
+    this.pendingShift = 0;
+    return shift;
+  }
+
+  /** Pedals and steering now. `shift` is always 0 here: use `takeShift` for the step that runs. */
   controls(): Controls {
     const left = this.any('KeyA', 'ArrowLeft');
     const right = this.any('KeyD', 'ArrowRight');

@@ -88,8 +88,95 @@ describe('car', () => {
     run(sim, NO_CONTROLS, 1);
     const t = runUntil(sim, FULL_THROTTLE, () => sim.car.speed > KMH_100, 15);
     expect(t).not.toBeNull();
-    expect(t!).toBeGreaterThan(4.5);
-    expect(t!).toBeLessThan(7);
+    expect(t!).toBeGreaterThan(5.5);
+    expect(t!).toBeLessThan(7.2);
+  });
+
+  it('reaches 230–255 km/h in top gear', async () => {
+    const s = await createSim(LONG_OVAL);
+    const driver = followLine(s, 100);
+    run(s, driver, 65);
+    expect(s.car.speed * 3.6).toBeGreaterThan(230);
+    expect(s.car.speed * 3.6).toBeLessThan(255);
+    expect(s.car.drivetrain.gearbox.gear).toBe(6);
+  });
+
+  it('shifts up near the shift point at full throttle and back down to first when stopping', async () => {
+    const s = await createSim(LONG_OVAL);
+    const driver = followLine(s, 100);
+    const gb = s.car.drivetrain.gearbox;
+    const shifts: { from: number; to: number; rpm: number }[] = [];
+    for (let i = 0; i < 40 * 120; i++) {
+      const before = gb.nextGear;
+      s.step(driver());
+      if (gb.nextGear !== before) shifts.push({ from: before, to: gb.nextGear, rpm: s.car.drivetrain.rpm });
+    }
+    expect(shifts.map((x) => x.to)).toEqual([2, 3, 4, 5, 6]);
+    for (const x of shifts) {
+      expect(x.rpm).toBeGreaterThan(KESTREL.gearbox.upshiftRpm.full - 400);
+      expect(x.rpm).toBeLessThan(KESTREL.engine.limiterRpm);
+    }
+    runUntil(s, controls({ brake: 0.6 }), () => s.car.speed < 0.05, 30);
+    run(s, controls({ brake: 0.6 }), 1);
+    expect(gb.gear).toBe(1);
+    expect(Math.abs(s.car.drivetrain.rpm - KESTREL.engine.idleRpm)).toBeLessThan(100);
+  });
+
+  it('spins the rear wheels on a full-throttle launch (no traction control until M2), but not at part throttle', async () => {
+    const peak = KESTREL.tyres.rear.long;
+    const launch = async (throttle: number) => {
+      const s = await createSim(LONG_OVAL);
+      run(s, NO_CONTROLS, 1);
+      let most = 0;
+      for (let i = 0; i < 120; i++) {
+        s.step(controls({ throttle }));
+        most = Math.max(most, s.car.wheels[2].slipRatio, s.car.wheels[3].slipRatio);
+      }
+      return most / s.car.wheels[2].tyre.peakSlipRatio;
+    };
+    expect(peak.B).toBeGreaterThan(0);
+    expect(await launch(1)).toBeGreaterThan(2);
+    expect(await launch(0.5)).toBeLessThan(1);
+  });
+
+  it('slows faster with the engine braking than coasting with the clutch in', async () => {
+    const decelFrom100 = async (clutch: number) => {
+      const s = await createSim(LONG_OVAL);
+      runUntil(s, followLine(s, 40), () => s.car.speed > KMH_100, 20);
+      // Not mid-shift, in whatever gear it is in (2nd or 3rd).
+      runUntil(s, followLine(s, 40), () => s.car.drivetrain.gearbox.shifting === 0, 1);
+      expect(s.car.drivetrain.gearbox.gear).toBeGreaterThan(1);
+      const v0 = s.car.speed;
+      run(s, controls({ clutch }), 2);
+      return (v0 - s.car.speed) / 2;
+    };
+    const engineBraking = await decelFrom100(0);
+    const coasting = await decelFrom100(1);
+    expect(engineBraking).toBeGreaterThan(coasting + 0.3);
+    expect(coasting).toBeGreaterThan(0.3); // drag and rolling resistance alone
+  });
+
+  it('idles in neutral at rest without moving', () => {
+    sim.setGearboxMode('manual');
+    run(sim, controls({ shift: -1 }), 1 / 120);
+    run(sim, NO_CONTROLS, 2);
+    expect(sim.car.drivetrain.gearbox.gear).toBe(0);
+    const from = sim.car.position;
+    run(sim, NO_CONTROLS, 10);
+    expect(flatDistance(from, sim.car.position)).toBeLessThan(0.001);
+    expect(Math.abs(sim.car.drivetrain.rpm - KESTREL.engine.idleRpm)).toBeLessThan(60);
+  });
+
+  it('reverses in manual through neutral, at a standstill only', () => {
+    sim.setGearboxMode('manual');
+    run(sim, NO_CONTROLS, 1);
+    run(sim, controls({ shift: -1 }), 1 / 120);
+    run(sim, NO_CONTROLS, 0.5);
+    run(sim, controls({ shift: -1 }), 1 / 120);
+    run(sim, NO_CONTROLS, 0.5);
+    expect(sim.car.reversing).toBe(true);
+    run(sim, controls({ throttle: 0.5 }), 2);
+    expect(sim.car.speed).toBeLessThan(-1);
   });
 
   it('stops from 100 km/h in under 45 m at the best pedal without locking a wheel', async () => {

@@ -10,9 +10,36 @@ export const TUNING = {
     rate: 4,
     returnRate: 7,
   },
-  automatic: {
-    /** Below this forward speed (m/s), holding brake engages reverse. */
+  transmission: {
+    /** Below this speed (m/s) the car counts as stopped: the automatic's brake pedal can select reverse. */
     reverseBelow: 0.5,
+    /** In manual, reverse can only be selected below this speed (m/s). */
+    reverseShiftBelow: 2,
+    /** A manual downshift is refused if it would take the engine past the limiter by more than this (rpm). */
+    overRevMargin: 300,
+    /** The automatic waits this long after a shift before the next (s). */
+    shiftPause: 0.4,
+    /** The automatic only shifts down if the lower gear lands this far below its upshift point (rpm). */
+    downshiftMargin: 300,
+    /** Throttle per rpm short of the target while blipping to match revs on a downshift. */
+    revMatchGain: 0.004,
+    /** The automatic clutch latches fully in once it slips less than this (rpm)... */
+    latchSlipRpm: 100,
+    /** ...with the gearbox input at least this far above idle (rpm), and lets go below `unlatchAboveIdle`. */
+    latchAboveIdle: 250,
+    unlatchAboveIdle: 100,
+    /** Pulling away, the automatic clutch carries this much extra torque per rpm above its bite point, at full throttle (N·m/rpm). */
+    biteGain: 0.3,
+    /** At or above this pedal the automatic clutch is dumped on a launch instead of fed in. */
+    launchDumpPedal: 0.95,
+  },
+  drivetrain: {
+    /** Gauss-Seidel passes over the clutch, differential and brake couplings per substep. */
+    solverIterations: 10,
+    /** Idle control: throttle per rpm below idle. */
+    idleGain: 0.005,
+    /** The limiter restores fuel this far below the limit (rpm). */
+    limiterHysteresis: 150,
   },
   surfaces: {
     /** Grip relative to the tyre's own (multiplies its μ) and extra rolling drag (fraction of load). */

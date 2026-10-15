@@ -13,6 +13,7 @@ import { createTrackView } from './render/trackView';
 import { Simulation } from './sim';
 import { TEST_CIRCUIT } from './track/circuits';
 import { buildTrack } from './track/track';
+import { NEUTRAL, REVERSE } from './vehicle/gearbox';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
 const hud = {
@@ -21,7 +22,10 @@ const hud = {
   lap: document.querySelector<HTMLDivElement>('#lap')!,
   last: document.querySelector<HTMLDivElement>('#last')!,
   best: document.querySelector<HTMLDivElement>('#best')!,
+  rpm: document.querySelector<HTMLDivElement>('#rpm-fill')!,
 };
+
+const gearLabel = (gear: number) => (gear === REVERSE ? 'R' : gear === NEUTRAL ? 'N' : String(gear));
 
 await initPhysics();
 const track = buildTrack(TEST_CIRCUIT);
@@ -38,6 +42,7 @@ telemetry.visible = new URLSearchParams(location.search).has('telemetry');
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyT') telemetry.toggle();
+  if (e.code === 'KeyM') sim.setGearboxMode(sim.car.drivetrain.gearbox.mode === 'auto' ? 'manual' : 'auto');
   if (e.code === 'KeyR') {
     sim.recover();
     chase.snap();
@@ -46,7 +51,10 @@ window.addEventListener('keydown', (e) => {
 
 function updateHud(): void {
   hud.speed.textContent = String(Math.round(Math.abs(sim.car.speed) * 3.6));
-  hud.gear.textContent = sim.car.reversing ? 'R' : 'D';
+  const drivetrain = sim.car.drivetrain;
+  hud.gear.textContent = `${gearLabel(drivetrain.gearbox.nextGear)} ${drivetrain.gearbox.mode === 'auto' ? 'AUTO' : 'MANUAL'}`;
+  hud.rpm.style.width = `${Math.min(100, (drivetrain.rpm / sim.car.def.engine.limiterRpm) * 100)}%`;
+  hud.rpm.classList.toggle('limit', drivetrain.rpm > sim.car.def.gearbox.upshiftRpm.full);
   const t = sim.timer;
   hud.lap.textContent = t.current(sim.time) === null ? 'OUT LAP' : `LAP ${t.laps + 1}  ${formatLapTime(t.current(sim.time))}`;
   hud.last.textContent = `LAST ${formatLapTime(t.lastLap)}`;
@@ -62,17 +70,24 @@ function frame(now: number): void {
   accumulator += dt;
   const controls = keyboard.controls();
   while (accumulator >= PHYSICS_STEP) {
+    // A shift request belongs to one step, not to every step this frame runs.
+    controls.shift = keyboard.takeShift();
     sim.step(controls);
     accumulator -= PHYSICS_STEP;
-    // A shift request belongs to one step, not to every step this frame runs.
-    controls.shift = 0;
   }
 
   carView.update(sim.car);
   chase.update(sim.car, dt);
   followSun(stage.sun, carView.root.position);
   updateHud();
-  telemetry.update({ time: sim.time, speed: sim.car.speed, wheels: sim.car.wheels, controls });
+  telemetry.update({
+    time: sim.time,
+    speed: sim.car.speed,
+    wheels: sim.car.wheels,
+    controls,
+    rpm: sim.car.drivetrain.rpm,
+    gear: `${gearLabel(sim.car.drivetrain.gearbox.nextGear)}  clutch ${sim.car.drivetrain.clutch.toFixed(2)}`,
+  });
   stage.renderer.render(stage.scene, stage.camera);
   requestAnimationFrame(frame);
 }

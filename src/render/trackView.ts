@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BARRIER_HEIGHT, BARRIER_THICKNESS } from '../physics';
+import { BARRIER_HEIGHT, BARRIER_THICKNESS, groundExtent } from '../physics';
 import { barriers, ribbon, type Ribbon } from '../track/geometry';
 import type { Track } from '../track/track';
 
@@ -11,7 +11,7 @@ export function createTrackView(track: Track): THREE.Group {
   const group = new THREE.Group();
   const half = track.def.width / 2;
 
-  group.add(createGrass());
+  group.add(createGrass(track));
 
   const road = mesh(ribbon(track, -half, half, 0.0), new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92 }), 6);
   road.receiveShadow = true;
@@ -51,7 +51,8 @@ function mesh(r: Ribbon, material: THREE.Material, repeat = 1): THREE.Mesh {
   return new THREE.Mesh(geo, material);
 }
 
-function createGrass(): THREE.Mesh {
+function createGrass(track: Track): THREE.Mesh {
+  const ground = groundExtent(track);
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
@@ -65,9 +66,14 @@ function createGrass(): THREE.Mesh {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(400, 400);
+  // One texture tile per 10 m.
+  tex.repeat.set(ground.halfX / 5, ground.halfZ / 5);
   tex.anisotropy = 8;
-  const grass = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+  const grass = new THREE.Mesh(
+    new THREE.PlaneGeometry(ground.halfX * 2, ground.halfZ * 2),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }),
+  );
+  grass.position.set(ground.x, 0, ground.z);
   grass.rotation.x = -Math.PI / 2;
   // Drawn a little below its collider (top at -5 mm) so it never shows through the road.
   grass.position.y = -0.04;

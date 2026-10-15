@@ -1,11 +1,12 @@
 // A car is data: every number about one car lives in a `CarDef`, so more cars are just
 // more definitions (`cars.ts`). Numbers that aren't about a particular car (surfaces,
 // keyboard steering assistance, camera, integration settings) stay in `TUNING`.
-//
-// Fields marked PLACEHOLDER belong to the stand-in drive model that the drivetrain
-// (engine, clutch, gearbox, differential) replaces.
 
 import type { Vec3 } from '../math';
+import type { DifferentialDef } from './differential';
+import type { ClutchDef } from './drivetrain';
+import type { EngineDef } from './engine';
+import type { GearboxDef } from './gearbox';
 import type { TyreModel } from './tyre';
 
 export interface SuspensionDef {
@@ -31,14 +32,6 @@ export interface TyreDef extends TyreModel {
   rollingResistance: number;
 }
 
-export interface EngineDef {
-  /** PLACEHOLDER: peak power at the driven wheels (W). */
-  power: number;
-  /** PLACEHOLDER: most torque the driven axle gets, forwards and in reverse (N·m). */
-  maxWheelTorque: number;
-  reverseTorque: number;
-}
-
 export interface BrakesDef {
   /** Brake torque of all four wheels together at full pedal (N·m). */
   maxTorque: number;
@@ -62,6 +55,9 @@ export interface CarDef {
   suspension: SuspensionDef;
   tyres: { front: TyreDef; rear: TyreDef };
   engine: EngineDef;
+  clutch: ClutchDef;
+  gearbox: GearboxDef;
+  differential: DifferentialDef;
   brakes: BrakesDef;
   aero: {
     /** Drag coefficient × frontal area, C_d·A (m²). */

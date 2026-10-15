@@ -76,6 +76,27 @@ body {
   opacity: 0.85;
 }
 
+#rpm {
+  grid-column: 1 / 3;
+  justify-self: end;
+  width: 160px;
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 3px;
+  background: rgba(10, 14, 20, 0.5);
+  overflow: hidden;
+}
+
+#rpm-fill {
+  width: 0;
+  height: 100%;
+  background: #ffca28;
+}
+
+#rpm-fill.limit {
+  background: #ef5350;
+}
+
 #keys {
   position: absolute;
   left: 50%;

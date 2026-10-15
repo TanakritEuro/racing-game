@@ -37,10 +37,14 @@ export function runUntil(sim: Simulation, driver: Driver, done: () => boolean, l
 /**
  * A test driver that follows the centreline at `targetSpeed` (m/s): pure-pursuit steering
  * towards a point `lookahead` seconds ahead (at least `minLookahead` metres), proportional
- * throttle and brake. It drives through `Controls` like any other driver, so it gets no
- * help from the car model.
+ * throttle (up to `maxThrottle`) and brake. It drives through `Controls` like any other
+ * driver, so it gets no help from the car model.
  */
-export function followLine(sim: Simulation, targetSpeed: number, lookahead = 0.8, minLookahead = 12): () => Controls {
+export function followLine(
+  sim: Simulation,
+  targetSpeed: number,
+  { maxThrottle = 1, lookahead = 0.8, minLookahead = 12 } = {},
+): () => Controls {
   const { track, car } = sim;
   const n = track.samples.length;
   const spacing = track.length / n;
@@ -63,7 +67,7 @@ export function followLine(sim: Simulation, targetSpeed: number, lookahead = 0.8
     const error = targetSpeed - car.speed;
     return controls({
       steer: clamp(wheelAngle / lock, -1, 1),
-      throttle: clamp(error * 0.5, 0, 1),
+      throttle: clamp(error * 0.5, 0, maxThrottle),
       brake: clamp(-error * 0.3, 0, 1),
     });
   };

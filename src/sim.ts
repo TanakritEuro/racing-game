@@ -8,6 +8,7 @@ import { nearestSample, type Track } from './track/track';
 import { Car, poseOnTrack, type Controls } from './vehicle/car';
 import type { CarDef } from './vehicle/carDef';
 import { KESTREL } from './vehicle/cars';
+import type { GearboxMode } from './vehicle/gearbox';
 
 /** How far behind the start line the car starts (track samples are 2 m apart). */
 const GRID_SAMPLES_BEHIND = 5;
@@ -45,5 +46,10 @@ export class Simulation {
     const p = this.car.position;
     const i = nearestSample(this.track, p.x, p.z, this.timer.index);
     this.car.reset(poseOnTrack(this.track.samples[i]));
+  }
+
+  /** Switch between the automatic and manual gearbox. */
+  setGearboxMode(mode: GearboxMode): void {
+    this.car.drivetrain.setMode(mode);
   }
 }

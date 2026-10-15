@@ -13,7 +13,8 @@
 //      slip (first-order relaxation: the slip builds up over a distance rolled).
 //   3. The substeps' average tyre forces are applied at the contact points, plus aero drag.
 //
-// The drive is still a PLACEHOLDER: a power-limited torque at the rear axle.
+// The rear wheels are driven through the drivetrain (`drivetrain.ts`): engine, clutch,
+// gearbox and differential.
 
 import RAPIER from '@dimforge/rapier3d-compat';
 import { TUNING } from '../config';
@@ -22,6 +23,8 @@ import { clamp, damp, type Quat, type Vec3 } from '../math';
 import type { Physics, SurfaceTag } from '../physics';
 import type { CarDef, TyreDef } from './carDef';
 import { KESTREL } from './cars';
+import { Drivetrain, type DriveOut } from './drivetrain';
+import { REVERSE } from './gearbox';
 import { spinFree, type SpinBody } from './spin';
 import { gripLimit, prepareTyre, tyreForces, type PreparedTyre, type TyreForce } from './tyre';
 
@@ -96,7 +99,6 @@ interface WheelWork {
   fxSum: number;
   fySum: number;
   driveSum: number;
-  brakeSum: number;
 }
 
 export interface Pose {
@@ -112,12 +114,10 @@ export class Car {
   readonly wheels: Wheel[];
   /** Current front wheel angle (rad), positive = right. */
   steerAngle = 0;
-  /** True while the car is in reverse (brake held from a standstill). */
-  reversing = false;
-  /** Reverse can be selected: the brake has been released since the car stopped. */
-  private reverseArmed = false;
+  readonly drivetrain: Drivetrain;
 
   private readonly world: RAPIER.World;
+  private readonly driveOut: DriveOut = { left: 0, right: 0 };
   private readonly tags: Map<number, SurfaceTag>;
   private readonly work: WheelWork[];
   // Scratch, so the per-step maths allocates nothing of its own.
@@ -157,6 +157,7 @@ export class Car {
     );
     this.tags.set(collider.handle, 'car');
     this.ray = new RAPIER.Ray(vec(), vec());
+    this.drivetrain = new Drivetrain(def);
 
     const front = prepareTyre(def.tyres.front);
     const rear = prepareTyre(def.tyres.rear);
@@ -198,7 +199,6 @@ export class Car {
           fxSum: 0,
           fySum: 0,
           driveSum: 0,
-          brakeSum: 0,
         });
       }
     }
@@ -214,8 +214,7 @@ export class Car {
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     this.steerAngle = 0;
-    this.reversing = false;
-    this.reverseArmed = false;
+    this.drivetrain.reset();
     this.wheels.forEach((w, i) => {
       w.suspensionLength = S.restLength;
       w.omega = w.slipRatio = w.slipAngle = 0;
@@ -237,6 +236,11 @@ export class Car {
   get forward(): Vec3 {
     basis(this.rotation, this.carRight, this.carUp, this.carForward);
     return { ...this.carForward };
+  }
+
+  /** In reverse gear. */
+  get reversing(): boolean {
+    return this.drivetrain.gearbox.gear === REVERSE;
   }
 
   /** Signed forward speed (m/s); negative when rolling backwards. */
@@ -261,9 +265,9 @@ export class Car {
     const speed = dot(linvel, fwd);
 
     this.updateSteering(controls.steer, Math.abs(speed), dt);
-    this.updateReverse(controls, speed);
-    const pedalDrive = this.reversing ? controls.brake : controls.throttle;
-    const pedalBrake = this.reversing ? controls.throttle : controls.brake;
+    const drivetrain = this.drivetrain;
+    drivetrain.update(controls, (this.work[2].spin.omega + this.work[3].spin.omega) / 2, speed, dt);
+    const pedalBrake = drivetrain.brakePedal;
 
     // 1. Suspension, contact frames and contact patch velocities.
     const S = this.def.suspension;
@@ -357,32 +361,24 @@ export class Car {
     const I = TUNING.tyreIntegration;
     const substeps = I.substeps;
     const h = dt / substeps;
-    const E = this.def.engine;
-    for (const work of this.work) work.fxSum = work.fySum = work.driveSum = work.brakeSum = 0;
+    for (const work of this.work) work.fxSum = work.fySum = work.driveSum = 0;
     for (let s = 0; s < substeps; s++) {
-      // PLACEHOLDER drive: power-limited torque on the rear axle, split equally.
-      const axleOmega = (this.work[2].spin.omega + this.work[3].spin.omega) / 2;
-      const axleTorque = this.reversing
-        ? -pedalDrive * E.reverseTorque
-        : pedalDrive * Math.min(E.maxWheelTorque, E.power / Math.max(Math.abs(axleOmega), 1));
-
+      // Tyre forces from the relaxed slip, and the torques they put on the wheels.
       for (let i = 0; i < 4; i++) {
         const wheel = this.wheels[i];
         const work = this.work[i];
-        const tyre = wheel.tyre;
-        const r = tyre.radius;
-        const omega = work.spin.omega;
+        const r = wheel.tyre.radius;
         let fx = 0;
         let fy = 0;
         if (wheel.contact) {
-          tyreForces(tyre, wheel.slipRatio, Math.atan(work.tanSlip), wheel.load, work.grip, this.tyreForce);
+          tyreForces(wheel.tyre, wheel.slipRatio, Math.atan(work.tanSlip), wheel.load, work.grip, this.tyreForce);
           fx = this.tyreForce.fx;
           fy = this.tyreForce.fy;
           // Low-speed damping of the slip velocity, fading out with speed.
           const fade = Math.max(0, 1 - Math.abs(work.vLong) / I.lowSpeedFade);
           if (fade > 0) {
             const c = I.lowSpeedDamping * wheel.load * fade;
-            fx += c * (omega * r - work.vLong);
+            fx += c * (work.spin.omega * r - work.vLong);
             fy -= c * work.vLat;
           }
           const total = Math.hypot(fx, fy);
@@ -392,25 +388,34 @@ export class Car {
             fy *= k;
           }
         }
-        const drive = wheel.driven ? axleTorque / 2 : 0;
-        work.spin.torque = drive - fx * r;
+        work.spin.torque = -fx * r;
         work.spin.friction = wheel.brakeTorque + work.rollingDrag;
-        spinFree(work.spin, h);
-
-        // Relax the slip towards its new value (implicit in the |v| term, so it's stable at any speed).
-        if (wheel.contact) {
-          const lim = I.slipLimit;
-          const vAbs = Math.abs(work.vLong);
-          const ax = h / tyre.relaxationLong;
-          wheel.slipRatio = clamp((wheel.slipRatio + ax * (work.spin.omega * r - work.vLong)) / (1 + ax * vAbs), -lim, lim);
-          const ay = h / tyre.relaxationLat;
-          work.tanSlip = clamp((work.tanSlip + ay * work.vLat) / (1 + ay * vAbs), -lim, lim);
-        } else {
-          wheel.slipRatio = work.tanSlip = 0;
-        }
         work.fxSum += fx;
         work.fySum += fy;
-        work.driveSum += drive;
+      }
+
+      // Wheel spin: the driven wheels with the engine through the drivetrain, the others free.
+      spinFree(this.work[0].spin, h);
+      spinFree(this.work[1].spin, h);
+      drivetrain.substep(h, this.work[2].spin, this.work[3].spin, this.driveOut);
+      this.work[2].driveSum += this.driveOut.left;
+      this.work[3].driveSum += this.driveOut.right;
+
+      // Relax the slip towards its new value (implicit in the |v| term, so it's stable at any speed).
+      for (let i = 0; i < 4; i++) {
+        const wheel = this.wheels[i];
+        const work = this.work[i];
+        const tyre = wheel.tyre;
+        if (!wheel.contact) {
+          wheel.slipRatio = work.tanSlip = 0;
+          continue;
+        }
+        const lim = I.slipLimit;
+        const vAbs = Math.abs(work.vLong);
+        const ax = h / tyre.relaxationLong;
+        wheel.slipRatio = clamp((wheel.slipRatio + ax * (work.spin.omega * tyre.radius - work.vLong)) / (1 + ax * vAbs), -lim, lim);
+        const ay = h / tyre.relaxationLat;
+        work.tanSlip = clamp((work.tanSlip + ay * work.vLat) / (1 + ay * vAbs), -lim, lim);
       }
     }
 
@@ -450,19 +455,6 @@ export class Car {
     this.steerAngle += (target - this.steerAngle) * damp(returning ? St.returnRate : St.rate, dt);
   }
 
-  /**
-   * Automatic reverse: pressing brake while stopped selects reverse, where the brake pedal
-   * drives and the throttle brakes. Braking to a stop and holding the pedal keeps the car
-   * stopped: reverse is armed only once the brake has been released at a standstill.
-   */
-  private updateReverse(controls: Controls, speed: number): void {
-    const below = TUNING.automatic.reverseBelow;
-    const stopped = Math.abs(speed) < below;
-    if (!stopped) this.reverseArmed = false;
-    else if (controls.brake === 0) this.reverseArmed = true;
-    if (!this.reversing && this.reverseArmed && controls.brake > 0 && controls.throttle === 0) this.reversing = true;
-    else if (this.reversing && controls.throttle > 0 && controls.brake === 0 && speed > -below) this.reversing = false;
-  }
 }
 
 /** The car's right, up and forward (-Z) axes in the world, from its rotation. */

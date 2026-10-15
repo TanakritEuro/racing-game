@@ -39,10 +39,40 @@ export const KESTREL: CarDef = {
   },
   tyres: { front: SPORT_TYRE, rear: SPORT_TYRE },
   engine: {
-    power: 150_000,
-    maxWheelTorque: 2300,
-    reverseTorque: 1000,
+    // 220 N·m at 5000 rpm, 150 kW at 7000.
+    torqueCurve: [
+      [1000, 140],
+      [2000, 168],
+      [3000, 192],
+      [4000, 210],
+      [5000, 220],
+      [6000, 218],
+      [6500, 213],
+      [7000, 207],
+      [7500, 195],
+      [8000, 170],
+    ],
+    friction: { base: 15, perRpm: 0.004 },
+    idleRpm: 900,
+    limiterRpm: 7500,
+    inertia: 0.18,
+    throttleMap: 2,
   },
+  clutch: {
+    maxTorque: 400,
+    engageRate: 6,
+    launchRpm: 3500,
+  },
+  gearbox: {
+    ratios: [3.3, 2.1, 1.55, 1.2, 1.0, 0.82],
+    reverse: 3.2,
+    finalDrive: 4.1,
+    efficiency: 0.92,
+    shiftTime: 0.2,
+    upshiftRpm: { light: 3200, full: 7200 },
+    downshiftRpm: { coast: 2200, full: 4000 },
+  },
+  differential: { type: 'lsd', preload: 50, ramp: 0.3 },
   brakes: {
     maxTorque: 5000,
     frontBias: 0.62, // the front axle's share of the load at ~1 g: the fronts still lock first

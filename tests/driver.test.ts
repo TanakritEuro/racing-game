@@ -6,7 +6,8 @@ import { LONG_OVAL, SKIDPAD } from './tracks';
 describe('test tracks and the line-following test driver', () => {
   it('holds the skidpad line at a steady speed', async () => {
     const sim = await createSim(SKIDPAD);
-    const driver = followLine(sim, 12);
+    // Part throttle: a full-throttle launch into a constant turn spins this car round.
+    const driver = followLine(sim, 12, { maxThrottle: 0.6 });
     let index: number | undefined;
     let worst = 0;
     for (let t = 0; t < 20; t += 1 / 120) {
