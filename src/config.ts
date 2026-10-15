@@ -113,6 +113,13 @@ export const TUNING = {
     /** Replay TV cameras: width of the shot at the car (m), field of view limits (degrees), aim above the car's origin (m), turn smoothing, near plane (m). */
     tv: { framing: 14, minFov: 4, maxFov: 50, aimHeight: 0.5, follow: 10, near: 0.5 },
   },
+  /** Races (`race/race.ts`). */
+  race: {
+    /** Start lights: the first comes on after `first` (s), one more each `interval` (s), all out after a random wait. */
+    lights: { count: 5, first: 1, interval: 1, wait: [0.2, 3] },
+    /** After the leader finishes, cars still running are classified where they are after this long (s). */
+    classifyAfter: 90,
+  },
   /** AI drivers (`ai/`). */
   ai: {
     envelope: {

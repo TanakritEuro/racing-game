@@ -27,6 +27,9 @@ import { speedProfile } from './ai/speedProfile';
 import { createLineView } from './render/lineView';
 import { bestKey, openBestStore } from './storage/bests';
 import { CIRCUITS } from './track/circuits';
+import { DEFAULT_RACE, Race, type RaceOptions } from './race/race';
+import { DIFFICULTIES, type Difficulty } from './ai/skill';
+import { RaceHud } from './ui/raceHud';
 import { buildTrack } from './track/track';
 import { NO_CONTROLS, poseOnTrack, type Controls } from './vehicle/car';
 import { createPose, interpolatePose } from './vehicle/pose';
@@ -49,7 +52,25 @@ await initPhysics();
 const circuit = CIRCUITS.find((c) => c.id === new URLSearchParams(location.search).get('track')) ?? CIRCUITS[0];
 const track = buildTrack(circuit);
 document.querySelector('#track-name')!.textContent = circuit.name.toUpperCase();
-const sim = new Simulation(track);
+const params = new URLSearchParams(location.search);
+// Race mode (?mode=race, Tab switches): ?difficulty=easy|medium|hard, ?opponents=0..7, ?laps=N.
+const race = params.get('mode') === 'race' ? new Race(track, raceOptions(params)) : null;
+const sim = race ? race.sim : new Simulation(track);
+
+function raceOptions(p: URLSearchParams): RaceOptions {
+  const int = (name: string, lo: number, hi: number, fallback: number) => {
+    const v = Number.parseInt(p.get(name) ?? '', 10);
+    return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : fallback;
+  };
+  const difficulty = p.get('difficulty');
+  return {
+    opponents: int('opponents', 0, 7, DEFAULT_RACE.opponents),
+    laps: int('laps', 1, 50, DEFAULT_RACE.laps),
+    difficulty: DIFFICULTIES.includes(difficulty as Difficulty) ? (difficulty as Difficulty) : DEFAULT_RACE.difficulty,
+    // A different race each time, unless ?seed= asks for a particular one.
+    seed: int('seed', 1, 2 ** 30, 1 + Math.floor(Math.random() * 2 ** 30)),
+  };
+}
 
 const stage = createStage(canvas);
 stage.scene.add(createTrackView(track, sim.physics.terrain));
@@ -59,6 +80,14 @@ const carView = new CarView(
   sim.car.wheels.map((w) => w.mount),
 );
 stage.scene.add(carView.root);
+// The other cars, each in its own colour.
+const AI_COLOURS = [0xd8342c, 0x2f6fd8, 0x2fa84f, 0xeeeeee, 0xf08a24, 0x8e44c8, 0x1fb5b0];
+const others = sim.cars.slice(1).map((car, k) => {
+  const view = new CarView(car.def, car.wheels.map((w) => w.mount), AI_COLOURS[k % AI_COLOURS.length]);
+  stage.scene.add(view.root);
+  return { view, drawn: createPose(), colour: `#${AI_COLOURS[k % AI_COLOURS.length].toString(16).padStart(6, '0')}` };
+});
+const raceHud = race ? new RaceHud(document.querySelector<HTMLDivElement>('#hud')!) : null;
 const cameras = new CameraRig(stage.camera, sim.car.def);
 const drawn = createPose();
 const session = new TimeTrial(sim);
@@ -80,7 +109,6 @@ let controls = NO_CONTROLS;
 const telemetry = new Telemetry(document.body);
 const timing = new TimingHud(document.querySelector<HTMLDivElement>('#timing')!);
 const minimap = new Minimap(document.querySelector<HTMLDivElement>('#hud')!, track);
-const params = new URLSearchParams(location.search);
 telemetry.visible = params.has('telemetry');
 // ?line draws the AI's racing line, coloured by its target speed.
 if (params.has('line')) {
@@ -90,7 +118,7 @@ if (params.has('line')) {
 // ?autopilot hands your car to the AI (for watching it, and checking it).
 const autopilot = params.has('autopilot') ? createAiDriver(track, sim.car.def) : null;
 // ?debug exposes the simulation in the console, for poking at it while developing.
-if (params.has('debug')) Object.assign(window, { sim, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay, autopilot });
+if (params.has('debug')) Object.assign(window, { sim, race, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay, autopilot });
 
 // Bests from earlier visits: the ghost, the delta and the sector colours carry on from them.
 const store = await openBestStore();
@@ -103,6 +131,8 @@ let savedSectors = JSON.stringify(sim.timer.bestSectors);
 
 /** After a lap: keep a new best lap, or a new best sector. */
 function keepBests(event: LapEvent): void {
+  // Race laps (in traffic, from a standing start) aren't time-trial bests.
+  if (race) return;
   const bests = session.bests();
   const sectors = JSON.stringify(sim.timer.bestSectors);
   if (!bests || (event !== 'best' && sectors === savedSectors)) return;
@@ -149,9 +179,18 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyG') settings.ghost = !settings.ghost;
   if (e.code === 'Backspace') {
     e.preventDefault();
-    session.restart();
+    if (race) {
+      race.restart();
+      session.forgetLap();
+    } else session.restart();
     input.reset();
     cameras.snap();
+  }
+  if (e.code === 'Tab') {
+    e.preventDefault();
+    if (race) params.delete('mode');
+    else params.set('mode', 'race');
+    location.search = params.toString();
   }
   if (e.code === 'KeyM') settings.gearbox = settings.gearbox === 'auto' ? 'manual' : 'auto';
   if (['KeyC', 'KeyV', 'KeyZ', 'KeyX', 'KeyM', 'KeyG'].includes(e.code)) applySettings();
@@ -161,7 +200,8 @@ window.addEventListener('keydown', (e) => {
 /** One physics step and what follows it. */
 function step(c: Controls): void {
   controls = c;
-  sim.step(c);
+  if (race) race.step(c);
+  else sim.step(c);
   const event = session.afterStep(c);
   if (event) keepBests(event);
 }
@@ -198,7 +238,9 @@ function drawReplay(t: number, dt: number): void {
   const rec = replay.recording!;
   sampleRecording(rec, t, replayState);
   carView.update(replayState.pose);
-  ghost.update(session.ghost, t, settings.ghost && session.ghost !== rec);
+  // Only your car is recorded: the others stay out of the replay.
+  for (const o of others) o.view.root.visible = false;
+  ghost.update(session.ghost, t, settings.ghost && !race && session.ghost !== rec);
   minimap.update(replayState.pose);
   tv.update(replayState.pose, dt, replay.jumped);
   replay.jumped = false;
@@ -233,6 +275,7 @@ function updateHud(): void {
   light(hud.tc, sim.car.aids.tc, sim.car.tcActive);
   light(hud.assist, steering.assist, false);
   timing.update(sim.timer, sim.time);
+  if (race) raceHud?.update(race);
 }
 
 let last = performance.now();
@@ -263,6 +306,7 @@ function frame(now: number): void {
   if (pad.reset) recover();
   while (accumulator >= PHYSICS_STEP) {
     if (autopilot) {
+      race?.traffic.advise(0, autopilot, PHYSICS_STEP, sim.timer.laps < 1);
       step(autopilot.drive(sim.car, PHYSICS_STEP));
       if (autopilot.stuck) {
         recover();
@@ -275,10 +319,19 @@ function frame(now: number): void {
   // Draw the car the right fraction of the way into the step that hasn't happened yet.
   interpolatePose(sim.previous, sim.current, accumulator / PHYSICS_STEP, drawn);
   carView.update(drawn);
-  // The ghost at the same moment between steps as the car is drawn.
+  others.forEach((o, k) => {
+    const poses = sim.poses[k + 1];
+    interpolatePose(poses.previous, poses.current, accumulator / PHYSICS_STEP, o.drawn);
+    o.view.root.visible = true;
+    o.view.update(o.drawn);
+  });
+  // The ghost at the same moment between steps as the car is drawn (not in a race).
   const lapTime = session.lapTime;
-  ghost.update(session.ghost, lapTime === null ? null : lapTime - PHYSICS_STEP * (1 - accumulator / PHYSICS_STEP), settings.ghost);
-  minimap.update(drawn);
+  ghost.update(session.ghost, lapTime === null ? null : lapTime - PHYSICS_STEP * (1 - accumulator / PHYSICS_STEP), settings.ghost && !race);
+  minimap.update(
+    drawn,
+    others.map((o) => ({ x: o.drawn.position.x, z: o.drawn.position.z, colour: o.colour })),
+  );
   cameras.update(drawn, dt);
   followSun(stage.sun, carView.root.position);
   updateHud();

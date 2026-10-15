@@ -40,6 +40,12 @@ export class Traffic {
     this.carLength = 2 * cars[0].def.halfExtents.z;
   }
 
+  /** Back to the grid: every car on its own line again. */
+  reset(): void {
+    this.side.fill(null);
+    for (const p of this.positions) p.index = -1;
+  }
+
   /** Every car's place on the track. Call after each step. */
   update(cars: readonly Car[]): void {
     const { track } = this;

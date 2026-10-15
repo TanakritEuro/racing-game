@@ -170,6 +170,15 @@ export class AiDriver {
     return limit;
   }
 
+  /** Back to the grid: forget where it was, traffic, mistakes and wander. */
+  reset(): void {
+    this.index = -1;
+    this.aim = 0;
+    this.speedCap = Infinity;
+    this.armed = true;
+    this.recovered();
+  }
+
   /** After the car was put back on the track: forget the stuck timer and any mistake. */
   recovered(): void {
     this.stuckFor = 0;

@@ -59,11 +59,22 @@ export class Minimap {
     ctx.stroke();
   }
 
-  update(pose: CarPose): void {
+  /** Your car as an arrow at `pose`; `others` (other cars) as dots in their colours. */
+  update(pose: CarPose, others: readonly { x: number; z: number; colour: string }[] = []): void {
     const ctx = this.canvas.getContext('2d')!;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.drawImage(this.base, 0, 0);
     const ratio = this.canvas.width / SIZE;
+    for (const o of others) {
+      const [ou, ov] = this.toMap(o.x, o.z);
+      ctx.beginPath();
+      ctx.arc(ou, ov, 3.2 * ratio, 0, 2 * Math.PI);
+      ctx.fillStyle = o.colour;
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 1.2 * ratio;
+      ctx.fill();
+      ctx.stroke();
+    }
     const [u, v] = this.toMap(pose.position.x, pose.position.z);
     // Heading on the ground: the car's −Z.
     const q = pose.rotation;

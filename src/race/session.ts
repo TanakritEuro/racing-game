@@ -71,8 +71,13 @@ export class TimeTrial {
 
   /** Back to the grid for an out lap. The ghost and the bests are kept. */
   restart(): void {
-    this.recorder.cancel();
     this.sim.restart();
+    this.forgetLap();
+  }
+
+  /** Drop the lap being recorded (the car was put back on the grid by someone else: a race restart). */
+  forgetLap(): void {
+    this.recorder.cancel();
     this.recordingFrom = null;
   }
 
