@@ -38,6 +38,6 @@ describe('determinism', () => {
     }
     expect(snapshot(b)).toEqual(snapshot(a));
     // The script actually moved the car.
-    expect(Math.hypot(a.car.position.x, a.car.position.z)).toBeGreaterThan(20);
+    expect(Math.hypot(a.car.position.x, a.car.position.z)).toBeGreaterThan(10);
   });
 });

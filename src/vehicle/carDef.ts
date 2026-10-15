@@ -1,54 +1,56 @@
 // A car is data: every number about one car lives in a `CarDef`, so more cars are just
 // more definitions (`cars.ts`). Numbers that aren't about a particular car (surfaces,
-// keyboard steering assistance, camera) stay in `TUNING`.
+// keyboard steering assistance, camera, integration settings) stay in `TUNING`.
 //
-// Milestone 1 grows this into the full model: tyre curves, engine, gearbox, clutch and
-// differential. Fields marked PLACEHOLDER belong to the scaffold's simple model and go.
+// Fields marked PLACEHOLDER belong to the stand-in drive model that the drivetrain
+// (engine, clutch, gearbox, differential) replaces.
 
 import type { Vec3 } from '../math';
+import type { TyreModel } from './tyre';
 
 export interface SuspensionDef {
   /** Spring fully extended (m). */
   restLength: number;
   /** Spring rate per wheel (N/m). */
   stiffness: number;
-  /** Damping per wheel (N·s/m). */
-  damping: number;
+  /** Damping per wheel in compression (bump) and extension (rebound) (N·s/m). */
+  bump: number;
+  rebound: number;
+  /** Below this suspension length (m) a much stiffer bump stop adds its force (N/m). */
+  bumpStop: { length: number; stiffness: number };
 }
 
-export interface TyreDef {
+export interface TyreDef extends TyreModel {
   radius: number; // m
-  /** PLACEHOLDER: lateral force = cornering stiffness × slip angle × load (per radian, per newton of load). */
-  corneringStiffness: number;
-  /** PLACEHOLDER: slip angles use max(|forward speed|, this) so the force stays stable near standstill (m/s). */
-  lowSpeedClamp: number;
+  /** Wheel, tyre and brake disc about the axle (kg·m²). */
+  inertia: number;
+  /** Distance the tyre rolls for its slip to build up (m): longitudinal and lateral relaxation lengths. */
+  relaxationLong: number;
+  relaxationLat: number;
   /** Rolling resistance coefficient (fraction of load). */
   rollingResistance: number;
 }
 
 export interface EngineDef {
-  /** PLACEHOLDER: peak power (W) and the most drive force the engine can put down at low speed (N). */
+  /** PLACEHOLDER: peak power at the driven wheels (W). */
   power: number;
-  maxDriveForce: number;
-  /** PLACEHOLDER: drive force when reversing (N). */
-  reverseForce: number;
+  /** PLACEHOLDER: most torque the driven axle gets, forwards and in reverse (N·m). */
+  maxWheelTorque: number;
+  reverseTorque: number;
 }
 
 export interface BrakesDef {
-  /**
-   * PLACEHOLDER: brake force per wheel at full pedal, as a fraction of that wheel's grip
-   * limit, before the bias split. The friction circle caps it, so wheels can't lock.
-   */
-  strength: number;
-  /** Share of braking on the front axle. */
+  /** Brake torque of all four wheels together at full pedal (N·m). */
+  maxTorque: number;
+  /** Share of it on the front axle. */
   frontBias: number;
 }
 
 export interface CarDef {
   name: string;
   mass: number; // kg
-  /** Centre of mass relative to the chassis box's centre (m, car local y). Lower = less body roll. */
-  comHeightOffset: number;
+  /** Centre of mass relative to the chassis box's centre (m, car local). Lower = less body roll; +z = towards the rear. */
+  centreOfMass: Vec3;
   /** Chassis collision box half extents (m): width, height, length. */
   halfExtents: Vec3;
   /** Wheel mounts (top of the suspension) in car local space. -Z is the front. */
@@ -58,7 +60,7 @@ export interface CarDef {
   /** Front wheel angle at full lock (rad). */
   steeringLock: number;
   suspension: SuspensionDef;
-  tyre: TyreDef;
+  tyres: { front: TyreDef; rear: TyreDef };
   engine: EngineDef;
   brakes: BrakesDef;
   aero: {

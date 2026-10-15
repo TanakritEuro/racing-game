@@ -33,7 +33,7 @@ export class CarView {
       this.root.add(l);
     }
 
-    const r = def.tyre.radius;
+    const r = def.tyres.front.radius;
     const tyreGeo = new THREE.CylinderGeometry(r, r, 0.26, 20);
     tyreGeo.rotateZ(Math.PI / 2); // axle along X
     const rimGeo = new THREE.CylinderGeometry(r * 0.6, r * 0.6, 0.27, 6);

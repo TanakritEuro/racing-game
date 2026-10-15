@@ -4,18 +4,26 @@
 // Pure simulation: no Three.js, DOM or audio. The presentation reads `wheels`, `steerAngle`
 // and the chassis transform after each step.
 //
-// PLACEHOLDER MODEL (Milestone 1 replaces it): wheels have no rotational dynamics of their
-// own, drive force comes straight from a power curve, and lateral grip is linear in slip
-// angle up to a friction circle. It is enough to drive and to oversteer under power, but
-// it can't do wheelspin, lock-ups that matter, or a believable limit.
+// Per physics step:
+//   1. Suspension: a ray from each mount finds the ground; spring, bump/rebound damping and
+//      bump stop give the tyre's load, so weight transfer emerges on its own.
+//   2. Substeps (TUNING.tyreIntegration.substeps), with the chassis velocities frozen: tyre
+//      forces from the relaxed slip (Pacejka curves, `tyre.ts`), wheel spin from drive,
+//      brake and tyre torques (`spin.ts`), then the relaxed slip moves towards the new
+//      slip (first-order relaxation: the slip builds up over a distance rolled).
+//   3. The substeps' average tyre forces are applied at the contact points, plus aero drag.
+//
+// The drive is still a PLACEHOLDER: a power-limited torque at the rear axle.
 
 import RAPIER from '@dimforge/rapier3d-compat';
 import { TUNING } from '../config';
 import { AIR_DENSITY } from '../constants';
-import { add, clamp, cross, damp, dot, length, normalize, rotate, rotateAbout, scale, sub, type Quat, type Vec3 } from '../math';
+import { clamp, damp, type Quat, type Vec3 } from '../math';
 import type { Physics, SurfaceTag } from '../physics';
-import type { CarDef } from './carDef';
+import type { CarDef, TyreDef } from './carDef';
 import { KESTREL } from './cars';
+import { spinFree, type SpinBody } from './spin';
+import { gripLimit, prepareTyre, tyreForces, type PreparedTyre, type TyreForce } from './tyre';
 
 /** One step's driver inputs. Keyboard, gamepad and AI drivers all produce these. */
 export interface Controls {
@@ -38,11 +46,14 @@ export function controls(c: Partial<Controls>): Controls {
   return { ...NO_CONTROLS, ...c };
 }
 
+export type WheelTyre = TyreDef & PreparedTyre;
+
 export interface Wheel {
   readonly front: boolean;
   readonly driven: boolean;
   /** Top of the suspension in car local space. */
   readonly mount: Vec3;
+  readonly tyre: WheelTyre;
   /** Distance from the mount down to the wheel centre (m). */
   suspensionLength: number;
   contact: boolean;
@@ -51,15 +62,41 @@ export interface Wheel {
   load: number;
   /** Angular velocity (rad/s); positive rolls forward. */
   omega: number;
-  /** Slip ratio and slip angle (rad), and the forces the tyre made this step (N, along / across the wheel). */
+  /** Relaxed slip ratio κ and slip angle α (rad): what the tyre's forces come from. */
   slipRatio: number;
   slipAngle: number;
+  /** Tyre forces averaged over the step (N): along the wheel's heading and to its right. */
   longForce: number;
   latForce: number;
   /** The most force the tyre could make right now, in any direction (N). */
   gripLimit: number;
+  /** Drive and brake torque on the wheel, averaged over the step (N·m). */
+  driveTorque: number;
+  brakeTorque: number;
+  /** Brakes are holding the wheel still while the car moves. */
+  locked: boolean;
   /** Accumulated rolling angle, for drawing (rad). */
   spin: number;
+}
+
+/** Per-wheel working state that the presentation doesn't need. */
+interface WheelWork {
+  spin: SpinBody;
+  /** Relaxed tan(slip angle). */
+  tanSlip: number;
+  /** Contact patch velocity along and across the wheel this step (m/s). */
+  vLong: number;
+  vLat: number;
+  grip: number;
+  rollingDrag: number;
+  /** Contact point and tyre frame on the contact plane, in the world. */
+  point: Vec3;
+  fwd: Vec3;
+  right: Vec3;
+  fxSum: number;
+  fySum: number;
+  driveSum: number;
+  brakeSum: number;
 }
 
 export interface Pose {
@@ -68,10 +105,7 @@ export interface Pose {
   yaw: number;
 }
 
-const UP_LOCAL: Vec3 = { x: 0, y: 1, z: 0 };
-const FORWARD_LOCAL: Vec3 = { x: 0, y: 0, z: -1 };
-/** Brake / rolling resistance force per m/s of wheel speed below the limit: stops cleanly without jitter. */
-const LOW_SPEED_STIFFNESS = 15000;
+const vec = (): Vec3 => ({ x: 0, y: 0, z: 0 });
 
 export class Car {
   readonly body: RAPIER.RigidBody;
@@ -80,9 +114,20 @@ export class Car {
   steerAngle = 0;
   /** True while the car is in reverse (brake held from a standstill). */
   reversing = false;
+  /** Reverse can be selected: the brake has been released since the car stopped. */
+  private reverseArmed = false;
 
   private readonly world: RAPIER.World;
   private readonly tags: Map<number, SurfaceTag>;
+  private readonly work: WheelWork[];
+  // Scratch, so the per-step maths allocates nothing of its own.
+  private readonly ray: RAPIER.Ray;
+  private readonly carRight = vec();
+  private readonly carUp = vec();
+  private readonly carForward = vec();
+  private readonly heading = vec();
+  private readonly force = vec();
+  private readonly tyreForce: TyreForce = { fx: 0, fy: 0 };
 
   constructor(
     physics: Physics,
@@ -91,11 +136,10 @@ export class Car {
   ) {
     this.world = physics.world;
     this.tags = physics.tags;
-    const C = def;
-    const h = C.halfExtents;
+    const h = def.halfExtents;
 
-    // Box inertia of the chassis' own mass; the centre of mass sits below the box centre.
-    const m = C.mass;
+    // Box inertia of the chassis' own mass, about the centre of mass.
+    const m = def.mass;
     const w = 2 * h.x;
     const ht = 2 * h.y;
     const l = 2 * h.z;
@@ -103,7 +147,7 @@ export class Car {
 
     this.body = this.world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
-        .setAdditionalMassProperties(m, { x: 0, y: C.comHeightOffset, z: 0 }, inertia, { x: 0, y: 0, z: 0, w: 1 })
+        .setAdditionalMassProperties(m, def.centreOfMass, inertia, { x: 0, y: 0, z: 0, w: 1 })
         .setCanSleep(false)
         .setCcdEnabled(true),
     );
@@ -112,25 +156,49 @@ export class Car {
       this.body,
     );
     this.tags.set(collider.handle, 'car');
+    this.ray = new RAPIER.Ray(vec(), vec());
 
+    const front = prepareTyre(def.tyres.front);
+    const rear = prepareTyre(def.tyres.rear);
     this.wheels = [];
-    for (const front of [true, false]) {
+    this.work = [];
+    for (const isFront of [true, false]) {
       for (const side of [-1, 1]) {
+        const tyre = isFront ? front : rear;
         this.wheels.push({
-          front,
-          driven: !front, // rear-wheel drive
-          mount: { x: side * C.trackHalf, y: C.mountHeight, z: front ? -C.wheelbaseHalf : C.wheelbaseHalf },
-          suspensionLength: C.suspension.restLength,
+          front: isFront,
+          driven: !isFront, // rear-wheel drive
+          mount: { x: side * def.trackHalf, y: def.mountHeight, z: isFront ? -def.wheelbaseHalf : def.wheelbaseHalf },
+          tyre,
+          suspensionLength: def.suspension.restLength,
           contact: false,
           surface: null,
           load: 0,
           omega: 0,
           slipRatio: 0,
           slipAngle: 0,
-          gripLimit: 0,
           longForce: 0,
           latForce: 0,
+          gripLimit: 0,
+          driveTorque: 0,
+          brakeTorque: 0,
+          locked: false,
           spin: 0,
+        });
+        this.work.push({
+          spin: { omega: 0, inertia: tyre.inertia, torque: 0, friction: 0 },
+          tanSlip: 0,
+          vLong: 0,
+          vLat: 0,
+          grip: 0,
+          rollingDrag: 0,
+          point: vec(),
+          fwd: vec(),
+          right: vec(),
+          fxSum: 0,
+          fySum: 0,
+          driveSum: 0,
+          brakeSum: 0,
         });
       }
     }
@@ -140,14 +208,21 @@ export class Car {
   /** Put the car at `pose`, at rest, with the wheels just touching the ground. */
   reset(pose: Pose): void {
     const S = this.def.suspension;
-    const y = pose.position.y - this.def.mountHeight + S.restLength + this.def.tyre.radius - 0.03;
+    const y = pose.position.y - this.def.mountHeight + S.restLength + this.def.tyres.front.radius - 0.03;
     this.body.setTranslation({ x: pose.position.x, y, z: pose.position.z }, true);
     this.body.setRotation({ x: 0, y: Math.sin(pose.yaw / 2), z: 0, w: Math.cos(pose.yaw / 2) }, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     this.steerAngle = 0;
     this.reversing = false;
-    for (const w of this.wheels) w.suspensionLength = S.restLength;
+    this.reverseArmed = false;
+    this.wheels.forEach((w, i) => {
+      w.suspensionLength = S.restLength;
+      w.omega = w.slipRatio = w.slipAngle = 0;
+      w.locked = false;
+      this.work[i].spin.omega = 0;
+      this.work[i].tanSlip = 0;
+    });
   }
 
   get position(): Vec3 {
@@ -160,12 +235,15 @@ export class Car {
 
   /** Unit vector the car points along, in the world. */
   get forward(): Vec3 {
-    return rotate(this.rotation, FORWARD_LOCAL);
+    basis(this.rotation, this.carRight, this.carUp, this.carForward);
+    return { ...this.carForward };
   }
 
   /** Signed forward speed (m/s); negative when rolling backwards. */
   get speed(): number {
-    return dot(this.body.linvel(), this.forward);
+    const f = this.forward;
+    const v = this.body.linvel();
+    return v.x * f.x + v.y * f.y + v.z * f.z;
   }
 
   /** Compute and apply this step's suspension, tyre and drag forces. Call before `world.step()`. */
@@ -174,108 +252,194 @@ export class Car {
     body.resetForces(false);
     body.resetTorques(false);
 
-    const q = this.rotation;
+    const right = this.carRight;
+    const up = this.carUp;
+    const fwd = this.carForward;
+    basis(body.rotation(), right, up, fwd);
     const pos = body.translation();
-    const up = rotate(q, UP_LOCAL);
-    const down = scale(up, -1);
-    const carForward = rotate(q, FORWARD_LOCAL);
-    const speed = dot(body.linvel(), carForward);
+    const linvel = body.linvel();
+    const speed = dot(linvel, fwd);
 
     this.updateSteering(controls.steer, Math.abs(speed), dt);
-    this.updateGear(controls, speed);
+    this.updateReverse(controls, speed);
     const pedalDrive = this.reversing ? controls.brake : controls.throttle;
     const pedalBrake = this.reversing ? controls.throttle : controls.brake;
 
-    // Total drive force, shared by the driven wheels: power-limited, capped at low speed.
-    const E = this.def.engine;
-    const driveTotal = this.reversing
-      ? -pedalDrive * E.reverseForce
-      : pedalDrive * Math.min(E.maxDriveForce, E.power / Math.max(Math.abs(speed), 1));
-    const drivenCount = this.wheels.filter((w) => w.driven).length;
-
+    // 1. Suspension, contact frames and contact patch velocities.
     const S = this.def.suspension;
-    const T = this.def.tyre;
     const B = this.def.brakes;
-    const radius = T.radius;
-    const reach = S.restLength + radius;
+    const sinSteer = Math.sin(this.steerAngle);
+    const cosSteer = Math.cos(this.steerAngle);
+    for (let i = 0; i < 4; i++) {
+      const wheel = this.wheels[i];
+      const work = this.work[i];
+      const radius = wheel.tyre.radius;
+      const m = wheel.mount;
+      const ox = pos.x + right.x * m.x + up.x * m.y - fwd.x * m.z;
+      const oy = pos.y + right.y * m.x + up.y * m.y - fwd.y * m.z;
+      const oz = pos.z + right.z * m.x + up.z * m.y - fwd.z * m.z;
+      const o = this.ray.origin;
+      o.x = ox;
+      o.y = oy;
+      o.z = oz;
+      const d = this.ray.dir;
+      d.x = -up.x;
+      d.y = -up.y;
+      d.z = -up.z;
+      const hit = this.world.castRayAndGetNormal(this.ray, S.restLength + radius, true, undefined, undefined, undefined, body);
 
-    for (const wheel of this.wheels) {
-      const mount = add(pos, rotate(q, wheel.mount));
-      const hit = this.world.castRayAndGetNormal(
-        new RAPIER.Ray(mount, down),
-        reach,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        body,
-      );
-
-      // Steered wheels turn about the car's up axis (positive angle = right = clockwise from above).
-      const heading = wheel.front ? rotateAbout(carForward, up, -this.steerAngle) : carForward;
-      wheel.omega = dot(body.linvel(), heading) / radius;
-      wheel.spin += wheel.omega * dt;
+      const share = wheel.front ? B.frontBias : 1 - B.frontBias;
+      work.spin.friction = 0;
+      wheel.brakeTorque = (pedalBrake * B.maxTorque * share) / 2;
 
       if (!hit) {
         wheel.contact = false;
         wheel.surface = null;
-        wheel.load = wheel.longForce = wheel.latForce = wheel.slipAngle = wheel.gripLimit = 0;
+        wheel.load = wheel.gripLimit = 0;
         wheel.suspensionLength = S.restLength;
+        work.grip = work.rollingDrag = work.vLong = work.vLat = 0;
         continue;
       }
 
-      const contact = add(mount, scale(down, hit.timeOfImpact));
-      const normal = hit.normal;
+      // Suspension: spring, bump / rebound damping and the bump stop.
+      const toi = hit.timeOfImpact;
+      const length = Math.max(0, toi - radius);
+      const mountVel = body.velocityAtPoint(o);
+      const compressionRate = -dot(mountVel, up);
+      const damping = compressionRate > 0 ? S.bump : S.rebound;
+      const bumpStop = length < S.bumpStop.length ? S.bumpStop.stiffness * (S.bumpStop.length - length) : 0;
+      const load = Math.max(0, S.stiffness * (S.restLength - length) + damping * compressionRate + bumpStop);
       wheel.contact = true;
       wheel.surface = this.tags.get(hit.collider.handle) ?? 'asphalt';
-      wheel.suspensionLength = Math.max(0, hit.timeOfImpact - radius);
-
-      // Suspension: spring on compression, damper on the rate of compression.
-      const compression = S.restLength - wheel.suspensionLength;
-      const compressionRate = -dot(body.velocityAtPoint(mount), up);
-      const load = Math.max(0, S.stiffness * compression + S.damping * compressionRate);
+      wheel.suspensionLength = length;
       wheel.load = load;
-      body.addForceAtPoint(scale(up, load), contact, false);
 
-      // Tyre frame on the contact plane.
-      const fwd = normalize(sub(heading, scale(normal, dot(heading, normal))));
-      const right = normalize(cross(fwd, normal));
-      const v = body.velocityAtPoint(contact);
-      const vLong = dot(v, fwd);
-      const vLat = dot(v, right);
+      const p = work.point;
+      p.x = ox - up.x * toi;
+      p.y = oy - up.y * toi;
+      p.z = oz - up.z * toi;
+      this.force.x = up.x * load;
+      this.force.y = up.y * load;
+      this.force.z = up.z * load;
+      body.addForceAtPoint(this.force, p, false);
+
+      // Tyre frame on the contact plane. Steered wheels turn about the car's up axis (positive = right).
+      const h = this.heading;
+      const sin = wheel.front ? sinSteer : 0;
+      const cos = wheel.front ? cosSteer : 1;
+      h.x = fwd.x * cos + right.x * sin;
+      h.y = fwd.y * cos + right.y * sin;
+      h.z = fwd.z * cos + right.z * sin;
+      const n = hit.normal;
+      const hn = dot(h, n);
+      const tf = work.fwd;
+      tf.x = h.x - n.x * hn;
+      tf.y = h.y - n.y * hn;
+      tf.z = h.z - n.z * hn;
+      normalise(tf);
+      const tr = work.right;
+      // right = fwd × normal
+      tr.x = tf.y * n.z - tf.z * n.y;
+      tr.y = tf.z * n.x - tf.x * n.z;
+      tr.z = tf.x * n.y - tf.y * n.x;
+      normalise(tr);
+      const v = body.velocityAtPoint(p);
+      work.vLong = dot(v, tf);
+      work.vLat = dot(v, tr);
 
       const surface = wheel.surface === 'grass' ? TUNING.surfaces.grass : TUNING.surfaces.asphalt;
-      const limit = surface.grip * load;
+      work.grip = surface.grip;
+      work.rollingDrag = (wheel.tyre.rollingResistance + surface.drag) * load * radius;
+      wheel.gripLimit = gripLimit(wheel.tyre, load, surface.grip);
+    }
 
-      // Longitudinal: drive, brakes, rolling resistance.
-      let fx = wheel.driven ? driveTotal / drivenCount : 0;
-      const brakeShare = wheel.front ? 2 * B.frontBias : 2 * (1 - B.frontBias);
-      const brakeMax = pedalBrake * B.strength * limit * brakeShare;
-      fx -= clamp(vLong * LOW_SPEED_STIFFNESS, -brakeMax, brakeMax);
-      const rollMax = (T.rollingResistance + surface.drag) * load;
-      fx -= clamp(vLong * LOW_SPEED_STIFFNESS, -rollMax, rollMax);
+    // 2. Substeps: tyre forces, wheel spin, slip relaxation.
+    const I = TUNING.tyreIntegration;
+    const substeps = I.substeps;
+    const h = dt / substeps;
+    const E = this.def.engine;
+    for (const work of this.work) work.fxSum = work.fySum = work.driveSum = work.brakeSum = 0;
+    for (let s = 0; s < substeps; s++) {
+      // PLACEHOLDER drive: power-limited torque on the rear axle, split equally.
+      const axleOmega = (this.work[2].spin.omega + this.work[3].spin.omega) / 2;
+      const axleTorque = this.reversing
+        ? -pedalDrive * E.reverseTorque
+        : pedalDrive * Math.min(E.maxWheelTorque, E.power / Math.max(Math.abs(axleOmega), 1));
 
-      // Lateral: linear in slip angle (placeholder for a Pacejka curve).
-      const slipAngle = Math.atan2(vLat, Math.max(Math.abs(vLong), T.lowSpeedClamp));
-      let fy = -T.corneringStiffness * slipAngle * load;
+      for (let i = 0; i < 4; i++) {
+        const wheel = this.wheels[i];
+        const work = this.work[i];
+        const tyre = wheel.tyre;
+        const r = tyre.radius;
+        const omega = work.spin.omega;
+        let fx = 0;
+        let fy = 0;
+        if (wheel.contact) {
+          tyreForces(tyre, wheel.slipRatio, Math.atan(work.tanSlip), wheel.load, work.grip, this.tyreForce);
+          fx = this.tyreForce.fx;
+          fy = this.tyreForce.fy;
+          // Low-speed damping of the slip velocity, fading out with speed.
+          const fade = Math.max(0, 1 - Math.abs(work.vLong) / I.lowSpeedFade);
+          if (fade > 0) {
+            const c = I.lowSpeedDamping * wheel.load * fade;
+            fx += c * (omega * r - work.vLong);
+            fy -= c * work.vLat;
+          }
+          const total = Math.hypot(fx, fy);
+          if (total > wheel.gripLimit) {
+            const k = wheel.gripLimit / total;
+            fx *= k;
+            fy *= k;
+          }
+        }
+        const drive = wheel.driven ? axleTorque / 2 : 0;
+        work.spin.torque = drive - fx * r;
+        work.spin.friction = wheel.brakeTorque + work.rollingDrag;
+        spinFree(work.spin, h);
 
-      // Friction circle: the tyre can't exceed its grip in any direction.
-      const total = Math.hypot(fx, fy);
-      if (total > limit && total > 0) {
-        fx *= limit / total;
-        fy *= limit / total;
+        // Relax the slip towards its new value (implicit in the |v| term, so it's stable at any speed).
+        if (wheel.contact) {
+          const lim = I.slipLimit;
+          const vAbs = Math.abs(work.vLong);
+          const ax = h / tyre.relaxationLong;
+          wheel.slipRatio = clamp((wheel.slipRatio + ax * (work.spin.omega * r - work.vLong)) / (1 + ax * vAbs), -lim, lim);
+          const ay = h / tyre.relaxationLat;
+          work.tanSlip = clamp((work.tanSlip + ay * work.vLat) / (1 + ay * vAbs), -lim, lim);
+        } else {
+          wheel.slipRatio = work.tanSlip = 0;
+        }
+        work.fxSum += fx;
+        work.fySum += fy;
+        work.driveSum += drive;
       }
-      wheel.slipAngle = slipAngle;
-      wheel.gripLimit = limit;
-      wheel.longForce = fx;
-      wheel.latForce = fy;
-      body.addForceAtPoint(add(scale(fwd, fx), scale(right, fy)), contact, false);
+    }
+
+    // 3. Apply the average tyre forces.
+    for (let i = 0; i < 4; i++) {
+      const wheel = this.wheels[i];
+      const work = this.work[i];
+      wheel.omega = work.spin.omega;
+      wheel.spin += wheel.omega * dt;
+      wheel.slipAngle = Math.atan(work.tanSlip);
+      wheel.longForce = work.fxSum / substeps;
+      wheel.latForce = work.fySum / substeps;
+      wheel.driveTorque = work.driveSum / substeps;
+      wheel.locked = wheel.contact && wheel.brakeTorque > 0 && wheel.omega === 0 && Math.abs(work.vLong) > 0.5;
+      if (!wheel.contact) continue;
+      const f = this.force;
+      f.x = work.fwd.x * wheel.longForce + work.right.x * wheel.latForce;
+      f.y = work.fwd.y * wheel.longForce + work.right.y * wheel.latForce;
+      f.z = work.fwd.z * wheel.longForce + work.right.z * wheel.latForce;
+      body.addForceAtPoint(f, work.point, false);
     }
 
     // Aerodynamic drag at the centre of mass.
     const vel = body.linvel();
-    const k = -0.5 * AIR_DENSITY * this.def.aero.dragArea * length(vel);
-    body.addForce(scale(vel, k), false);
+    const k = -0.5 * AIR_DENSITY * this.def.aero.dragArea * Math.hypot(vel.x, vel.y, vel.z);
+    this.force.x = vel.x * k;
+    this.force.y = vel.y * k;
+    this.force.z = vel.z * k;
+    body.addForce(this.force, false);
   }
 
   private updateSteering(input: number, speed: number, dt: number): void {
@@ -286,10 +450,43 @@ export class Car {
     this.steerAngle += (target - this.steerAngle) * damp(returning ? St.returnRate : St.rate, dt);
   }
 
-  private updateGear(controls: Controls, speed: number): void {
+  /**
+   * Automatic reverse: pressing brake while stopped selects reverse, where the brake pedal
+   * drives and the throttle brakes. Braking to a stop and holding the pedal keeps the car
+   * stopped: reverse is armed only once the brake has been released at a standstill.
+   */
+  private updateReverse(controls: Controls, speed: number): void {
     const below = TUNING.automatic.reverseBelow;
-    if (!this.reversing && controls.brake > 0 && controls.throttle === 0 && speed < below) this.reversing = true;
+    const stopped = Math.abs(speed) < below;
+    if (!stopped) this.reverseArmed = false;
+    else if (controls.brake === 0) this.reverseArmed = true;
+    if (!this.reversing && this.reverseArmed && controls.brake > 0 && controls.throttle === 0) this.reversing = true;
     else if (this.reversing && controls.throttle > 0 && controls.brake === 0 && speed > -below) this.reversing = false;
+  }
+}
+
+/** The car's right, up and forward (-Z) axes in the world, from its rotation. */
+function basis(q: Quat, right: Vec3, up: Vec3, forward: Vec3): void {
+  const { x, y, z, w } = q;
+  right.x = 1 - 2 * (y * y + z * z);
+  right.y = 2 * (x * y + w * z);
+  right.z = 2 * (x * z - w * y);
+  up.x = 2 * (x * y - w * z);
+  up.y = 1 - 2 * (x * x + z * z);
+  up.z = 2 * (y * z + w * x);
+  forward.x = -2 * (x * z + w * y);
+  forward.y = -2 * (y * z - w * x);
+  forward.z = -(1 - 2 * (x * x + y * y));
+}
+
+const dot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
+
+function normalise(v: Vec3): void {
+  const l = Math.hypot(v.x, v.y, v.z);
+  if (l > 1e-9) {
+    v.x /= l;
+    v.y /= l;
+    v.z /= l;
   }
 }
 
