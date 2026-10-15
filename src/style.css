@@ -46,6 +46,53 @@ body {
   opacity: 0.75;
 }
 
+#replay {
+  display: none;
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: rgba(10, 14, 20, 0.7);
+  text-align: center;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.r-title {
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+
+.r-title::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #ff4b3e;
+}
+
+.r-time {
+  font-size: 13px;
+}
+
+.r-keys {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+body.replaying #replay {
+  display: block;
+}
+
+body.replaying #timing,
+body.replaying #keys {
+  display: none;
+}
+
 #minimap {
   position: absolute;
   left: 16px;

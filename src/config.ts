@@ -110,5 +110,7 @@ export const TUNING = {
     hood: { fov: 70 },
     /** Near clip plane for the cameras on the car (m), so the hood isn't cut off. */
     inCarNear: 0.05,
+    /** Replay TV cameras: width of the shot at the car (m), field of view limits (degrees), aim above the car's origin (m), turn smoothing, near plane (m). */
+    tv: { framing: 14, minFov: 4, maxFov: 50, aimHeight: 0.5, follow: 10, near: 0.5 },
   },
 };

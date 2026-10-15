@@ -17,6 +17,11 @@ import { TimeTrial, type LapEvent } from './race/session';
 import { GhostView } from './render/ghostView';
 import { Simulation } from './sim';
 import { TimingHud } from './ui/timingHud';
+import { createRecordedState, duration, sampleRecording, type LapRecording } from './race/recording';
+import { formatLapTime } from './race/timing';
+import { Replay, REPLAY_SPEEDS } from './replay/replay';
+import { TvCameraView } from './render/tvCameras';
+import { placeTvCameras } from './track/cameras';
 import { bestKey, openBestStore } from './storage/bests';
 import { CIRCUITS } from './track/circuits';
 import { buildTrack } from './track/track';
@@ -59,6 +64,13 @@ const ghost = new GhostView(
   sim.car.wheels.map((w) => w.mount),
 );
 stage.scene.add(ghost.root);
+const replay = new Replay();
+const replayState = createRecordedState();
+const tv = new TvCameraView(stage.camera, track, placeTvCameras(track, sim.physics.terrain));
+const replayHud = {
+  title: document.querySelector<HTMLDivElement>('#replay .r-title')!,
+  time: document.querySelector<HTMLDivElement>('#replay .r-time')!,
+};
 const input = new PlayerInput();
 const steering = input.steering;
 let controls = NO_CONTROLS;
@@ -68,7 +80,7 @@ const minimap = new Minimap(document.querySelector<HTMLDivElement>('#hud')!, tra
 const params = new URLSearchParams(location.search);
 telemetry.visible = params.has('telemetry');
 // ?debug exposes the simulation in the console, for poking at it while developing.
-if (params.has('debug')) Object.assign(window, { sim, poseOnTrack, session: () => session, step: (c: Controls) => step(c) });
+if (params.has('debug')) Object.assign(window, { sim, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay });
 
 // Bests from earlier visits: the ghost, the delta and the sector colours carry on from them.
 const store = await openBestStore();
@@ -102,7 +114,15 @@ function applySettings(): void {
 applySettings();
 
 window.addEventListener('keydown', (e) => {
+  if (replay.active) {
+    replayKey(e);
+    return;
+  }
   if (e.repeat) return;
+  if (e.code === 'KeyP') {
+    if (e.shiftKey) startReplay(session.ghost, 'BEST LAP');
+    else startReplay(session.lastLap, 'LAST LAP');
+  }
   if (e.code === 'KeyT') telemetry.toggle();
   if (e.code === 'KeyN') {
     const next = CIRCUITS[(CIRCUITS.indexOf(circuit) + 1) % CIRCUITS.length];
@@ -134,6 +154,52 @@ function step(c: Controls): void {
   sim.step(c);
   const event = session.afterStep(c);
   if (event) keepBests(event);
+}
+
+/** Watch `rec` from the TV cameras; live driving waits until it ends. */
+function startReplay(rec: LapRecording | null, caption: string): void {
+  if (!rec) return;
+  replay.play(rec, caption);
+  document.body.classList.add('replaying');
+}
+
+function endReplay(): void {
+  replay.stop();
+  document.body.classList.remove('replaying');
+  cameras.setMode(cameras.mode);
+  input.reset();
+}
+
+function replayKey(e: KeyboardEvent): void {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (!e.repeat) replay.togglePause();
+  }
+  if (e.code === 'ArrowLeft') replay.scrub(-2);
+  if (e.code === 'ArrowRight') replay.scrub(2);
+  const speed = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
+  if (speed >= 0) replay.speed = REPLAY_SPEEDS[speed];
+  if (e.code === 'Escape' || (e.code === 'KeyP' && !e.repeat)) endReplay();
+  if (e.code === 'KeyT' && !e.repeat) telemetry.toggle();
+}
+
+/** A frame of the replay: the recorded car (and the ghost beside it) from the TV cameras. */
+function drawReplay(t: number, dt: number): void {
+  const rec = replay.recording!;
+  sampleRecording(rec, t, replayState);
+  carView.update(replayState.pose);
+  ghost.update(session.ghost, t, settings.ghost && session.ghost !== rec);
+  minimap.update(replayState.pose);
+  tv.update(replayState.pose, dt, replay.jumped);
+  replay.jumped = false;
+  followSun(stage.sun, carView.root.position);
+  const valid = rec.valid ? '' : '  (INVALID)';
+  replayHud.title.textContent = `REPLAY · ${replay.caption} ${formatLapTime(rec.lapTime)}${valid}`;
+  const state = replay.paused ? 'PAUSED' : `${replay.speed}×`;
+  replayHud.time.textContent = `${formatLapTime(t)} / ${formatLapTime(duration(rec))}  ·  ${state}`;
+  hud.speed.textContent = String(Math.round(Math.abs(replayState.speed) * 3.6));
+  hud.gear.textContent = gearLabel(Math.round(replayState.gear));
+  hud.rpm.style.width = `${Math.min(100, (replayState.rpm / sim.car.def.engine.limiterRpm) * 100)}%`;
 }
 
 function recover(): void {
@@ -171,6 +237,18 @@ function frame(now: number): void {
     cameras.cycle();
     settings.camera = cameras.mode;
     saveSettings(settings);
+  }
+  if (replay.active) {
+    // Live driving waits: no steps, and no catching up afterwards.
+    accumulator = 0;
+    const t = replay.update(dt);
+    if (t === null) endReplay();
+    else {
+      drawReplay(t, dt);
+      stage.renderer.render(stage.scene, stage.camera);
+      requestAnimationFrame(frame);
+      return;
+    }
   }
   if (pad.reset) recover();
   while (accumulator >= PHYSICS_STEP) {
