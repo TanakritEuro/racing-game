@@ -1,3 +1,4 @@
+import { scaled, withCornerKerbs, withHairpinGravel } from './corners';
 import type { TrackDef } from './track';
 
 /**
@@ -51,3 +52,161 @@ export const TEST_CIRCUIT: TrackDef = {
     { x: -120, z: 0 },
   ],
 };
+
+const deg = Math.PI / 180;
+
+/**
+ * Harrowmere: fast and flowing over rolling farmland, about 4.5 km. Long straights, sweepers
+ * taken flat out, gentle crests and wide grass run-off. Clockwise.
+ */
+export const HARROWMERE: TrackDef = withCornerKerbs(
+  {
+    id: 'harrowmere',
+    name: 'Harrowmere',
+    width: 13,
+    runoff: { width: 15, surface: 'grass' },
+    terrain: { hills: 12, seed: 7 },
+    points: [
+      { x: 0, z: 0, y: 0 },
+      { x: 400, z: 0, y: 1 },
+      { x: 800, z: 0, y: 3 },
+      { x: 1100, z: 80, y: 6 },
+      { x: 1250, z: 280, y: 9 },
+      { x: 1280, z: 500, y: 7 },
+      { x: 1200, z: 700, y: 3 },
+      { x: 1050, z: 800, y: 0 },
+      { x: 850, z: 780, y: -3 },
+      { x: 700, z: 850, y: -6 },
+      { x: 500, z: 830, y: -5 },
+      { x: 320, z: 760, y: -3 },
+      { x: 260, z: 620, y: 0 },
+      { x: 380, z: 480, y: 3 },
+      { x: 520, z: 420, y: 5 },
+      { x: 600, z: 320, y: 6 },
+      { x: 520, z: 230, y: 5 },
+      { x: 300, z: 260, y: 3 },
+      { x: 100, z: 330, y: 1 },
+      { x: -120, z: 280, y: 0 },
+      { x: -180, z: 130, y: -1 },
+      { x: -120, z: 20, y: -1 },
+    ],
+  },
+  150,
+);
+
+/**
+ * Saltmarsh: tight and technical on flat coastal ground, about 3 km. A narrow 10 m road,
+ * two hairpins and two chicanes, kerbs to ride, gravel traps where the braking is heaviest.
+ * Clockwise.
+ */
+export const SALTMARSH: TrackDef = withHairpinGravel(
+  withCornerKerbs(
+    {
+      id: 'saltmarsh',
+      name: 'Saltmarsh',
+      width: 10,
+      runoff: { width: 10, surface: 'grass' },
+      terrain: { hills: 1.5, seed: 11 },
+      points: [
+        { x: 150, z: 0 },
+        { x: 350, z: 0 },
+        { x: 520, z: 0 },
+        // Hairpin 1, right, its exit leg splaying away south-west.
+        { x: 575, z: 2 },
+        { x: 600, z: 22 },
+        { x: 592, z: 52 },
+        { x: 555, z: 64 },
+        { x: 450, z: 100 },
+        // Chicane A: a jog left, then back to the west.
+        { x: 385, z: 112 },
+        { x: 350, z: 138 },
+        { x: 300, z: 142 },
+        { x: 220, z: 142 },
+        { x: 172, z: 170 },
+        { x: 155, z: 240 },
+        { x: 155, z: 330 },
+        { x: 185, z: 420 },
+        { x: 280, z: 450 },
+        // Chicane B: a jog right, then on east.
+        { x: 365, z: 452 },
+        { x: 400, z: 478 },
+        { x: 445, z: 482 },
+        { x: 540, z: 482 },
+        // Hairpin 2, right, its exit leg splaying away west.
+        { x: 595, z: 486 },
+        { x: 625, z: 506 },
+        { x: 622, z: 538 },
+        { x: 590, z: 552 },
+        { x: 480, z: 568 },
+        { x: 300, z: 578 },
+        { x: 60, z: 578 },
+        { x: -50, z: 540 },
+        { x: -100, z: 440 },
+        { x: -115, z: 250 },
+        { x: -100, z: 90 },
+        { x: -50, z: 15 },
+        { x: 20, z: 0 },
+      ],
+    },
+    120,
+  ),
+);
+
+/** The carousel's points: a right-hander around `centre` at `radius`, from angle `a0` to `a1` (degrees, clockwise from +X). */
+function carousel(cx: number, cz: number, radius: number, a0: number, a1: number, step: number, y: (k: number) => number, bank: number) {
+  const out = [];
+  for (let a = a0, k = 0; a <= a1 + 1e-9; a += step, k++) out.push({ x: cx + radius * Math.cos(a * deg), z: cz + radius * Math.sin(a * deg), y: y(k), bank });
+  return out;
+}
+
+/**
+ * Ridgeback: hilly, about 4 km, with 40 m of climb. An uphill hairpin, a blind crest into a
+ * left, a steep twisting descent and a banked carousel. Clockwise.
+ */
+export const RIDGEBACK: TrackDef = withHairpinGravel(
+  withCornerKerbs(
+    {
+      id: 'ridgeback',
+      name: 'Ridgeback',
+      width: 12,
+      runoff: { width: 12, surface: 'grass' },
+      terrain: { hills: 25, seed: 23 },
+      points: scaled(1.2, [
+        { x: 0, z: 0, y: 0 },
+        { x: 300, z: 0, y: 2 },
+        { x: 550, z: -10, y: 6 },
+        { x: 750, z: 40, y: 12 },
+        { x: 860, z: 170, y: 18 },
+        { x: 885, z: 300, y: 23 },
+        // The uphill hairpin, right, splaying away north-west.
+        { x: 882, z: 360, y: 25 },
+        { x: 858, z: 382, y: 26 },
+        { x: 828, z: 368, y: 27 },
+        { x: 790, z: 330, y: 29 },
+        { x: 720, z: 270, y: 34 },
+        // The blind crest, straight into a left.
+        { x: 620, z: 215, y: 40 },
+        { x: 545, z: 238, y: 38 },
+        { x: 495, z: 320, y: 33 },
+        // The twisting descent.
+        { x: 520, z: 410, y: 27 },
+        { x: 470, z: 480, y: 21 },
+        { x: 500, z: 550, y: 16 },
+        // The banked carousel.
+        ...carousel(420, 640, 80, -20, 180, 40, (k) => 13 - k * 0.8, 10 * deg),
+        { x: 330, z: 560, y: 8 },
+        { x: 300, z: 470, y: 7 },
+        { x: 200, z: 420, y: 5 },
+        { x: 80, z: 440, y: 4 },
+        { x: -40, z: 400, y: 3 },
+        { x: -150, z: 300, y: 2 },
+        { x: -200, z: 150, y: 1 },
+        { x: -130, z: 30, y: 0 },
+      ]),
+    },
+    150,
+  ),
+);
+
+/** The circuits you can drive, in track-select order. */
+export const CIRCUITS: readonly TrackDef[] = [HARROWMERE, SALTMARSH, RIDGEBACK, TEST_CIRCUIT];

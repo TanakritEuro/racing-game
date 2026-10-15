@@ -3,6 +3,7 @@ import { clamp } from '../src/math';
 import { initPhysics } from '../src/physics';
 import { Simulation } from '../src/sim';
 import { TEST_CIRCUIT } from '../src/track/circuits';
+import { curvature } from '../src/track/corners';
 import { buildTrack, lateralOffset, nearestSample, type Track, type TrackDef } from '../src/track/track';
 import { controls, type Controls } from '../src/vehicle/car';
 import type { CarDef } from '../src/vehicle/carDef';
@@ -45,15 +46,16 @@ export function runUntil(sim: Simulation, driver: Driver, done: () => boolean, l
  * A test driver that follows the centreline at `targetSpeed` (m/s): pure-pursuit steering
  * towards a point `lookahead` seconds ahead (at least `minLookahead` metres), `offset`
  * metres left of the centreline (negative = right), proportional throttle (up to
- * `maxThrottle`) and brake. It drives through `Controls` like any other driver, so it gets
- * no help from the car model.
+ * `maxThrottle`) and brake; with `corners`, it also slows for corners (`speedProfile`). It
+ * drives through `Controls` like any other driver, so it gets no help from the car model.
  */
 export function followLine(
   sim: Simulation,
   targetSpeed: number,
-  { maxThrottle = 1, lookahead = 0.8, minLookahead = 12, offset = 0 } = {},
+  { maxThrottle = 1, lookahead = 0.8, minLookahead = 12, offset = 0, corners = false } = {},
 ): () => Controls {
   const { track, car } = sim;
+  const limit = corners ? speedProfile(track) : null;
   const n = track.samples.length;
   const spacing = track.length / n;
   let index: number | undefined;
@@ -72,7 +74,9 @@ export function followLine(
     const alpha = Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz);
     const wheelAngle = Math.atan((4 * car.def.wheelbaseHalf * Math.sin(alpha)) / Math.hypot(dx, dz));
     const lock = car.def.steering.lock;
-    const error = targetSpeed - car.speed;
+    // With `corners`, slow for the corners ahead (the profile already brakes in time).
+    const wanted = limit ? Math.min(targetSpeed, limit[(index + 3) % n]) : targetSpeed;
+    const error = wanted - car.speed;
     return controls({
       steer: clamp(wheelAngle / lock, -1, 1),
       throttle: clamp(error * 0.5, 0, maxThrottle),
@@ -117,4 +121,30 @@ export async function skidpadLimit(trackDef: TrackDef, carDef: CarDef = KESTREL,
     }
   }
   return { best, atBest, frontTransferShare };
+}
+
+const profiles = new WeakMap<Track, Float64Array>();
+
+/**
+ * A cautious speed limit per sample (m/s): the cornering speed at `lateral` m/s² from the
+ * curvature, with backward passes so the speed is shed at `braking` m/s² before each corner.
+ * A test driver's crude racing line; the AI's real one comes in Milestone 5.
+ */
+export function speedProfile(track: Track, lateral = 6, braking = 5): Float64Array {
+  const cached = profiles.get(track);
+  if (cached) return cached;
+  const n = track.samples.length;
+  const ds = track.length / n;
+  const v = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    // The tightest curvature nearby, so a corner's speed holds across all of it.
+    let k = 0;
+    for (let j = -4; j <= 4; j++) k = Math.max(k, Math.abs(curvature(track, (i + j + n) % n)));
+    v[i] = Math.min(90, Math.sqrt(lateral / Math.max(k, 1e-6)));
+  }
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = n - 1; i >= 0; i--) v[i] = Math.min(v[i], Math.sqrt(v[(i + 1) % n] ** 2 + 2 * braking * ds));
+  }
+  profiles.set(track, v);
+  return v;
 }

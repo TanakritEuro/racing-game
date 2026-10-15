@@ -40,6 +40,12 @@ body {
   line-height: 1.5;
 }
 
+#track-name {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  opacity: 0.75;
+}
+
 #lap {
   font-size: 18px;
   font-weight: 700;

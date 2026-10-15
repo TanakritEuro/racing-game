@@ -14,7 +14,7 @@ import { Telemetry } from './render/telemetry';
 import { createTrackView } from './render/trackView';
 import { loadSettings, saveSettings } from './settings';
 import { Simulation } from './sim';
-import { TEST_CIRCUIT } from './track/circuits';
+import { CIRCUITS } from './track/circuits';
 import { buildTrack } from './track/track';
 import { createPose, NO_CONTROLS, poseOnTrack } from './vehicle/car';
 import { NEUTRAL, REVERSE } from './vehicle/gearbox';
@@ -35,7 +35,10 @@ const hud = {
 const gearLabel = (gear: number) => (gear === REVERSE ? 'R' : gear === NEUTRAL ? 'N' : String(gear));
 
 await initPhysics();
-const track = buildTrack(TEST_CIRCUIT);
+// The circuit: ?track=<id>, the first by default. N moves on to the next (until the M6 menus).
+const circuit = CIRCUITS.find((c) => c.id === new URLSearchParams(location.search).get('track')) ?? CIRCUITS[0];
+const track = buildTrack(circuit);
+document.querySelector('#track-name')!.textContent = circuit.name.toUpperCase();
 const sim = new Simulation(track);
 
 const stage = createStage(canvas);
@@ -71,6 +74,11 @@ applySettings();
 window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (e.code === 'KeyT') telemetry.toggle();
+  if (e.code === 'KeyN') {
+    const next = CIRCUITS[(CIRCUITS.indexOf(circuit) + 1) % CIRCUITS.length];
+    params.set('track', next.id);
+    location.search = params.toString();
+  }
   if (e.code === 'KeyC') {
     cameras.cycle();
     settings.camera = cameras.mode;

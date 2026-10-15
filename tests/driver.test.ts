@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { lateralOffset, nearestSample } from '../src/track/track';
 import { createSim, followLine } from './helpers';
 import { LONG_OVAL, SKIDPAD } from './tracks';
+import { HARROWMERE, RIDGEBACK, SALTMARSH } from '../src/track/circuits';
+import { formatLapTime } from '../src/race/timing';
 
 describe('test tracks and the line-following test driver', () => {
   it('holds the skidpad line at a steady speed', async () => {
@@ -56,5 +58,25 @@ describe('test tracks and the line-following test driver', () => {
     // Still on the first straight.
     expect(sim.car.position.x).toBeLessThan(5000);
     expect(Math.abs(sim.car.position.z)).toBeLessThan(1);
+  });
+});
+
+describe.each([HARROWMERE, SALTMARSH, RIDGEBACK].map((def) => [def.name, def] as const))('the test driver on %s', (_, def) => {
+  it('laps it cleanly within the track limits', async () => {
+    const sim = await createSim(def);
+    const driver = followLine(sim, 70, { corners: true });
+    let index: number | undefined;
+    let worst = 0;
+    while (sim.timer.laps < 1 && sim.time < 500) {
+      sim.step(driver());
+      const p = sim.car.position;
+      index = nearestSample(sim.track, p.x, p.z, index);
+      worst = Math.max(worst, Math.abs(lateralOffset(sim.track, index, p.x, p.z)));
+      for (const w of sim.car.wheels) expect(Number.isFinite(w.load + w.longForce + w.latForce)).toBe(true);
+    }
+    console.log(`${def.name}: test-driver lap ${formatLapTime(sim.timer.lastLap)}, furthest ${worst.toFixed(1)} m off the line`);
+    expect(sim.timer.laps).toBe(1);
+    expect(sim.timer.lastValid).toBe(true);
+    expect(worst).toBeLessThan(4);
   });
 });
