@@ -24,11 +24,18 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 ## Current state
 
 Milestones 1 (tyres and drivetrain) and 2 (handling and controls) are done; **Milestone 3
-(tracks) is planned** (`docs/milestone-3.md`).
+(tracks) is built and in playtesting** (`docs/milestone-3.md`).
 
-A 1.4 km test circuit (`track/circuits.ts`) is built from a spline: asphalt, kerbs, edge
-lines, start line, grass run-off and tyre-wall barriers. The car, `KESTREL` (`vehicle/cars.ts`),
-is a Rapier rigid body with four raycast wheels (`vehicle/car.ts`): per-axle suspension with
+Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
+farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
+**Ridgeback** (4.0 km, 40 m of climb, a banked carousel) and the flat 1.4 km Proving Ground
+the vehicle tests use. Each is a spline through control points with elevation, banking and
+width; the road, raised ridged kerbs (from the layout's corners), grass or gravel run-off
+and barriers are 3D strips across each sample's banked frame, on a terrain heightfield that
+rolls away into hills. Track limits (all four wheels off) invalidate a lap. Scenery (trees,
+grandstands, pits), a minimap; `?track=<id>` or N picks the circuit. The car, `KESTREL`
+(`vehicle/cars.ts`), is a Rapier rigid body with four wheels that each touch the ground
+with three rays across the tread (`vehicle/car.ts`): per-axle suspension with
 bump/rebound damping, bump stops and anti-roll bars; per-wheel spin; slip ratio and slip
 angle with relaxation lengths; Pacejka tyres with load sensitivity and combined slip; a
 steering rack with Ackermann geometry; downforce at each axle; and a rear-wheel-drive
@@ -47,7 +54,7 @@ slip, forces, brake torque, ABS and friction circles, RPM, gear, clutch, TC, ped
 Keys: W/S or arrows to accelerate and brake (brake to a stop, release, and press again to
 reverse in automatic), A/D or arrows to steer, Space handbrake, E/Q to shift up/down, M
 automatic/manual, Z ABS, X traction control, V steering assist, C camera, R to put the car
-back on the track, T telemetry. Gamepad: left stick, RT/LT, A handbrake, RB/LB shift, Y
+back on the track, N next circuit, T telemetry. Gamepad: left stick, RT/LT, A handbrake, RB/LB shift, Y
 camera, View/Back reset.
 
 Measured (tests): 0–100 km/h in ~6.5 s (aids on), ~235 km/h top speed, ~0.98 g on a 40 m
@@ -72,8 +79,8 @@ The most important rule: **the simulation does not depend on the presentation.**
 
 Per wheel, every step:
 
-1. **Suspension:** raycast (later a shape-cast the width of the tyre, so kerbs and bumps
-   don't snag a single ray) from the mount down. Spring, bump/rebound damping, bump
+1. **Suspension:** three rays across the tyre's tread from the mount down, the highest
+   hit taken (rays within 3 mm averaged), so kerbs and bumps don't snag a single ray. Spring, bump/rebound damping, bump
    stop. Load `Fz` comes from here, so weight transfer under braking, acceleration and
    cornering emerges on its own. Anti-roll bars per axle.
 2. **Wheel spin dynamics:** each wheel has its own angular velocity `ω`, integrated from
@@ -99,11 +106,14 @@ Racing* series; Hans Pacejka, *Tire and Vehicle Dynamics* (the Magic Formula).
 
 ### Tracks
 
-A track is data (`TrackDef`): a closed centreline through control points, road width
-and run-off. `buildTrack` samples it every 2 m; `track/geometry.ts` turns samples into
-plain arrays used by **both** the colliders and the meshes, so what you see is what the
-tyres drive on. Sample 0 is the start line. Elevation, banking and per-point width come
-in Milestone 3.
+A track is data (`TrackDef`): a closed centreline through control points (each with
+elevation, banking and width), run-off, kerb and gravel spans, terrain and scenery.
+`buildTrack` samples it every 2 m, each sample with a banked cross-section frame and a
+profile of what lies beyond each edge; `track/geometry.ts` sweeps strips across those
+frames into plain arrays used by **both** the colliders and the meshes, so what you see is
+what the tyres drive on. Sample 0 is the start line. Nearest-sample lookups are 2D, so
+layouts must not cross over themselves. `tests/circuits.test.ts` checks every circuit
+(length, radius ≥ 12 m, grade ≤ 12 %, banking ≤ 12°, no overlaps, a straight start).
 
 ## Layout
 
@@ -111,7 +121,8 @@ in Milestone 3.
 - `src/config.ts` — `TUNING`: what isn't about one car (keyboard steering, transmission
   logic, drivetrain solver, tyre integration, surfaces, camera).
 - `src/math.ts` — vectors, quaternion rotation, smoothing, seeded PRNG.
-- `src/physics.ts` — Rapier world: grass sized to the track, road trimesh, barriers, surface tags.
+- `src/physics.ts` — Rapier world: terrain heightfield, road / kerb / run-off trimeshes,
+  barriers, surface tags, collision groups (wheels only see ground).
 - `src/sim.ts` — `Simulation`: world, car, lap timer, fixed `step(controls)`, `recover()`,
   `setGearboxMode()`.
 - `src/vehicle/car.ts` — chassis body, raycast suspension, the wheel substep loop (tyre
@@ -126,17 +137,22 @@ in Milestone 3.
   ratios and shift timing; locking torque for open / locked / limited-slip.
 - `src/vehicle/drivetrain.ts` — automatic and manual shifting, automatic clutch, idle and
   limiter, and the substep solver coupling engine, clutch, diff, brakes and driven wheels.
-- `src/track/` — `track.ts` (spline, samples, nearest sample, lateral offset),
-  `geometry.ts` (road ribbons, barrier segments), `circuits.ts` (track definitions).
-- `src/race/timing.ts` — lap timer and time formatting.
+- `src/track/` — `track.ts` (spline, samples and frames, side profiles, nearest sample,
+  lateral offset), `geometry.ts` (strips and sweeps: road, kerbs, run-off, barriers),
+  `terrain.ts` (heightfield), `corners.ts` (corners from curvature, kerb and gravel
+  placement), `scenery.ts` (seeded tree and building layout), `circuits.ts` (the circuits).
+- `src/race/timing.ts` — lap timer, track limits and time formatting.
 - `src/render/` — `scene.ts` (renderer, sky, sun), `trackView.ts`, `carView.ts`
   (placeholder car), `cameras.ts` (chase, bumper, hood), `interpolate.ts` (drawing between
-  physics steps), `telemetry.ts` (`?telemetry` overlay).
+  physics steps), `telemetry.ts` (`?telemetry` overlay), `terrainView.ts`, `scenery.ts`,
+  `minimap.ts`.
 - `src/input/` — `keyboard.ts`, `gamepad.ts`, `index.ts` (`PlayerInput`: both devices → `Controls`).
 - `src/settings.ts` — player settings in localStorage.
-- `src/main.ts` — entry point and frame loop.
+- `src/main.ts` — entry point and frame loop; `?track=<id>`, `?telemetry`, `?debug`
+  (exposes `sim` in the console).
 - `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
-  line-following test driver; `tracks.ts` has test-only layouts (skidpad, long oval).
+  line-following test driver (offset, curvature speed profile); `tracks.ts` has test-only
+  layouts (skidpads, long oval, hill, kerbed oval, grass and gravel pads).
 
 ## Conventions
 

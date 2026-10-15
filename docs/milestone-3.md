@@ -1,6 +1,33 @@
 # Milestone 3 plan: tracks
 
-## Status: proposed, waiting for your OK
+## Status: built, in playtesting
+
+Measured: the test driver (cornering at only 0.6 g) laps Harrowmere in 2:19, Saltmarsh in
+2:05 and Ridgeback in 2:23, cleanly within the limits. A physics step with one car costs
+0.19–0.27 ms, the car update 0.06–0.14 ms (12 rays), so nine cars fit in ~2 ms a frame.
+Building a circuit (track, terrain, physics, scenery) takes 0.3–0.5 s.
+
+Where the build differs from the plan below:
+
+- **Wheels touch the ground with three rays across the tread, not a shape-cast.** A cylinder
+  shape-cast put a 1 mm ripple at every 2 m mesh edge (Rapier's cast tolerance), a fake
+  14 Hz buzz at 100 km/h. Taking the highest of three exact rays, with rays within 3 mm
+  of it averaged (taking just the highest flipped between rays on rounding noise and set
+  up a 12 Hz pitch wobble), gives the tyre its width without the noise.
+- **Collision groups:** wheels only see ground (road, kerbs, run-off, terrain). A
+  tyre-width contact otherwise climbed the barriers when the car slid along them.
+- **Kerbs and gravel come from the layout:** `track/corners.ts` finds corners by curvature
+  and puts kerbs inside each (and outside its exit), gravel outside each hairpin, so they
+  follow the control points. The Proving Ground gained corner kerbs this way (its old
+  painted strips are gone).
+- **"Locked" means braked and turning under 5 % of road speed**, not exactly zero, which the
+  drivetrain solver doesn't always reach.
+- **Recovering the car (R) voids the lap**, so it can't be a shortcut.
+- **Gravel really traps a rear-drive car:** its drag (0.3 g) exceeds the rears' traction on
+  it, so the test eases onto gravel at speed and compares deceleration with grass.
+- **`?debug`** exposes the simulation in the console (used to place the car for visual checks).
+- The Ridgeback layout is scaled up 20 % to reach 4 km; Saltmarsh's start line sits 150 m
+  into its straight.
 
 Goal: real circuits. The road rises, falls and banks, changes width, and has kerbs you
 can ride with a rumble you feel through the suspension. Run-off is grass or gravel,
