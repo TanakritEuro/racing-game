@@ -1,6 +1,10 @@
 # Milestone 4 plan: time trial and ghosts
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (the ghost's visibility, trusting the live
+delta, reading the sector colours, replay camera angles and cuts, replay controls, bests
+surviving a reload) stay open.
 
 Approved as proposed: transform ghosts, the keys below, the all-time best lap as the only ghost.
 

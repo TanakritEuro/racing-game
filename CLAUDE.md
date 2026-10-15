@@ -23,8 +23,8 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 ## Current state
 
-Milestones 1–3 (tyres and drivetrain, handling and controls, tracks) are done; **Milestone 4
-(time trial and ghosts) is built and in playtesting** (`docs/milestone-4.md`).
+Milestones 1–4 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts)
+are done; **Milestone 5 (AI drivers) is planned** (`docs/milestone-5.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
