@@ -47,6 +47,8 @@ export interface TrackDef {
   gravel?: readonly (Span & { width?: number })[];
   /** The landscape around the circuit. Default: flat. */
   terrain?: TerrainDef;
+  /** Where sectors 1 and 2 end (m from the start line). Default: a third and two thirds of the lap. */
+  sectors?: readonly [number, number];
   /** Trees, grandstands and pits. Default: none. */
   scenery?: SceneryDef;
 }

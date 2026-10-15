@@ -4,7 +4,6 @@
 import { PHYSICS_STEP } from './constants';
 import { PlayerInput } from './input';
 import { initPhysics } from './physics';
-import { formatLapTime } from './race/timing';
 import { CarView } from './render/carView';
 import { CameraRig } from './render/cameras';
 import { interpolatePose } from './render/interpolate';
@@ -16,6 +15,7 @@ import { createTrackView } from './render/trackView';
 import { layoutScenery } from './track/scenery';
 import { loadSettings, saveSettings } from './settings';
 import { Simulation } from './sim';
+import { TimingHud } from './ui/timingHud';
 import { CIRCUITS } from './track/circuits';
 import { buildTrack } from './track/track';
 import { createPose, NO_CONTROLS, poseOnTrack } from './vehicle/car';
@@ -25,9 +25,6 @@ const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
 const hud = {
   speed: document.querySelector<HTMLDivElement>('#speed')!,
   gear: document.querySelector<HTMLDivElement>('#gear')!,
-  lap: document.querySelector<HTMLDivElement>('#lap')!,
-  last: document.querySelector<HTMLDivElement>('#last')!,
-  best: document.querySelector<HTMLDivElement>('#best')!,
   rpm: document.querySelector<HTMLDivElement>('#rpm-fill')!,
   abs: document.querySelector<HTMLSpanElement>('#abs-light')!,
   tc: document.querySelector<HTMLSpanElement>('#tc-light')!,
@@ -57,6 +54,7 @@ const input = new PlayerInput();
 const steering = input.steering;
 let controls = NO_CONTROLS;
 const telemetry = new Telemetry(document.body);
+const timing = new TimingHud(document.querySelector<HTMLDivElement>('#timing')!);
 const minimap = new Minimap(document.querySelector<HTMLDivElement>('#hud')!, track);
 const params = new URLSearchParams(location.search);
 telemetry.visible = params.has('telemetry');
@@ -114,11 +112,7 @@ function updateHud(): void {
   light(hud.abs, sim.car.aids.abs, sim.car.absActive);
   light(hud.tc, sim.car.aids.tc, sim.car.tcActive);
   light(hud.assist, steering.assist, false);
-  const t = sim.timer;
-  hud.lap.textContent = t.current(sim.time) === null ? 'OUT LAP' : `LAP ${t.laps + 1}  ${formatLapTime(t.current(sim.time))}${t.invalid ? '  INVALID' : ''}`;
-  hud.lap.classList.toggle('invalid', t.invalid);
-  hud.last.textContent = `LAST ${formatLapTime(t.lastLap)}${t.lastLap !== null && !t.lastValid ? ' (invalid)' : ''}`;
-  hud.best.textContent = `BEST ${formatLapTime(t.bestLap)}`;
+  timing.update(sim.timer, sim.time);
 }
 
 let last = performance.now();

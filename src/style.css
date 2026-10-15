@@ -46,11 +46,6 @@ body {
   opacity: 0.75;
 }
 
-#lap {
-  font-size: 18px;
-  font-weight: 700;
-}
-
 #minimap {
   position: absolute;
   left: 16px;
@@ -61,8 +56,54 @@ body {
   background: rgba(10, 14, 20, 0.35);
 }
 
-#lap.invalid {
+.t-lap {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.t-lap.invalid {
   color: #ff6b5e;
+}
+
+.t-delta {
+  font-size: 22px;
+  font-weight: 800;
+  min-height: 1.1em;
+}
+
+.t-delta.faster {
+  color: #5fe07a;
+}
+
+.t-delta.slower {
+  color: #ff6b5e;
+}
+
+.t-splits {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 4px;
+}
+
+.t-split {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.t-split.best {
+  background: #9b4fd6;
+}
+
+.t-split.faster {
+  background: #2f9e4a;
+}
+
+.t-split.slower {
+  background: #c9a227;
+  color: #1b1300;
+  text-shadow: none;
 }
 
 #dash {
