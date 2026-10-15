@@ -1,6 +1,10 @@
 # Milestone 3 plan: tracks
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (kerb rumble and snagging, the blind crest,
+the carousel's banking, gravel strictness, track-limit strictness, scenery and frame rate)
+stay open.
 
 Measured: the test driver (cornering at only 0.6 g) laps Harrowmere in 2:19, Saltmarsh in
 2:05 and Ridgeback in 2:23, cleanly within the limits. A physics step with one car costs
