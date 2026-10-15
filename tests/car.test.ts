@@ -3,7 +3,8 @@ import type { Simulation } from '../src/sim';
 import { controls, NO_CONTROLS } from '../src/vehicle/car';
 import { KESTREL } from '../src/vehicle/cars';
 import { createSim, followLine, run, runUntil } from './helpers';
-import { LONG_OVAL } from './tracks';
+import { LONG_OVAL, SKIDPAD } from './tracks';
+import { lateralOffset, nearestSample } from '../src/track/track';
 
 let sim: Simulation;
 
@@ -225,6 +226,38 @@ describe('car', () => {
     run(sim, controls({ brake: 1 }), 2);
     expect(sim.car.reversing).toBe(true);
     expect(sim.car.speed).toBeLessThan(-1);
+  });
+
+  it('holds 0.85–1.0 g on the skidpad, running out of front grip first', async () => {
+    const s = await createSim(SKIDPAD);
+    // Settle at 15 m/s, then creep the target speed up until the car can't hold the circle.
+    let target = 15;
+    const drive = () => followLine(s, target, { maxThrottle: 0.4 })();
+    let index: number | undefined;
+    let best = 0;
+    let atBest = { front: 0, rear: 0 };
+    const window: number[] = [];
+    for (let i = 0; i < 75 * 120; i++) {
+      if (i > 15 * 120) target += 0.1 / 120;
+      s.step(drive());
+      const p = s.car.position;
+      index = nearestSample(s.track, p.x, p.z, index);
+      const v = s.car.body.linvel();
+      // Lateral acceleration from the speed and the radius actually driven, averaged over 1 s.
+      window.push((v.x * v.x + v.z * v.z) / Math.hypot(p.x, p.z) / 9.81);
+      if (window.length > 120) window.shift();
+      const g = window.reduce((a, b) => a + b, 0) / window.length;
+      if (window.length === 120 && Math.abs(lateralOffset(s.track, index, p.x, p.z)) < 5 && g > best) {
+        best = g;
+        const [fl, fr, rl, rr] = s.car.wheels;
+        atBest = { front: Math.abs(fl.slipAngle + fr.slipAngle) / 2, rear: Math.abs(rl.slipAngle + rr.slipAngle) / 2 };
+      }
+    }
+    expect(best).toBeGreaterThan(0.85);
+    expect(best).toBeLessThan(1.0);
+    // Understeer at the limit: the fronts are at their peak slip angle, the rears below theirs.
+    expect(atBest.front).toBeGreaterThan(atBest.rear * 1.3);
+    expect(atBest.front).toBeGreaterThan(0.8 * s.car.wheels[0].tyre.peakSlipAngle);
   });
 
   it('turns without rolling over and keeps the forces finite', () => {

@@ -1,6 +1,40 @@
 # Milestone 1 plan: tyres and drivetrain
 
-## Status: proposed, waiting for your OK
+## Status: built, waiting for playtesting
+
+Measured by the tests: 0–100 km/h in 6.6 s, 240 km/h after 65 s on the long oval,
+0.92 g on the 40 m skidpad with the fronts at their limit first, 43 m from 100 km/h at
+the best pedal without locking (squeezed on over 0.3 s), 0.026 ms per car per step.
+
+Where the build differs from the plan below:
+
+- **Targets, deliberately:** lateral grip is 0.92 g, not "about 1 g": that is what a
+  road car on μ 1.1 tyres pulls once load transfer is counted, and the car understeers
+  at the limit (anti-roll bars in M2 are the balance tool). 0–100 is 6.6 s, not 6. The
+  braking test squeezes the pedal on over 0.3 s and allows 45 m: a pedal step locks the
+  fronts before the weight has come forward, which is right without ABS.
+- **Brake bias is 62 % front**, the front axle's share of the load at ~1 g. 70 % left
+  the rears idle; the fronts still lock first.
+- **Load sensitivity is a power law,** μ = mu·(Fz/F0)^(−k): never negative, so it
+  needs no clamp.
+- **The drivetrain is one small solver,** not a viscous clutch. Clutch, differential and
+  brakes on the driven wheels are torque-limited velocity constraints solved together
+  each substep, so a locked clutch is rigid and a slipping one passes its capacity.
+- **The automatic clutch** holds the engine near a throttle-dependent bite point at part
+  throttle, and dumps at full throttle so launches spin the rears. The throttle is
+  progressive (`throttleMap`: 75 % torque at half pedal); with a linear pedal the car
+  barely pulled away at part throttle.
+- **The automatic** upshifts at a point that rises with the throttle, and holds the gear
+  when you lift, for engine braking into corners.
+- **Automatic reverse needs a second press:** braking to a stop and holding the pedal
+  keeps the car stopped (it would otherwise reverse down a slope); release and press
+  again to reverse. Both modes start in first.
+- **Keyboard steering lock** at speed is halved by 12 m/s rather than 22: at 100 km/h
+  full lock is now ~10°, about what the car needs at the limit instead of 15°.
+- **The ground is sized to the track** (it was a fixed 4 km square that the long test
+  oval ran off).
+- Extra tests: a lap of the test circuit, part-throttle launches without wheelspin,
+  manual gearbox refusals, idling in neutral.
 
 Goal: replace the placeholder car with the real model. Every wheel spins on its own,
 slip builds up through relaxation lengths, Pacejka curves with load sensitivity and

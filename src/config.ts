@@ -4,8 +4,12 @@
 
 export const TUNING = {
   steering: {
-    /** Speed (m/s) at which full lock is halved; keyboard steering needs this to be drivable. */
-    halfLockSpeed: 22,
+    /**
+     * Speed (m/s) at which full lock is halved; keyboard steering needs this to be drivable.
+     * 12 gives ~10° at 100 km/h, about what the car needs at its limit (proper speed-sensitive
+     * assistance is Milestone 2), and still ~19° for a hairpin at 36 km/h.
+     */
+    halfLockSpeed: 12,
     /** How fast the wheel turns towards the keyboard's target (per second) and back to centre. */
     rate: 4,
     returnRate: 7,

@@ -24,6 +24,22 @@ describe('test tracks and the line-following test driver', () => {
     expect(sim.track.length).toBeLessThan(255);
   });
 
+  it('laps the test circuit, hairpin included, at 12 m/s', async () => {
+    const sim = await createSim();
+    // The tightest corner is a ~12 m radius: ~10 m/s at the car's grip, so 12 m/s runs a little wide there.
+    const driver = followLine(sim, 12, { maxThrottle: 0.7 });
+    let index: number | undefined;
+    let worst = 0;
+    while (sim.timer.laps < 1 && sim.time < 200) {
+      sim.step(driver());
+      const p = sim.car.position;
+      index = nearestSample(sim.track, p.x, p.z, index);
+      worst = Math.max(worst, Math.abs(lateralOffset(sim.track, index, p.x, p.z)));
+    }
+    expect(sim.timer.laps).toBe(1);
+    expect(worst).toBeLessThan(2);
+  });
+
   it('keeps the car on the long oval straight at full speed', async () => {
     const sim = await createSim(LONG_OVAL);
     const driver = followLine(sim, 100);

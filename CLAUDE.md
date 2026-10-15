@@ -23,17 +23,27 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 ## Current state
 
-Scaffold with a drivable **placeholder** car. A 1.4 km test circuit (`track/circuits.ts`)
-is built from a spline: asphalt, kerbs, edge lines, start line, grass run-off and tyre-wall
-barriers. The car is a Rapier rigid body with four raycast wheels (`vehicle/car.ts`):
-spring-damper suspension, a power-limited rear-wheel drive force, brakes with a bias,
-and lateral grip linear in slip angle inside a friction circle. Grass has less grip and
-more drag. Lap timing (`race/timing.ts`) with an out lap, last and best laps. Chase
-camera. Keys: W/S or arrows to accelerate and brake (hold brake at a standstill to
-reverse), A/D or arrows to steer, R to put the car back on the track.
+**Milestone 1 (tyres and drivetrain) is built and waiting for playtesting** (`docs/milestone-1.md`).
 
-The placeholder drives and can oversteer under power, but it has no wheel spin dynamics,
-so no real wheelspin or lock-ups, no gears and no believable limit. Milestone 1 replaces it.
+A 1.4 km test circuit (`track/circuits.ts`) is built from a spline: asphalt, kerbs, edge
+lines, start line, grass run-off and tyre-wall barriers. The car, `KESTREL` (`vehicle/cars.ts`),
+is a Rapier rigid body with four raycast wheels (`vehicle/car.ts`): suspension with
+bump/rebound damping and bump stops; per-wheel spin; slip ratio and slip angle with
+relaxation lengths; Pacejka tyres with load sensitivity and combined slip; and a
+rear-wheel-drive drivetrain (engine torque curve, limiter, engine braking, six-speed
+gearbox, automatic or manual, automatic clutch, limited-slip diff). The wheel and drivetrain
+maths runs in 8 substeps per physics step. Wheels spin on full-throttle launches and lock
+under a stamped brake: there is no traction control or ABS yet. Grass has less grip and
+more drag. Lap timing (`race/timing.ts`) with an out lap, last and best laps. Chase camera.
+`?telemetry` (or T) shows per-wheel load, slip, forces and friction circles, RPM, gear,
+pedals and graphs.
+
+Keys: W/S or arrows to accelerate and brake (brake to a stop, release, and press again to
+reverse in automatic), A/D or arrows to steer, E/Q to shift up/down, M to switch between
+automatic and manual, R to put the car back on the track, T for telemetry.
+
+Measured (tests): 0–100 km/h in ~6.6 s, ~240 km/h top speed, ~0.92 g on a 40 m skidpad
+(understeer at the limit), ~43 m from 100 km/h at the best pedal without locking.
 
 ## Architecture
 
@@ -90,18 +100,27 @@ in Milestone 3.
 ## Layout
 
 - `src/constants.ts` — physical constants, `PHYSICS_STEP` (1/120 s).
-- `src/config.ts` — `TUNING`: what isn't about one car (keyboard steering, automatic, surfaces, camera).
+- `src/config.ts` — `TUNING`: what isn't about one car (keyboard steering, transmission
+  logic, drivetrain solver, tyre integration, surfaces, camera).
 - `src/math.ts` — vectors, quaternion rotation, smoothing, seeded PRNG.
-- `src/physics.ts` — Rapier world: grass, road trimesh, barriers, surface tags.
-- `src/sim.ts` — `Simulation`: world, car, lap timer, fixed `step(controls)`, `recover()`.
-- `src/vehicle/car.ts` — chassis body, raycast wheels, suspension and tyre forces, `Controls`.
+- `src/physics.ts` — Rapier world: grass sized to the track, road trimesh, barriers, surface tags.
+- `src/sim.ts` — `Simulation`: world, car, lap timer, fixed `step(controls)`, `recover()`,
+  `setGearboxMode()`.
+- `src/vehicle/car.ts` — chassis body, raycast suspension, the wheel substep loop (tyre
+  forces, wheel spin, slip relaxation), force application, `Controls`.
 - `src/vehicle/carDef.ts` — `CarDef`, every number about one car; `cars.ts` — the cars (`KESTREL`).
+- `src/vehicle/tyre.ts` — Magic Formula, load sensitivity, combined slip (pure functions).
+- `src/vehicle/spin.ts` — wheel spin integration with friction torques that never reverse a wheel.
+- `src/vehicle/engine.ts`, `gearbox.ts`, `differential.ts` — torque curve and engine braking;
+  ratios and shift timing; locking torque for open / locked / limited-slip.
+- `src/vehicle/drivetrain.ts` — automatic and manual shifting, automatic clutch, idle and
+  limiter, and the substep solver coupling engine, clutch, diff, brakes and driven wheels.
 - `src/track/` — `track.ts` (spline, samples, nearest sample, lateral offset),
   `geometry.ts` (road ribbons, barrier segments), `circuits.ts` (track definitions).
 - `src/race/timing.ts` — lap timer and time formatting.
 - `src/render/` — `scene.ts` (renderer, sky, sun), `trackView.ts`, `carView.ts`
-  (placeholder car), `chaseCamera.ts`.
-- `src/input.ts` — keyboard → `Controls`.
+  (placeholder car), `chaseCamera.ts`, `telemetry.ts` (`?telemetry` overlay).
+- `src/input.ts` — keyboard → `Controls`, shift requests.
 - `src/main.ts` — entry point and frame loop.
 - `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
   line-following test driver; `tracks.ts` has test-only layouts (skidpad, long oval).
