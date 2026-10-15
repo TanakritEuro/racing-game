@@ -5,7 +5,7 @@ import { PHYSICS_STEP } from './constants';
 import { createPhysics, type Physics } from './physics';
 import { LapTimer } from './race/timing';
 import { nearestSample, type Track } from './track/track';
-import { Car, poseOnTrack, type Controls } from './vehicle/car';
+import { Car, copyPose, createPose, poseOnTrack, type CarPose, type Controls } from './vehicle/car';
 import type { CarDef } from './vehicle/carDef';
 import { KESTREL } from './vehicle/cars';
 import type { GearboxMode } from './vehicle/gearbox';
@@ -17,6 +17,9 @@ export class Simulation {
   readonly physics: Physics;
   readonly car: Car;
   readonly timer: LapTimer;
+  /** The car's pose before and after the last step, for drawing in between. */
+  readonly previous: CarPose = createPose();
+  readonly current: CarPose = createPose();
   /** Simulation time (s). */
   time = 0;
   steps = 0;
@@ -30,11 +33,14 @@ export class Simulation {
     const grid = track.samples[n - GRID_SAMPLES_BEHIND];
     this.car = new Car(this.physics, poseOnTrack(grid), carDef);
     this.timer = new LapTimer(track, grid.x, grid.z);
+    this.settlePose();
   }
 
   step(controls: Controls): void {
+    copyPose(this.current, this.previous);
     this.car.update(controls, PHYSICS_STEP);
     this.physics.world.step();
+    this.car.capturePose(this.current);
     this.time += PHYSICS_STEP;
     this.steps++;
     const p = this.car.position;
@@ -46,6 +52,13 @@ export class Simulation {
     const p = this.car.position;
     const i = nearestSample(this.track, p.x, p.z, this.timer.index);
     this.car.reset(poseOnTrack(this.track.samples[i]));
+    this.settlePose();
+  }
+
+  /** Make both poses the car's pose now, so a teleport isn't drawn as a slide. */
+  private settlePose(): void {
+    this.car.capturePose(this.current);
+    copyPose(this.current, this.previous);
   }
 
   /** Switch between the automatic and manual gearbox. */

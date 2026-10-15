@@ -63,4 +63,6 @@ export interface CarDef {
     /** Drag coefficient × frontal area, C_d·A (m²). */
     dragArea: number;
   };
+  /** Where the bumper and hood cameras sit, in car local space (they look along -Z). */
+  cameras: { bumper: Vec3; hood: Vec3 };
 }

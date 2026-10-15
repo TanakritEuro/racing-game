@@ -80,4 +80,8 @@ export const KESTREL: CarDef = {
   aero: {
     dragArea: 0.62,
   },
+  cameras: {
+    bumper: { x: 0, y: -0.05, z: -2.2 },
+    hood: { x: 0, y: 0.34, z: -0.8 },
+  },
 };

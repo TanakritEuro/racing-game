@@ -224,6 +224,25 @@ export class Car {
     });
   }
 
+  /** Write the car's current pose into `out`. */
+  capturePose(out: CarPose): void {
+    const p = this.body.translation();
+    const q = this.body.rotation();
+    out.position.x = p.x;
+    out.position.y = p.y;
+    out.position.z = p.z;
+    out.rotation.x = q.x;
+    out.rotation.y = q.y;
+    out.rotation.z = q.z;
+    out.rotation.w = q.w;
+    this.wheels.forEach((w, i) => {
+      const o = out.wheels[i];
+      o.suspensionLength = w.suspensionLength;
+      o.steer = w.front ? this.steerAngle : 0;
+      o.spin = w.spin;
+    });
+  }
+
   get position(): Vec3 {
     return this.body.translation();
   }
@@ -480,6 +499,27 @@ function normalise(v: Vec3): void {
     v.y /= l;
     v.z /= l;
   }
+}
+
+/** What the presentation draws: the chassis transform and each wheel's travel, steer and roll. */
+export interface CarPose {
+  position: Vec3;
+  rotation: Quat;
+  wheels: { suspensionLength: number; steer: number; spin: number }[];
+}
+
+export function createPose(): CarPose {
+  return {
+    position: vec(),
+    rotation: { x: 0, y: 0, z: 0, w: 1 },
+    wheels: [0, 1, 2, 3].map(() => ({ suspensionLength: 0, steer: 0, spin: 0 })),
+  };
+}
+
+export function copyPose(from: CarPose, to: CarPose): void {
+  Object.assign(to.position, from.position);
+  Object.assign(to.rotation, from.rotation);
+  from.wheels.forEach((w, i) => Object.assign(to.wheels[i], w));
 }
 
 /** Where to put the car at track sample `index`, facing the driving direction. */

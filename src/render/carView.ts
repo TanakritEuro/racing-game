@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import type { Vec3 } from '../math';
+import type { CarPose } from '../vehicle/car';
 import type { CarDef } from '../vehicle/carDef';
-import type { Car } from '../vehicle/car';
 
 /**
  * Placeholder car: boxes for the body and cabin, cylinders for wheels. Reads the car's
@@ -10,7 +11,12 @@ export class CarView {
   readonly root = new THREE.Group();
   private readonly wheels: { pivot: THREE.Group; tyre: THREE.Mesh }[] = [];
 
-  constructor(def: CarDef, colour = 0xe0b020) {
+  /** `mounts`: each wheel's suspension mount in car space (`Car.wheels[i].mount`). */
+  constructor(
+    def: CarDef,
+    private readonly mounts: readonly Vec3[],
+    colour = 0xe0b020,
+  ) {
     const h = def.halfExtents;
     const paint = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.35, metalness: 0.3 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x15181c, roughness: 0.4, metalness: 0.2 });
@@ -51,15 +57,17 @@ export class CarView {
     }
   }
 
-  update(car: Car): void {
-    const p = car.position;
-    const q = car.rotation;
+  update(pose: CarPose): void {
+    const p = pose.position;
+    const q = pose.rotation;
     this.root.position.set(p.x, p.y, p.z);
     this.root.quaternion.set(q.x, q.y, q.z, q.w);
-    car.wheels.forEach((w, i) => {
+    pose.wheels.forEach((w, i) => {
       const { pivot, tyre } = this.wheels[i];
-      pivot.position.set(w.mount.x, w.mount.y - w.suspensionLength, w.mount.z);
-      pivot.rotation.y = w.front ? -car.steerAngle : 0;
+      const m = this.mounts[i];
+      pivot.position.set(m.x, m.y - w.suspensionLength, m.z);
+      // Positive steer is to the right: clockwise from above, a negative rotation about +Y.
+      pivot.rotation.y = -w.steer;
       // Rolling forward (-Z) turns the top of the wheel forward: negative rotation about +X.
       tyre.rotation.x = -w.spin;
     });

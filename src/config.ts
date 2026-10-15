@@ -69,11 +69,18 @@ export const TUNING = {
     slipLimit: 1,
   },
   camera: {
-    distance: 6.2,
-    height: 2.1,
-    lookAhead: 4,
-    fov: 62,
-    /** Smoothing: fraction of the remaining gap closed per second (higher = stiffer). */
-    follow: 6,
+    chase: {
+      distance: 6.2,
+      height: 2.1,
+      lookAhead: 4,
+      fov: 62,
+      near: 0.3,
+      /** Smoothing: fraction of the remaining gap closed per second (higher = stiffer). */
+      follow: 6,
+    },
+    bumper: { fov: 75 },
+    hood: { fov: 70 },
+    /** Near clip plane for the cameras on the car (m), so the hood isn't cut off. */
+    inCarNear: 0.05,
   },
 };

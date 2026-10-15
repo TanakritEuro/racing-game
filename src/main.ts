@@ -6,13 +6,15 @@ import { Keyboard } from './input';
 import { initPhysics } from './physics';
 import { formatLapTime } from './race/timing';
 import { CarView } from './render/carView';
-import { ChaseCamera } from './render/chaseCamera';
+import { CameraRig } from './render/cameras';
+import { interpolatePose } from './render/interpolate';
 import { createStage, followSun } from './render/scene';
 import { Telemetry } from './render/telemetry';
 import { createTrackView } from './render/trackView';
 import { Simulation } from './sim';
 import { TEST_CIRCUIT } from './track/circuits';
 import { buildTrack } from './track/track';
+import { createPose } from './vehicle/car';
 import { NEUTRAL, REVERSE } from './vehicle/gearbox';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
@@ -33,19 +35,24 @@ const sim = new Simulation(track);
 
 const stage = createStage(canvas);
 stage.scene.add(createTrackView(track));
-const carView = new CarView(sim.car.def);
+const carView = new CarView(
+  sim.car.def,
+  sim.car.wheels.map((w) => w.mount),
+);
 stage.scene.add(carView.root);
-const chase = new ChaseCamera(stage.camera);
+const cameras = new CameraRig(stage.camera, sim.car.def);
+const drawn = createPose();
 const keyboard = new Keyboard();
 const telemetry = new Telemetry(document.body);
 telemetry.visible = new URLSearchParams(location.search).has('telemetry');
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyT') telemetry.toggle();
+  if (e.code === 'KeyC') cameras.cycle();
   if (e.code === 'KeyM') sim.setGearboxMode(sim.car.drivetrain.gearbox.mode === 'auto' ? 'manual' : 'auto');
   if (e.code === 'KeyR') {
     sim.recover();
-    chase.snap();
+    cameras.snap();
   }
 });
 
@@ -76,8 +83,10 @@ function frame(now: number): void {
     accumulator -= PHYSICS_STEP;
   }
 
-  carView.update(sim.car);
-  chase.update(sim.car, dt);
+  // Draw the car the right fraction of the way into the step that hasn't happened yet.
+  interpolatePose(sim.previous, sim.current, accumulator / PHYSICS_STEP, drawn);
+  carView.update(drawn);
+  cameras.update(drawn, dt);
   followSun(stage.sun, carView.root.position);
   updateHud();
   telemetry.update({
