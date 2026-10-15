@@ -287,3 +287,19 @@ export function lateralOffset(track: Track, i: number, x: number, z: number): nu
   const p = track.samples[i];
   return (x - p.x) * p.nx + (z - p.z) * p.nz;
 }
+
+/**
+ * A short fingerprint of a built track's layout: everything that decides where the road is.
+ * Saved laps carry it, so a ghost recorded on an older layout isn't drawn off the road.
+ */
+export function trackFingerprint(track: Track): string {
+  const { def } = track;
+  const layout = JSON.stringify([def.points, def.width, def.runoff, def.kerbs ?? [], def.gravel ?? [], track.samples.length]);
+  // FNV-1a, 32 bits.
+  let h = 0x811c9dc5;
+  for (let i = 0; i < layout.length; i++) {
+    h ^= layout.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return `${def.id}-${(h >>> 0).toString(16).padStart(8, '0')}-${Math.round(track.length)}`;
+}

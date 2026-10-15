@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { TUNING } from '../config';
 import { damp } from '../math';
-import type { CarPose } from '../vehicle/car';
+import type { CarPose } from '../vehicle/pose';
 import type { CarDef } from '../vehicle/carDef';
 
 export type CameraMode = 'chase' | 'bumper' | 'hood';

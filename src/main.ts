@@ -6,7 +6,6 @@ import { PlayerInput } from './input';
 import { initPhysics } from './physics';
 import { CarView } from './render/carView';
 import { CameraRig } from './render/cameras';
-import { interpolatePose } from './render/interpolate';
 import { Minimap } from './render/minimap';
 import { createStage, followSun } from './render/scene';
 import { Telemetry } from './render/telemetry';
@@ -18,7 +17,8 @@ import { Simulation } from './sim';
 import { TimingHud } from './ui/timingHud';
 import { CIRCUITS } from './track/circuits';
 import { buildTrack } from './track/track';
-import { createPose, NO_CONTROLS, poseOnTrack } from './vehicle/car';
+import { NO_CONTROLS, poseOnTrack } from './vehicle/car';
+import { createPose, interpolatePose } from './vehicle/pose';
 import { NEUTRAL, REVERSE } from './vehicle/gearbox';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!;

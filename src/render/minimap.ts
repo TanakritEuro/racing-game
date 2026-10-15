@@ -1,7 +1,7 @@
 // Minimap: the track's outline seen from above (north up), the start line, and the car.
 // The outline is drawn once; each frame copies it and adds the car.
 
-import type { CarPose } from '../vehicle/car';
+import type { CarPose } from '../vehicle/pose';
 import type { Track } from '../track/track';
 
 const SIZE = 180;

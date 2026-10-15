@@ -1,7 +1,28 @@
-// Drawing between physics steps: physics runs at a fixed 120 Hz and the display at
-// whatever rate it likes, so the car is drawn part-way between its last two poses.
+// The car's pose: what the presentation draws (and what lap recordings store), with
+// helpers to copy it and to blend between two poses. Pure data and maths.
 
-import type { CarPose } from '../vehicle/car';
+import type { Quat, Vec3 } from '../math';
+
+/** The chassis transform and each wheel's travel, steer and roll (unwrapped). */
+export interface CarPose {
+  position: Vec3;
+  rotation: Quat;
+  wheels: { suspensionLength: number; steer: number; spin: number }[];
+}
+
+export function createPose(): CarPose {
+  return {
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0, w: 1 },
+    wheels: [0, 1, 2, 3].map(() => ({ suspensionLength: 0, steer: 0, spin: 0 })),
+  };
+}
+
+export function copyPose(from: CarPose, to: CarPose): void {
+  Object.assign(to.position, from.position);
+  Object.assign(to.rotation, from.rotation);
+  from.wheels.forEach((w, i) => Object.assign(to.wheels[i], w));
+}
 
 /** `out` = the pose `t` (0–1) of the way from `a` to `b`. Wheel spin is unwrapped, so it blends directly. */
 export function interpolatePose(a: CarPose, b: CarPose, t: number, out: CarPose): void {

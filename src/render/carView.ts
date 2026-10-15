@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Vec3 } from '../math';
-import type { CarPose } from '../vehicle/car';
+import type { CarPose } from '../vehicle/pose';
 import type { CarDef } from '../vehicle/carDef';
 
 /**

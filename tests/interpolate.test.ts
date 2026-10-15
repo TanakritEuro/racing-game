@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { interpolatePose } from '../src/render/interpolate';
-import { createPose, NO_CONTROLS } from '../src/vehicle/car';
+import { NO_CONTROLS } from '../src/vehicle/car';
+import { createPose, interpolatePose } from '../src/vehicle/pose';
 import { createSim, run } from './helpers';
 
 describe('pose interpolation', () => {

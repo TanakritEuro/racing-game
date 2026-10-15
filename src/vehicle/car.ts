@@ -24,6 +24,7 @@ import { CAR_GROUPS, WHEEL_QUERY_GROUPS, type Physics, type SurfaceTag } from '.
 import type { TrackSample } from '../track/track';
 import type { CarDef, TyreDef } from './carDef';
 import { KESTREL } from './cars';
+import type { CarPose } from './pose';
 import { Drivetrain, type DriveOut } from './drivetrain';
 import { REVERSE } from './gearbox';
 import { absStep, tcStep, type AidSettings } from './aids';
@@ -693,27 +694,6 @@ function normalise(v: Vec3): void {
     v.y /= l;
     v.z /= l;
   }
-}
-
-/** What the presentation draws: the chassis transform and each wheel's travel, steer and roll. */
-export interface CarPose {
-  position: Vec3;
-  rotation: Quat;
-  wheels: { suspensionLength: number; steer: number; spin: number }[];
-}
-
-export function createPose(): CarPose {
-  return {
-    position: vec(),
-    rotation: { x: 0, y: 0, z: 0, w: 1 },
-    wheels: [0, 1, 2, 3].map(() => ({ suspensionLength: 0, steer: 0, spin: 0 })),
-  };
-}
-
-export function copyPose(from: CarPose, to: CarPose): void {
-  Object.assign(to.position, from.position);
-  Object.assign(to.rotation, from.rotation);
-  from.wheels.forEach((w, i) => Object.assign(to.wheels[i], w));
 }
 
 /** Where to put the car at a track sample: on the road, facing the driving direction, pitched and banked with it. */
