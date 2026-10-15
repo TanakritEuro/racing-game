@@ -10,6 +10,7 @@ export interface Settings {
   steeringAssist: boolean;
   gearbox: GearboxMode;
   camera: CameraMode;
+  ghost: boolean;
 }
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
@@ -18,6 +19,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   steeringAssist: true,
   gearbox: 'auto',
   camera: 'chase',
+  ghost: true,
 };
 
 const KEY = 'racing.settings.v1';

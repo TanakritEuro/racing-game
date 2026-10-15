@@ -31,10 +31,22 @@ export class Simulation {
     carDef: CarDef = KESTREL,
   ) {
     this.physics = createPhysics(track);
-    const n = track.samples.length;
-    const grid = track.samples[n - GRID_SAMPLES_BEHIND];
+    const grid = this.grid;
     this.car = new Car(this.physics, poseOnTrack(grid), carDef);
     this.timer = new LapTimer(track, grid.x, grid.z);
+    this.settlePose();
+  }
+
+  /** Where the car starts: a little behind the start line. */
+  private get grid() {
+    return this.track.samples[this.track.samples.length - GRID_SAMPLES_BEHIND];
+  }
+
+  /** Back to the grid for an out lap; the best laps are kept. */
+  restart(): void {
+    const grid = this.grid;
+    this.car.reset(poseOnTrack(grid));
+    this.timer.restart(grid.x, grid.z);
     this.settlePose();
   }
 

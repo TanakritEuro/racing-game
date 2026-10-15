@@ -13,6 +13,8 @@ import { createSceneryView } from './render/scenery';
 import { createTrackView } from './render/trackView';
 import { layoutScenery } from './track/scenery';
 import { loadSettings, saveSettings } from './settings';
+import { TimeTrial } from './race/session';
+import { GhostView } from './render/ghostView';
 import { Simulation } from './sim';
 import { TimingHud } from './ui/timingHud';
 import { CIRCUITS } from './track/circuits';
@@ -50,6 +52,12 @@ const carView = new CarView(
 stage.scene.add(carView.root);
 const cameras = new CameraRig(stage.camera, sim.car.def);
 const drawn = createPose();
+const session = new TimeTrial(sim);
+const ghost = new GhostView(
+  sim.car.def,
+  sim.car.wheels.map((w) => w.mount),
+);
+stage.scene.add(ghost.root);
 const input = new PlayerInput();
 const steering = input.steering;
 let controls = NO_CONTROLS;
@@ -59,7 +67,7 @@ const minimap = new Minimap(document.querySelector<HTMLDivElement>('#hud')!, tra
 const params = new URLSearchParams(location.search);
 telemetry.visible = params.has('telemetry');
 // ?debug exposes the simulation in the console, for poking at it while developing.
-if (params.has('debug')) Object.assign(window, { sim, poseOnTrack });
+if (params.has('debug')) Object.assign(window, { sim, poseOnTrack, session: () => session });
 
 // Settings: remembered between visits, applied to the simulation through its setters.
 const settings = loadSettings();
@@ -87,8 +95,15 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyV') settings.steeringAssist = !settings.steeringAssist;
   if (e.code === 'KeyZ') settings.abs = !settings.abs;
   if (e.code === 'KeyX') settings.tc = !settings.tc;
+  if (e.code === 'KeyG') settings.ghost = !settings.ghost;
+  if (e.code === 'Backspace') {
+    e.preventDefault();
+    session.restart();
+    input.reset();
+    cameras.snap();
+  }
   if (e.code === 'KeyM') settings.gearbox = settings.gearbox === 'auto' ? 'manual' : 'auto';
-  if (['KeyC', 'KeyV', 'KeyZ', 'KeyX', 'KeyM'].includes(e.code)) applySettings();
+  if (['KeyC', 'KeyV', 'KeyZ', 'KeyX', 'KeyM', 'KeyG'].includes(e.code)) applySettings();
   if (e.code === 'KeyR') recover();
 });
 
@@ -132,12 +147,16 @@ function frame(now: number): void {
   while (accumulator >= PHYSICS_STEP) {
     controls = input.controls(sim.car, PHYSICS_STEP);
     sim.step(controls);
+    session.afterStep(controls);
     accumulator -= PHYSICS_STEP;
   }
 
   // Draw the car the right fraction of the way into the step that hasn't happened yet.
   interpolatePose(sim.previous, sim.current, accumulator / PHYSICS_STEP, drawn);
   carView.update(drawn);
+  // The ghost at the same moment between steps as the car is drawn.
+  const lapTime = session.lapTime;
+  ghost.update(session.ghost, lapTime === null ? null : lapTime - PHYSICS_STEP * (1 - accumulator / PHYSICS_STEP), settings.ghost);
   minimap.update(drawn);
   cameras.update(drawn, dt);
   followSun(stage.sun, carView.root.position);

@@ -66,6 +66,16 @@ export class LapTimer {
     this.sectorEnds = [Math.round((ends[0] / track.length) * n), Math.round((ends[1] / track.length) * n)];
   }
 
+  /** Back to an out lap from (x, z), keeping the last and best laps. */
+  restart(x: number, z: number): void {
+    this.index = nearestSample(this.track, x, z);
+    this.lapStart = null;
+    this.passedHalf = false;
+    this.invalid = false;
+    this.sectors = [null, null, null];
+    this.reached = 0;
+  }
+
   /** Void the lap in progress (e.g. the car was put back on the track). */
   invalidate(): void {
     if (this.lapStart !== null) this.invalid = true;
