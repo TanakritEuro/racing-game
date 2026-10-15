@@ -1,6 +1,30 @@
 # Milestone 2 plan: handling and controls
 
-## Status: proposed, waiting for your OK
+## Status: built, in playtesting
+
+Measured by the tests: 0.98 g on the skidpad with mild understeer (front 45 % of the
+lateral load transfer), ~560 N downforce at 200 km/h, 0–100 km/h in 6.5 s with TC on
+(6.9 s off, wheels spinning), 39 m from 100 km/h stamping the brake with ABS (no lock
+above 3 m/s, and the car still steers), 0.028 ms per car per step.
+
+Where the build differs from the plan below:
+
+- **Bars:** 10 000 N/m front, 16 000 rear. Equal bars gave 0.96 g; moving roll stiffness
+  rearward gained grip and kept the fronts reaching their limit first.
+- **TC acts on the engine's drive torque, not the throttle,** so a cut never becomes
+  engine braking (which, mid-slide, spun the car). It also needs a real slip speed
+  (0.5 m/s) as well as the slip ratio: near a standstill a tiny difference is a big ratio.
+- **Shifts sync on a slipping clutch.** After a gear change the clutch carries the
+  engine's torque + 60 N·m until the revs match; snapping it in kicked the flywheel's
+  energy into the wheels and spun them on the 1–2 shift. The flywheel is lighter
+  (0.12 kg·m²) and engine braking stronger at high revs, closer to a real engine.
+- **Gamepad steering is direct** (dead zone 0.08, curve 1.6), with no speed-sensitive
+  lock, as planned; whether it needs some is a playtest question.
+- The ABS test counts lock-ups above 3 m/s only (ABS stands down below 2 m/s so the car
+  can stop); "steers under braking" is measured as sideways travel, since a car with all
+  four wheels locked can rotate without changing course.
+- Settings (aids, assist, gearbox, camera) are remembered in localStorage as planned; the
+  ASSIST light joins ABS and TC on the dash.
 
 Goal: the car handles like a tuned car and is good to drive on any input. Anti-roll
 bars and downforce give the chassis a balance to tune; Ackermann steering, a handbrake,

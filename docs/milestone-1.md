@@ -1,6 +1,6 @@
 # Milestone 1 plan: tyres and drivetrain
 
-## Status: built, waiting for playtesting
+## Status: done
 
 Measured by the tests: 0–100 km/h in 6.6 s, 240 km/h after 65 s on the long oval,
 0.92 g on the 40 m skidpad with the fronts at their limit first, 43 m from 100 km/h at

@@ -23,27 +23,35 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 ## Current state
 
-**Milestone 1 (tyres and drivetrain) is built and waiting for playtesting** (`docs/milestone-1.md`).
+Milestone 1 (tyres and drivetrain) is done. **Milestone 2 (handling and controls) is built
+and in playtesting** (`docs/milestone-2.md`).
 
 A 1.4 km test circuit (`track/circuits.ts`) is built from a spline: asphalt, kerbs, edge
 lines, start line, grass run-off and tyre-wall barriers. The car, `KESTREL` (`vehicle/cars.ts`),
-is a Rapier rigid body with four raycast wheels (`vehicle/car.ts`): suspension with
-bump/rebound damping and bump stops; per-wheel spin; slip ratio and slip angle with
-relaxation lengths; Pacejka tyres with load sensitivity and combined slip; and a
-rear-wheel-drive drivetrain (engine torque curve, limiter, engine braking, six-speed
-gearbox, automatic or manual, automatic clutch, limited-slip diff). The wheel and drivetrain
-maths runs in 8 substeps per physics step. Wheels spin on full-throttle launches and lock
-under a stamped brake: there is no traction control or ABS yet. Grass has less grip and
-more drag. Lap timing (`race/timing.ts`) with an out lap, last and best laps. Chase camera.
-`?telemetry` (or T) shows per-wheel load, slip, forces and friction circles, RPM, gear,
-pedals and graphs.
+is a Rapier rigid body with four raycast wheels (`vehicle/car.ts`): per-axle suspension with
+bump/rebound damping, bump stops and anti-roll bars; per-wheel spin; slip ratio and slip
+angle with relaxation lengths; Pacejka tyres with load sensitivity and combined slip; a
+steering rack with Ackermann geometry; downforce at each axle; and a rear-wheel-drive
+drivetrain (engine torque curve, limiter, engine braking, six-speed gearbox, automatic or
+manual, automatic clutch, limited-slip diff). Handbrake, ABS and traction control
+(`vehicle/aids.ts`, on by default, toggleable). The wheel and drivetrain maths runs in 8
+substeps per physics step. Grass has less grip and more drag. Lap timing (`race/timing.ts`)
+with an out lap, last and best laps.
+
+Keyboard steering goes through an assist (`drivers/steeringAssist.ts`: speed-sensitive lock,
+counter-steer help, toggleable); gamepads steer the rack directly with analogue triggers
+(`input/`). Chase, bumper and hood cameras; the car is drawn interpolated between physics
+steps. Settings are remembered in localStorage. `?telemetry` (or T) shows per-wheel load,
+slip, forces, brake torque, ABS and friction circles, RPM, gear, clutch, TC, pedals and graphs.
 
 Keys: W/S or arrows to accelerate and brake (brake to a stop, release, and press again to
-reverse in automatic), A/D or arrows to steer, E/Q to shift up/down, M to switch between
-automatic and manual, R to put the car back on the track, T for telemetry.
+reverse in automatic), A/D or arrows to steer, Space handbrake, E/Q to shift up/down, M
+automatic/manual, Z ABS, X traction control, V steering assist, C camera, R to put the car
+back on the track, T telemetry. Gamepad: left stick, RT/LT, A handbrake, RB/LB shift, Y
+camera, View/Back reset.
 
-Measured (tests): 0–100 km/h in ~6.6 s, ~240 km/h top speed, ~0.92 g on a 40 m skidpad
-(understeer at the limit), ~43 m from 100 km/h at the best pedal without locking.
+Measured (tests): 0–100 km/h in ~6.5 s (aids on), ~235 km/h top speed, ~0.98 g on a 40 m
+skidpad (mild understeer at the limit), ~39 m from 100 km/h stamping the brake with ABS.
 
 ## Architecture
 
@@ -111,6 +119,9 @@ in Milestone 3.
 - `src/vehicle/carDef.ts` — `CarDef`, every number about one car; `cars.ts` — the cars (`KESTREL`).
 - `src/vehicle/tyre.ts` — Magic Formula, load sensitivity, combined slip (pure functions).
 - `src/vehicle/spin.ts` — wheel spin integration with friction torques that never reverse a wheel.
+- `src/vehicle/steering.ts` — steering rack rate and Ackermann geometry.
+- `src/vehicle/aids.ts` — ABS and traction control slip controllers.
+- `src/drivers/steeringAssist.ts` — keyboard keys → steering position (assist on or off).
 - `src/vehicle/engine.ts`, `gearbox.ts`, `differential.ts` — torque curve and engine braking;
   ratios and shift timing; locking torque for open / locked / limited-slip.
 - `src/vehicle/drivetrain.ts` — automatic and manual shifting, automatic clutch, idle and
@@ -119,8 +130,10 @@ in Milestone 3.
   `geometry.ts` (road ribbons, barrier segments), `circuits.ts` (track definitions).
 - `src/race/timing.ts` — lap timer and time formatting.
 - `src/render/` — `scene.ts` (renderer, sky, sun), `trackView.ts`, `carView.ts`
-  (placeholder car), `chaseCamera.ts`, `telemetry.ts` (`?telemetry` overlay).
-- `src/input.ts` — keyboard → `Controls`, shift requests.
+  (placeholder car), `cameras.ts` (chase, bumper, hood), `interpolate.ts` (drawing between
+  physics steps), `telemetry.ts` (`?telemetry` overlay).
+- `src/input/` — `keyboard.ts`, `gamepad.ts`, `index.ts` (`PlayerInput`: both devices → `Controls`).
+- `src/settings.ts` — player settings in localStorage.
 - `src/main.ts` — entry point and frame loop.
 - `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
   line-following test driver; `tracks.ts` has test-only layouts (skidpad, long oval).
@@ -130,9 +143,8 @@ in Milestone 3.
 - Units are SI: metres, kilograms, seconds, newtons, radians. Speeds shown in km/h only in the HUD.
 - World: +Y up, ground at y = 0. Car local frame: +X right, +Y up, **−Z forward**
   (Three.js convention). Positive steer is to the right.
-- Physics runs at a fixed 120 Hz; rendering is variable-rate. Add interpolation between
-  the last two physics states for the car's transform when the display rate isn't a
-  multiple of 120 (there's none yet).
+- Physics runs at a fixed 120 Hz; rendering is variable-rate. The car is drawn interpolated
+  between the last two physics states (`Simulation.previous` / `current`).
 - Physics is the source of truth. Meshes copy transforms from the simulation.
 - Simulation code takes randomness from a seeded PRNG passed in, never `Math.random`.
 - Every tuning number goes in `TUNING` (or a car's data). No magic numbers in the model.
