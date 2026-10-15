@@ -6,6 +6,8 @@ import { createPhysics, type Physics } from './physics';
 import { LapTimer } from './race/timing';
 import { nearestSample, type Track } from './track/track';
 import { Car, poseOnTrack, type Controls } from './vehicle/car';
+import type { CarDef } from './vehicle/carDef';
+import { KESTREL } from './vehicle/cars';
 
 /** How far behind the start line the car starts (track samples are 2 m apart). */
 const GRID_SAMPLES_BEHIND = 5;
@@ -18,11 +20,14 @@ export class Simulation {
   time = 0;
   steps = 0;
 
-  constructor(readonly track: Track) {
+  constructor(
+    readonly track: Track,
+    carDef: CarDef = KESTREL,
+  ) {
     this.physics = createPhysics(track);
     const n = track.samples.length;
     const grid = track.samples[n - GRID_SAMPLES_BEHIND];
-    this.car = new Car(this.physics, poseOnTrack(grid));
+    this.car = new Car(this.physics, poseOnTrack(grid), carDef);
     this.timer = new LapTimer(track, grid.x, grid.z);
   }
 

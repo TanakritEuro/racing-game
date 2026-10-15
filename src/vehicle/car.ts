@@ -14,6 +14,8 @@ import { TUNING } from '../config';
 import { AIR_DENSITY } from '../constants';
 import { add, clamp, cross, damp, dot, length, normalize, rotate, rotateAbout, scale, sub, type Quat, type Vec3 } from '../math';
 import type { Physics, SurfaceTag } from '../physics';
+import type { CarDef } from './carDef';
+import { KESTREL } from './cars';
 
 /** One step's driver inputs. Keyboard, gamepad and AI drivers all produce these. */
 export interface Controls {
@@ -23,9 +25,18 @@ export interface Controls {
   brake: number;
   /** -1 (full left) to +1 (full right). */
   steer: number;
+  /** Clutch pedal: 0 = up (engaged) to 1 = pressed. Combined with the automatic clutch. */
+  clutch: number;
+  /** A gear change requested for this step only: -1 down, +1 up. */
+  shift: -1 | 0 | 1;
 }
 
-export const NO_CONTROLS: Controls = { throttle: 0, brake: 0, steer: 0 };
+export const NO_CONTROLS: Readonly<Controls> = { throttle: 0, brake: 0, steer: 0, clutch: 0, shift: 0 };
+
+/** Full `Controls` from the inputs given, with the clutch up and no shift. */
+export function controls(c: Partial<Controls>): Controls {
+  return { ...NO_CONTROLS, ...c };
+}
 
 export interface Wheel {
   readonly front: boolean;
@@ -68,10 +79,14 @@ export class Car {
   private readonly world: RAPIER.World;
   private readonly tags: Map<number, SurfaceTag>;
 
-  constructor(physics: Physics, pose: Pose) {
+  constructor(
+    physics: Physics,
+    pose: Pose,
+    readonly def: CarDef = KESTREL,
+  ) {
     this.world = physics.world;
     this.tags = physics.tags;
-    const C = TUNING.car;
+    const C = def;
     const h = C.halfExtents;
 
     // Box inertia of the chassis' own mass; the centre of mass sits below the box centre.
@@ -100,7 +115,7 @@ export class Car {
           front,
           driven: !front, // rear-wheel drive
           mount: { x: side * C.trackHalf, y: C.mountHeight, z: front ? -C.wheelbaseHalf : C.wheelbaseHalf },
-          suspensionLength: TUNING.suspension.restLength,
+          suspensionLength: C.suspension.restLength,
           contact: false,
           surface: null,
           load: 0,
@@ -116,8 +131,8 @@ export class Car {
 
   /** Put the car at `pose`, at rest, with the wheels just touching the ground. */
   reset(pose: Pose): void {
-    const S = TUNING.suspension;
-    const y = pose.position.y - TUNING.car.mountHeight + S.restLength + TUNING.car.wheelRadius - 0.03;
+    const S = this.def.suspension;
+    const y = pose.position.y - this.def.mountHeight + S.restLength + this.def.tyre.radius - 0.03;
     this.body.setTranslation({ x: pose.position.x, y, z: pose.position.z }, true);
     this.body.setRotation({ x: 0, y: Math.sin(pose.yaw / 2), z: 0, w: Math.cos(pose.yaw / 2) }, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -164,16 +179,16 @@ export class Car {
     const pedalBrake = this.reversing ? controls.throttle : controls.brake;
 
     // Total drive force, shared by the driven wheels: power-limited, capped at low speed.
-    const E = TUNING.engine;
+    const E = this.def.engine;
     const driveTotal = this.reversing
       ? -pedalDrive * E.reverseForce
       : pedalDrive * Math.min(E.maxDriveForce, E.power / Math.max(Math.abs(speed), 1));
     const drivenCount = this.wheels.filter((w) => w.driven).length;
 
-    const S = TUNING.suspension;
-    const T = TUNING.tyres;
-    const B = TUNING.brakes;
-    const radius = TUNING.car.wheelRadius;
+    const S = this.def.suspension;
+    const T = this.def.tyre;
+    const B = this.def.brakes;
+    const radius = T.radius;
     const reach = S.restLength + radius;
 
     for (const wheel of this.wheels) {
@@ -228,7 +243,7 @@ export class Car {
       const brakeShare = wheel.front ? 2 * B.frontBias : 2 * (1 - B.frontBias);
       const brakeMax = pedalBrake * B.strength * limit * brakeShare;
       fx -= clamp(vLong * LOW_SPEED_STIFFNESS, -brakeMax, brakeMax);
-      const rollMax = (TUNING.car.rollingResistance + surface.drag) * load;
+      const rollMax = (T.rollingResistance + surface.drag) * load;
       fx -= clamp(vLong * LOW_SPEED_STIFFNESS, -rollMax, rollMax);
 
       // Lateral: linear in slip angle (placeholder for a Pacejka curve).
@@ -249,20 +264,20 @@ export class Car {
 
     // Aerodynamic drag at the centre of mass.
     const vel = body.linvel();
-    const k = -0.5 * AIR_DENSITY * TUNING.car.dragArea * length(vel);
+    const k = -0.5 * AIR_DENSITY * this.def.aero.dragArea * length(vel);
     body.addForce(scale(vel, k), false);
   }
 
   private updateSteering(input: number, speed: number, dt: number): void {
     const St = TUNING.steering;
-    const lock = St.maxAngle / (1 + speed / St.halfLockSpeed);
+    const lock = this.def.steeringLock / (1 + speed / St.halfLockSpeed);
     const target = clamp(input, -1, 1) * lock;
     const returning = Math.abs(target) < Math.abs(this.steerAngle);
     this.steerAngle += (target - this.steerAngle) * damp(returning ? St.returnRate : St.rate, dt);
   }
 
   private updateGear(controls: Controls, speed: number): void {
-    const below = TUNING.engine.reverseBelow;
+    const below = TUNING.automatic.reverseBelow;
     if (!this.reversing && controls.brake > 0 && controls.throttle === 0 && speed < below) this.reversing = true;
     else if (this.reversing && controls.throttle > 0 && controls.brake === 0 && speed > -below) this.reversing = false;
   }

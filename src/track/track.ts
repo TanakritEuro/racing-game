@@ -109,7 +109,7 @@ function catmullRom(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, u: number): Vec2 {
  * Index of the sample nearest (x, z). With `hint` (the last known index) only a window
  * around it is searched, which is what per-step callers should use.
  */
-export function nearestSample(track: Track, x: number, z: number, hint?: number, window = 40): number {
+export function nearestSample(track: Track, x: number, z: number, hint?: number, span = 40): number {
   const { samples } = track;
   const n = samples.length;
   let best = 0;
@@ -122,7 +122,7 @@ export function nearestSample(track: Track, x: number, z: number, hint?: number,
     }
   };
   if (hint === undefined) for (let i = 0; i < n; i++) check(i);
-  else for (let k = -window; k <= window; k++) check((((hint + k) % n) + n) % n);
+  else for (let k = -span; k <= span; k++) check((((hint + k) % n) + n) % n);
   return best;
 }
 

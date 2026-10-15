@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TUNING } from '../config';
+import type { CarDef } from '../vehicle/carDef';
 import type { Car } from '../vehicle/car';
 
 /**
@@ -10,9 +10,8 @@ export class CarView {
   readonly root = new THREE.Group();
   private readonly wheels: { pivot: THREE.Group; tyre: THREE.Mesh }[] = [];
 
-  constructor(colour = 0xe0b020) {
-    const C = TUNING.car;
-    const h = C.halfExtents;
+  constructor(def: CarDef, colour = 0xe0b020) {
+    const h = def.halfExtents;
     const paint = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.35, metalness: 0.3 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x15181c, roughness: 0.4, metalness: 0.2 });
 
@@ -34,7 +33,7 @@ export class CarView {
       this.root.add(l);
     }
 
-    const r = C.wheelRadius;
+    const r = def.tyre.radius;
     const tyreGeo = new THREE.CylinderGeometry(r, r, 0.26, 20);
     tyreGeo.rotateZ(Math.PI / 2); // axle along X
     const rimGeo = new THREE.CylinderGeometry(r * 0.6, r * 0.6, 0.27, 6);

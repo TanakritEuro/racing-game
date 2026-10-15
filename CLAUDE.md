@@ -90,11 +90,12 @@ in Milestone 3.
 ## Layout
 
 - `src/constants.ts` — physical constants, `PHYSICS_STEP` (1/120 s).
-- `src/config.ts` — `TUNING`: car, suspension, steering, engine, brakes, tyres, surfaces, camera.
+- `src/config.ts` — `TUNING`: what isn't about one car (keyboard steering, automatic, surfaces, camera).
 - `src/math.ts` — vectors, quaternion rotation, smoothing, seeded PRNG.
 - `src/physics.ts` — Rapier world: grass, road trimesh, barriers, surface tags.
 - `src/sim.ts` — `Simulation`: world, car, lap timer, fixed `step(controls)`, `recover()`.
 - `src/vehicle/car.ts` — chassis body, raycast wheels, suspension and tyre forces, `Controls`.
+- `src/vehicle/carDef.ts` — `CarDef`, every number about one car; `cars.ts` — the cars (`KESTREL`).
 - `src/track/` — `track.ts` (spline, samples, nearest sample, lateral offset),
   `geometry.ts` (road ribbons, barrier segments), `circuits.ts` (track definitions).
 - `src/race/timing.ts` — lap timer and time formatting.
@@ -102,7 +103,8 @@ in Milestone 3.
   (placeholder car), `chaseCamera.ts`.
 - `src/input.ts` — keyboard → `Controls`.
 - `src/main.ts` — entry point and frame loop.
-- `tests/` — Vitest; `helpers.ts` makes a headless `Simulation` and runs it.
+- `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
+  line-following test driver; `tracks.ts` has test-only layouts (skidpad, long oval).
 
 ## Conventions
 

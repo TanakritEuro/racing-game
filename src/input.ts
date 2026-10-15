@@ -27,6 +27,8 @@ export class Keyboard {
       throttle: this.any('KeyW', 'ArrowUp') ? 1 : 0,
       brake: this.any('KeyS', 'ArrowDown') ? 1 : 0,
       steer: (right ? 1 : 0) - (left ? 1 : 0),
+      clutch: 0,
+      shift: 0,
     };
   }
 }

@@ -28,7 +28,7 @@ const sim = new Simulation(track);
 
 const stage = createStage(canvas);
 stage.scene.add(createTrackView(track));
-const carView = new CarView();
+const carView = new CarView(sim.car.def);
 stage.scene.add(carView.root);
 const chase = new ChaseCamera(stage.camera);
 const keyboard = new Keyboard();
@@ -60,6 +60,8 @@ function frame(now: number): void {
   while (accumulator >= PHYSICS_STEP) {
     sim.step(controls);
     accumulator -= PHYSICS_STEP;
+    // A shift request belongs to one step, not to every step this frame runs.
+    controls.shift = 0;
   }
 
   carView.update(sim.car);
