@@ -8,6 +8,7 @@ import { nearestSample, type Track } from './track/track';
 import { Car, copyPose, createPose, poseOnTrack, type CarPose, type Controls } from './vehicle/car';
 import type { CarDef } from './vehicle/carDef';
 import { KESTREL } from './vehicle/cars';
+import type { AidSettings } from './vehicle/aids';
 import type { GearboxMode } from './vehicle/gearbox';
 
 /** How far behind the start line the car starts (track samples are 2 m apart). */
@@ -59,6 +60,11 @@ export class Simulation {
   private settlePose(): void {
     this.car.capturePose(this.current);
     copyPose(this.current, this.previous);
+  }
+
+  /** Switch ABS and traction control on or off. */
+  setAids(aids: AidSettings): void {
+    this.car.aids = { ...aids };
   }
 
   /** Switch between the automatic and manual gearbox. */

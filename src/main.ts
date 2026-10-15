@@ -12,6 +12,7 @@ import { interpolatePose } from './render/interpolate';
 import { createStage, followSun } from './render/scene';
 import { Telemetry } from './render/telemetry';
 import { createTrackView } from './render/trackView';
+import { loadSettings, saveSettings } from './settings';
 import { Simulation } from './sim';
 import { TEST_CIRCUIT } from './track/circuits';
 import { buildTrack } from './track/track';
@@ -26,6 +27,9 @@ const hud = {
   last: document.querySelector<HTMLDivElement>('#last')!,
   best: document.querySelector<HTMLDivElement>('#best')!,
   rpm: document.querySelector<HTMLDivElement>('#rpm-fill')!,
+  abs: document.querySelector<HTMLSpanElement>('#abs-light')!,
+  tc: document.querySelector<HTMLSpanElement>('#tc-light')!,
+  assist: document.querySelector<HTMLSpanElement>('#assist-light')!,
 };
 
 const gearLabel = (gear: number) => (gear === REVERSE ? 'R' : gear === NEUTRAL ? 'N' : String(gear));
@@ -48,11 +52,29 @@ const steering = new KeyboardSteering();
 const telemetry = new Telemetry(document.body);
 telemetry.visible = new URLSearchParams(location.search).has('telemetry');
 
+// Settings: remembered between visits, applied to the simulation through its setters.
+const settings = loadSettings();
+function applySettings(): void {
+  sim.setAids({ abs: settings.abs, tc: settings.tc });
+  sim.setGearboxMode(settings.gearbox);
+  steering.assist = settings.steeringAssist;
+  if (cameras.mode !== settings.camera) cameras.setMode(settings.camera);
+  saveSettings(settings);
+}
+applySettings();
+
 window.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
   if (e.code === 'KeyT') telemetry.toggle();
-  if (e.code === 'KeyC') cameras.cycle();
-  if (e.code === 'KeyV') steering.assist = !steering.assist;
-  if (e.code === 'KeyM') sim.setGearboxMode(sim.car.drivetrain.gearbox.mode === 'auto' ? 'manual' : 'auto');
+  if (e.code === 'KeyC') {
+    cameras.cycle();
+    settings.camera = cameras.mode;
+  }
+  if (e.code === 'KeyV') settings.steeringAssist = !settings.steeringAssist;
+  if (e.code === 'KeyZ') settings.abs = !settings.abs;
+  if (e.code === 'KeyX') settings.tc = !settings.tc;
+  if (e.code === 'KeyM') settings.gearbox = settings.gearbox === 'auto' ? 'manual' : 'auto';
+  if (['KeyC', 'KeyV', 'KeyZ', 'KeyX', 'KeyM'].includes(e.code)) applySettings();
   if (e.code === 'KeyR') {
     sim.recover();
     steering.reset();
@@ -66,6 +88,14 @@ function updateHud(): void {
   hud.gear.textContent = `${gearLabel(drivetrain.gearbox.nextGear)} ${drivetrain.gearbox.mode === 'auto' ? 'AUTO' : 'MANUAL'}`;
   hud.rpm.style.width = `${Math.min(100, (drivetrain.rpm / sim.car.def.engine.limiterRpm) * 100)}%`;
   hud.rpm.classList.toggle('limit', drivetrain.rpm > sim.car.def.gearbox.upshiftRpm.full);
+  // Dashboard lights: dim when off, lit when on, bright while working.
+  const light = (el: HTMLElement, on: boolean, active: boolean) => {
+    el.classList.toggle('on', on);
+    el.classList.toggle('active', on && active);
+  };
+  light(hud.abs, sim.car.aids.abs, sim.car.absActive);
+  light(hud.tc, sim.car.aids.tc, sim.car.tcActive);
+  light(hud.assist, steering.assist, false);
   const t = sim.timer;
   hud.lap.textContent = t.current(sim.time) === null ? 'OUT LAP' : `LAP ${t.laps + 1}  ${formatLapTime(t.current(sim.time))}`;
   hud.last.textContent = `LAST ${formatLapTime(t.lastLap)}`;
@@ -101,7 +131,7 @@ function frame(now: number): void {
     wheels: sim.car.wheels,
     controls,
     rpm: sim.car.drivetrain.rpm,
-    gear: `${gearLabel(sim.car.drivetrain.gearbox.nextGear)}  clutch ${sim.car.drivetrain.clutch.toFixed(2)}`,
+    gear: `${gearLabel(sim.car.drivetrain.gearbox.nextGear)}  clutch ${sim.car.drivetrain.clutch.toFixed(2)}  tc ${sim.car.drivetrain.tcFactor.toFixed(2)}`,
   });
   stage.renderer.render(stage.scene, stage.camera);
   requestAnimationFrame(frame);

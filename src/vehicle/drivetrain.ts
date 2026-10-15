@@ -46,6 +46,10 @@ export class Drivetrain {
   throttle = 0;
   /** The rev limiter is cutting the fuel. */
   limiter = false;
+  /** Traction control is on (set by the car): launches feed the clutch in rather than dump it. */
+  tractionControl = false;
+  /** Traction control's share of the engine's drive torque (1 = all of it), set by the car each substep. */
+  tcFactor = 1;
   /** Torque the engine sent through the clutch in the last substep (N·m; negative when engine braking). */
   clutchTorque = 0;
   /** The pedals after the automatic's reverse swap (in reverse, brake drives and throttle brakes). */
@@ -57,6 +61,8 @@ export class Drivetrain {
   private autoClutch = 0;
   /** A full-throttle launch has reached its bite point and dumped the clutch. */
   private dumped = false;
+  /** A gear has just gone in and the clutch is still bringing the engine to speed. */
+  private syncing = false;
   /** Reverse can be selected: the brake has been released since the car stopped. */
   private reverseArmed = false;
 
@@ -74,7 +80,8 @@ export class Drivetrain {
     this.engineOmega = this.def.engine.idleRpm / RPM_PER_RAD_S;
     this.gearbox.set(1);
     this.clutch = this.autoClutch = this.clutchTorque = this.throttle = 0;
-    this.latched = this.limiter = this.reverseArmed = this.dumped = false;
+    this.tcFactor = 1;
+    this.latched = this.limiter = this.reverseArmed = this.dumped = this.syncing = false;
   }
 
   setMode(mode: GearboxMode): void {
@@ -88,7 +95,12 @@ export class Drivetrain {
    * Once per physics step. `axleOmega` is the driven wheels' mean angular velocity and
    * `speed` the car's forward speed (m/s).
    */
-  update(controls: { throttle: number; brake: number; clutch: number; shift: number }, axleOmega: number, speed: number, dt: number): void {
+  update(
+    controls: { throttle: number; brake: number; clutch: number; shift: number; handbrake: number },
+    axleOmega: number,
+    speed: number,
+    dt: number,
+  ): void {
     const gb = this.gearbox;
     const T = TUNING.transmission;
     const E = this.def.engine;
@@ -127,7 +139,10 @@ export class Drivetrain {
       if (input > upAt && gb.gear < gb.top) gb.shiftTo(gb.gear + 1);
       else if (gb.gear > 1 && input < downAt && inputRpmIn(gb.gear - 1) < upAt - T.downshiftMargin) gb.shiftTo(gb.gear - 1);
     }
+    const gearBefore = gb.gear;
     gb.update(dt);
+    // A new gear is in: the clutch has to bring the engine to the gearbox's speed.
+    if (gb.gear !== gearBefore && gb.gear !== NEUTRAL) this.syncing = true;
 
     // Automatic clutch: slips while pulling away (more revs, more clutch), then latches fully in
     // once the gearbox has caught up with the engine, and lets go before the engine would stall.
@@ -148,7 +163,7 @@ export class Drivetrain {
       const C = this.def.clutch;
       const p = this.drivePedal;
       const bite = E.idleRpm + p * (C.launchRpm - E.idleRpm);
-      const launching = p >= T.launchDumpPedal;
+      const launching = p >= T.launchDumpPedal && !this.tractionControl;
       if (!launching) this.dumped = false;
       else if (rpm >= bite) this.dumped = true;
       const target = launching
@@ -161,7 +176,23 @@ export class Drivetrain {
       if (slipRpm < T.latchSlipRpm && inputRpm > E.idleRpm + T.latchAboveIdle) this.latched = true;
     }
     if (this.latched) this.autoClutch = 1;
+    // Pulling the handbrake dips the clutch, as a driver would, so the engine keeps running.
+    if (controls.handbrake > T.handbrakeClutch) {
+      this.latched = false;
+      this.autoClutch = 0;
+    }
     this.clutch = Math.min(this.autoClutch, 1 - clamp(controls.clutch, 0, 1)) * gb.clutchAllowed;
+    // After a shift, the clutch slips at a set torque while the revs come into step, as an
+    // automated gearbox's does: the engine's own torque plus `shiftSyncTorque`. The rest of
+    // the speed difference goes into heat instead of kicking the driven wheels.
+    if (this.syncing) {
+      const slipRpm = Math.abs(this.engineOmega - inputOmega) * RPM_PER_RAD_S;
+      if (slipRpm < T.latchSlipRpm || gb.gear === NEUTRAL) this.syncing = false;
+      else {
+        const carry = Math.abs(engineTorque(E, rpm, this.drivePedal)) + T.shiftSyncTorque;
+        this.clutch = Math.min(this.clutch, carry / this.def.clutch.maxTorque);
+      }
+    }
 
     // Throttle: cut while the old gear comes out (blipped to match revs on a downshift),
     // held up at idle, cut by the limiter.
@@ -188,6 +219,8 @@ export class Drivetrain {
     const capClutch = ratio === 0 ? 0 : this.clutch * this.def.clutch.maxTorque * h;
 
     let torque = engineTorque(E, this.rpm, this.throttle);
+    // Traction control takes away drive, but never turns it into engine braking.
+    if (torque > 0) torque *= this.tcFactor;
     // Gearbox losses take a share of the drive torque while the clutch is in.
     if (torque > 0) torque *= 1 - (1 - this.def.gearbox.efficiency) * this.clutch;
     let we = this.engineOmega + (h * torque) / E.inertia;

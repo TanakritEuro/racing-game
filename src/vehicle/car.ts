@@ -25,6 +25,7 @@ import type { CarDef, TyreDef } from './carDef';
 import { KESTREL } from './cars';
 import { Drivetrain, type DriveOut } from './drivetrain';
 import { REVERSE } from './gearbox';
+import { absStep, tcStep, type AidSettings } from './aids';
 import { spinFree, type SpinBody } from './spin';
 import { rackStep, wheelSteerAngle } from './steering';
 import { gripLimit, prepareTyre, tyreForces, type PreparedTyre, type TyreForce } from './tyre';
@@ -41,11 +42,13 @@ export interface Controls {
   clutch: number;
   /** A gear change requested for this step only: -1 down, +1 up. */
   shift: -1 | 0 | 1;
+  /** 0–1: brakes the rear wheels only, past ABS, and lets the automatic clutch go. */
+  handbrake: number;
 }
 
-export const NO_CONTROLS: Readonly<Controls> = { throttle: 0, brake: 0, steer: 0, clutch: 0, shift: 0 };
+export const NO_CONTROLS: Readonly<Controls> = { throttle: 0, brake: 0, steer: 0, clutch: 0, shift: 0, handbrake: 0 };
 
-/** Full `Controls` from the inputs given, with the clutch up and no shift. */
+/** Full `Controls` from the inputs given, with the clutch up, no shift and no handbrake. */
 export function controls(c: Partial<Controls>): Controls {
   return { ...NO_CONTROLS, ...c };
 }
@@ -79,6 +82,8 @@ export interface Wheel {
   /** Drive and brake torque on the wheel, averaged over the step (N·m). */
   driveTorque: number;
   brakeTorque: number;
+  /** ABS: the share of the foot brake it lets through (1 = all of it). */
+  absFactor: number;
   /** Brakes are holding the wheel still while the car moves. */
   locked: boolean;
   /** Accumulated rolling angle, for drawing (rad). */
@@ -102,6 +107,10 @@ interface WheelWork {
   fxSum: number;
   fySum: number;
   driveSum: number;
+  brakeSum: number;
+  /** This step's foot brake and handbrake torque on the wheel (N·m), before ABS. */
+  footBrake: number;
+  handbrake: number;
 }
 
 export interface Pose {
@@ -123,6 +132,11 @@ export class Car {
   /** Steering rack: the wheel angle at the middle of the front axle (rad), positive = right. */
   steerAngle = 0;
   readonly drivetrain: Drivetrain;
+  /** Which driver aids are on. */
+  aids: AidSettings = { abs: true, tc: true };
+  /** ABS is easing a brake, or TC the throttle, this step (for the dashboard lights). */
+  absActive = false;
+  tcActive = false;
 
   private readonly world: RAPIER.World;
   private readonly driveOut: DriveOut = { left: 0, right: 0 };
@@ -193,6 +207,7 @@ export class Car {
           gripLimit: 0,
           driveTorque: 0,
           brakeTorque: 0,
+          absFactor: 1,
           locked: false,
           spin: 0,
         });
@@ -209,6 +224,9 @@ export class Car {
           fxSum: 0,
           fySum: 0,
           driveSum: 0,
+          brakeSum: 0,
+          footBrake: 0,
+          handbrake: 0,
         });
       }
     }
@@ -230,6 +248,7 @@ export class Car {
       w.suspensionLength = (w.front ? this.def.suspension.front : this.def.suspension.rear).restLength;
       w.omega = w.slipRatio = w.slipAngle = 0;
       w.locked = false;
+      w.absFactor = 1;
       this.work[i].spin.omega = 0;
       this.work[i].tanSlip = 0;
     });
@@ -314,6 +333,7 @@ export class Car {
       w.steer = w.front ? wheelSteerAngle(this.steerAngle, w.mount.x, 2 * this.def.wheelbaseHalf, St.ackermann) : 0;
     }
     const drivetrain = this.drivetrain;
+    drivetrain.tractionControl = this.aids.tc;
     drivetrain.update(controls, (this.work[2].spin.omega + this.work[3].spin.omega) / 2, speed, dt);
     const pedalBrake = drivetrain.brakePedal;
 
@@ -340,7 +360,8 @@ export class Car {
 
       const share = wheel.front ? B.frontBias : 1 - B.frontBias;
       work.spin.friction = 0;
-      wheel.brakeTorque = (pedalBrake * B.maxTorque * share) / 2;
+      work.footBrake = (pedalBrake * B.maxTorque * share) / 2;
+      work.handbrake = wheel.front ? 0 : clamp(controls.handbrake, 0, 1) * B.handbrakeTorque;
 
       if (!hit) {
         wheel.contact = false;
@@ -446,7 +467,9 @@ export class Car {
     const I = TUNING.tyreIntegration;
     const substeps = I.substeps;
     const h = dt / substeps;
-    for (const work of this.work) work.fxSum = work.fySum = work.driveSum = 0;
+    for (const work of this.work) work.fxSum = work.fySum = work.driveSum = work.brakeSum = 0;
+    const aids = this.def.aids;
+    this.absActive = this.tcActive = false;
     for (let s = 0; s < substeps; s++) {
       // Tyre forces from the relaxed slip, and the torques they put on the wheels.
       for (let i = 0; i < 4; i++) {
@@ -474,10 +497,35 @@ export class Car {
           }
         }
         work.spin.torque = -fx * r;
-        work.spin.friction = wheel.brakeTorque + work.rollingDrag;
+        // ABS eases the foot brake on a wheel that slips too much; the handbrake bypasses it.
+        if (this.aids.abs && work.footBrake > 0 && wheel.contact) {
+          wheel.absFactor = absStep(aids.abs, wheel.absFactor, wheel.slipRatio, wheel.tyre.peakSlipRatio, work.vLong, h);
+          if (wheel.absFactor < 1) this.absActive = true;
+        } else wheel.absFactor = 1;
+        const brake = work.footBrake * wheel.absFactor + work.handbrake;
+        work.brakeSum += brake;
+        work.spin.friction = brake + work.rollingDrag;
         work.fxSum += fx;
         work.fySum += fy;
       }
+
+      // Traction control eases the throttle while a driven wheel spins past its target slip.
+      if (this.aids.tc) {
+        const left = this.wheels[2];
+        // Drive slip, signed with the direction of travel so reversing counts too.
+        let slip = 0;
+        let slipSpeed = 0;
+        for (const i of [2, 3]) {
+          const sign = this.work[i].vLong < 0 ? -1 : 1;
+          const w = this.wheels[i];
+          if (w.slipRatio * sign > slip) {
+            slip = w.slipRatio * sign;
+            slipSpeed = (this.work[i].spin.omega * w.tyre.radius - this.work[i].vLong) * sign;
+          }
+        }
+        drivetrain.tcFactor = tcStep(aids.tc, drivetrain.tcFactor, slip, slipSpeed, left.tyre.peakSlipRatio, h);
+        if (drivetrain.tcFactor < 1) this.tcActive = true;
+      } else drivetrain.tcFactor = 1;
 
       // Wheel spin: the driven wheels with the engine through the drivetrain, the others free.
       spinFree(this.work[0].spin, h);
@@ -514,6 +562,7 @@ export class Car {
       wheel.longForce = work.fxSum / substeps;
       wheel.latForce = work.fySum / substeps;
       wheel.driveTorque = work.driveSum / substeps;
+      wheel.brakeTorque = work.brakeSum / substeps;
       wheel.locked = wheel.contact && wheel.brakeTorque > 0 && wheel.omega === 0 && Math.abs(work.vLong) > 0.5;
       if (!wheel.contact) continue;
       const f = this.force;

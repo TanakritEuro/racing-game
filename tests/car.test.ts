@@ -30,6 +30,8 @@ interface Stop {
  */
 async function brakeFrom100(pedal: number, squeeze: number): Promise<Stop> {
   const s = await createSim(LONG_OVAL);
+  // The car's own braking: no ABS (aids.test.ts covers it).
+  s.car.aids = { abs: false, tc: false };
   run(s, NO_CONTROLS, 1);
   runUntil(s, FULL_THROTTLE, () => s.car.speed > KMH_100 + 0.5, 15);
   runUntil(s, NO_CONTROLS, () => s.car.speed < KMH_100, 5);
@@ -123,23 +125,6 @@ describe('car', () => {
     expect(Math.abs(s.car.drivetrain.rpm - KESTREL.engine.idleRpm)).toBeLessThan(100);
   });
 
-  it('spins the rear wheels on a full-throttle launch (no traction control until M2), but not at part throttle', async () => {
-    const peak = KESTREL.tyres.rear.long;
-    const launch = async (throttle: number) => {
-      const s = await createSim(LONG_OVAL);
-      run(s, NO_CONTROLS, 1);
-      let most = 0;
-      for (let i = 0; i < 120; i++) {
-        s.step(controls({ throttle }));
-        most = Math.max(most, s.car.wheels[2].slipRatio, s.car.wheels[3].slipRatio);
-      }
-      return most / s.car.wheels[2].tyre.peakSlipRatio;
-    };
-    expect(peak.B).toBeGreaterThan(0);
-    expect(await launch(1)).toBeGreaterThan(2);
-    expect(await launch(0.5)).toBeLessThan(1);
-  });
-
   it('slows faster with the engine braking than coasting with the clutch in', async () => {
     const decelFrom100 = async (clutch: number) => {
       const s = await createSim(LONG_OVAL);
@@ -189,15 +174,6 @@ describe('car', () => {
     // ~0.95 g plus the 0.3 s squeeze; no more grip than the tyres have.
     expect(best).toBeLessThan(45);
     expect(best).toBeGreaterThan(36);
-  });
-
-  it('locks the fronts, not the rears, when the brake is stamped on (no ABS until M2)', async () => {
-    const stamp = await brakeFrom100(1, 0);
-    expect(stamp.frontsLocked).toBe(true);
-    expect(stamp.distance).toBeLessThan(55);
-    const firm = await brakeFrom100(0.9, 0.3);
-    expect(firm.frontsLocked).toBe(true);
-    expect(firm.rearsLocked).toBe(false);
   });
 
   it('holds still on a slope with the brake held', () => {

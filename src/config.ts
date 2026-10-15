@@ -45,8 +45,15 @@ export const TUNING = {
     unlatchAboveIdle: 100,
     /** Pulling away, the automatic clutch carries this much extra torque per rpm above its bite point, at full throttle (N·m/rpm). */
     biteGain: 0.3,
-    /** At or above this pedal the automatic clutch is dumped on a launch instead of fed in. */
+    /** At or above this pedal the automatic clutch is dumped on a launch instead of fed in (with TC off). */
     launchDumpPedal: 0.95,
+    /** Pulling the handbrake past this lets the automatic clutch go. */
+    handbrakeClutch: 0.5,
+    /**
+     * After a shift the clutch carries the engine's torque plus this (N·m) until the revs
+     * match the new gear: enough to pull them into step in ~0.25 s without spinning the wheels.
+     */
+    shiftSyncTorque: 60,
   },
   drivetrain: {
     /** Gauss-Seidel passes over the clutch, differential and brake couplings per substep. */

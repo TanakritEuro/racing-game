@@ -41,6 +41,7 @@ export class Keyboard {
       steer: (right ? 1 : 0) - (left ? 1 : 0),
       clutch: 0,
       shift: 0,
+      handbrake: this.any('Space') ? 1 : 0,
     };
   }
 }

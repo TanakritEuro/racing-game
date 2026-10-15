@@ -98,7 +98,8 @@ describe('keyboard steering assist', () => {
     let calm = 0;
     let worstSlip = 0;
     let helpOpposedSlide = true;
-    for (let i = 0; i < 6 * 120; i++) {
+    // Until it has recovered: once straight, it is pointing at the barrier with nobody steering.
+    for (let i = 0; i < 6 * 120 && recovered === null; i++) {
       const help = counterSteer(s.car);
       if (help !== 0 && Math.sign(help) !== Math.sign(s.car.bodySlipAngle)) helpOpposedSlide = false;
       s.step(controls({ throttle: 0.2, steer: steering.update(0, s.car, 1 / 120) }));

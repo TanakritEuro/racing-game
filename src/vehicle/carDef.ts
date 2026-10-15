@@ -3,6 +3,7 @@
 // keyboard steering assistance, camera, integration settings) stay in `TUNING`.
 
 import type { Vec3 } from '../math';
+import type { AidsDef } from './aids';
 import type { DifferentialDef } from './differential';
 import type { ClutchDef } from './drivetrain';
 import type { EngineDef } from './engine';
@@ -44,6 +45,8 @@ export interface BrakesDef {
   maxTorque: number;
   /** Share of it on the front axle. */
   frontBias: number;
+  /** Handbrake torque on each rear wheel at full pull (N·m). */
+  handbrakeTorque: number;
 }
 
 export interface CarDef {
@@ -65,6 +68,7 @@ export interface CarDef {
   gearbox: GearboxDef;
   differential: DifferentialDef;
   brakes: BrakesDef;
+  aids: AidsDef;
   aero: {
     /** Drag coefficient × frontal area, C_d·A (m²). */
     dragArea: number;

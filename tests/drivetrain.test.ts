@@ -9,7 +9,7 @@ import type { SpinBody } from '../src/vehicle/spin';
 const E = KESTREL.engine;
 const STEP = 1 / 120;
 const SUBSTEPS = 8;
-const pedals = (throttle = 0, shift: -1 | 0 | 1 = 0) => ({ throttle, brake: 0, clutch: 0, shift });
+const pedals = (throttle = 0, shift: -1 | 0 | 1 = 0) => ({ throttle, brake: 0, clutch: 0, shift, handbrake: 0 });
 const wheel = (omega = 0, torque = 0, friction = 0): SpinBody => ({ omega, inertia: KESTREL.tyres.rear.inertia, torque, friction });
 
 /** Run a drivetrain on its own (wheels held still unless given) for `seconds`. */

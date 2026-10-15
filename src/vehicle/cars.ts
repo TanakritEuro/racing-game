@@ -64,10 +64,10 @@ export const KESTREL: CarDef = {
       [7500, 195],
       [8000, 170],
     ],
-    friction: { base: 15, perRpm: 0.004 },
+    friction: { base: 15, perRpm: 0.006 }, // ~60 N·m of engine braking at the limiter
     idleRpm: 900,
     limiterRpm: 7500,
-    inertia: 0.18,
+    inertia: 0.12,
     throttleMap: 2,
   },
   clutch: {
@@ -88,6 +88,11 @@ export const KESTREL: CarDef = {
   brakes: {
     maxTorque: 5000,
     frontBias: 0.62, // the front axle's share of the load at ~1 g: the fronts still lock first
+    handbrakeTorque: 1500,
+  },
+  aids: {
+    abs: { slip: 1, release: 12, apply: 5, minSpeed: 2 },
+    tc: { slip: 1.2, minSlipSpeed: 0.5, cut: 10, restore: 6 },
   },
   aero: {
     dragArea: 0.62,

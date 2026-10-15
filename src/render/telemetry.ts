@@ -165,6 +165,7 @@ export class Telemetry {
         `Fx ${num(w.longForce)} N`,
         `Fy ${num(w.latForce)} N`,
         `ω  ${num(w.omega, 1)} r/s`,
+        `Tb ${w.brakeTorque.toFixed(0).padStart(5)}${w.absFactor < 1 ? ` abs ${w.absFactor.toFixed(2)}` : ''}`,
         w.contact ? (w.surface ?? '') : 'airborne',
       ].join('\n');
     });
