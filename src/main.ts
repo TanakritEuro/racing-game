@@ -38,7 +38,7 @@ const track = buildTrack(TEST_CIRCUIT);
 const sim = new Simulation(track);
 
 const stage = createStage(canvas);
-stage.scene.add(createTrackView(track));
+stage.scene.add(createTrackView(track, sim.physics.terrain));
 const carView = new CarView(
   sim.car.def,
   sim.car.wheels.map((w) => w.mount),

@@ -1,18 +1,20 @@
 import * as THREE from 'three';
 import { uprightAlong } from '../math';
-import { BARRIER_HEIGHT, BARRIER_THICKNESS, groundExtent } from '../physics';
+import { BARRIER_HEIGHT, BARRIER_THICKNESS } from '../physics';
 import { barrierOffset, barriers, crossSection, road, strip, type Offset, type Ribbon } from '../track/geometry';
+import type { Terrain } from '../track/terrain';
 import type { Track, TrackSample } from '../track/track';
+import { createTerrainView } from './terrainView';
 
 /** Painted layers sit on the road with a polygon offset, so they never z-fight with it. */
 const decal = { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 };
 
 /** Road, edge lines, run-off, start line, ground and barriers, built from the same data as the colliders. */
-export function createTrackView(track: Track): THREE.Group {
+export function createTrackView(track: Track, terrain: Terrain): THREE.Group {
   const group = new THREE.Group();
   const grass = grassTexture();
 
-  group.add(createGround(track, grass));
+  group.add(createTerrainView(terrain, grass));
 
   const surface = mesh(road(track), new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92 }), 6);
   surface.receiveShadow = true;
@@ -60,21 +62,6 @@ function mesh(r: Ribbon, material: THREE.Material, repeat = 1): THREE.Mesh {
   geo.setIndex(new THREE.BufferAttribute(r.indices, 1));
   geo.computeVertexNormals();
   return new THREE.Mesh(geo, material);
-}
-
-/** A flat stand-in for the ground under and around the track (the terrain replaces it). */
-function createGround(track: Track, map: THREE.Texture): THREE.Mesh {
-  const ground = groundExtent(track);
-  const tex = map.clone();
-  // One texture tile per 10 m.
-  tex.repeat.set(ground.halfX / 5, ground.halfZ / 5);
-  const grass = new THREE.Mesh(new THREE.PlaneGeometry(ground.halfX * 2, ground.halfZ * 2), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
-  grass.position.set(ground.x, 0, ground.z);
-  grass.rotation.x = -Math.PI / 2;
-  // Drawn a little below its collider (top at -5 mm) so it never shows through the road.
-  grass.position.y = -0.04;
-  grass.receiveShadow = true;
-  return grass;
 }
 
 function grassTexture(): THREE.Texture {

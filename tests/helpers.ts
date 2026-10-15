@@ -3,14 +3,22 @@ import { clamp } from '../src/math';
 import { initPhysics } from '../src/physics';
 import { Simulation } from '../src/sim';
 import { TEST_CIRCUIT } from '../src/track/circuits';
-import { buildTrack, lateralOffset, nearestSample, type TrackDef } from '../src/track/track';
+import { buildTrack, lateralOffset, nearestSample, type Track, type TrackDef } from '../src/track/track';
 import { controls, type Controls } from '../src/vehicle/car';
 import type { CarDef } from '../src/vehicle/carDef';
 import { KESTREL } from '../src/vehicle/cars';
 
+/** Built tracks by definition: building is pure, so tests share them (and their terrain). */
+const tracks = new Map<TrackDef, Track>();
+
 export async function createSim(trackDef: TrackDef = TEST_CIRCUIT, carDef: CarDef = KESTREL): Promise<Simulation> {
   await initPhysics();
-  return new Simulation(buildTrack(trackDef), carDef);
+  let track = tracks.get(trackDef);
+  if (!track) {
+    track = buildTrack(trackDef);
+    tracks.set(trackDef, track);
+  }
+  return new Simulation(track, carDef);
 }
 
 /** Fixed controls, or a driver asked for controls before every step. */

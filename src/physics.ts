@@ -2,6 +2,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { GRAVITY, PHYSICS_STEP } from './constants';
 import { uprightAlong } from './math';
 import { barrierOffset, barriers, road, strip } from './track/geometry';
+import { buildTerrain, type Terrain } from './track/terrain';
 import type { Track } from './track/track';
 
 /** What a collider is: the wheels read the surface under them from this. */
@@ -11,6 +12,8 @@ export interface Physics {
   world: RAPIER.World;
   /** Collider handle → surface tag. */
   tags: Map<number, SurfaceTag>;
+  /** The ground around the track (also drawn by the view). */
+  terrain: Terrain;
 }
 
 export const BARRIER_HEIGHT = 1.0;
@@ -21,27 +24,15 @@ export async function initPhysics(): Promise<void> {
   await RAPIER.init();
 }
 
-/** Margin of ground beyond the track's furthest point (m). */
-const GROUND_MARGIN = 1000;
-
-/** The ground: a rectangle covering the track with `GROUND_MARGIN` to spare. */
-export function groundExtent(track: Track): { x: number; z: number; halfX: number; halfZ: number } {
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minZ = Infinity;
-  let maxZ = -Infinity;
-  for (const p of track.samples) {
-    minX = Math.min(minX, p.x);
-    maxX = Math.max(maxX, p.x);
-    minZ = Math.min(minZ, p.z);
-    maxZ = Math.max(maxZ, p.z);
+/** Terrain is a pure function of the track, and slow-ish to build: build it once per track. */
+const terrains = new WeakMap<Track, Terrain>();
+function terrainFor(track: Track): Terrain {
+  let terrain = terrains.get(track);
+  if (!terrain) {
+    terrain = buildTerrain(track, track.def.terrain);
+    terrains.set(track, terrain);
   }
-  return {
-    x: (minX + maxX) / 2,
-    z: (minZ + maxZ) / 2,
-    halfX: (maxX - minX) / 2 + GROUND_MARGIN,
-    halfZ: (maxZ - minZ) / 2 + GROUND_MARGIN,
-  };
+  return terrain;
 }
 
 export function createPhysics(track: Track): Physics {
@@ -50,10 +41,15 @@ export function createPhysics(track: Track): Physics {
   const tags = new Map<number, SurfaceTag>();
   const add = (tag: SurfaceTag, desc: RAPIER.ColliderDesc) => tags.set(world.createCollider(desc).handle, tag);
 
-  // Grass everywhere around the track, its top 5 mm below the road so a wheel's ray hits the road first.
-  // (A flat stand-in: the terrain heightfield replaces it.)
-  const ground = groundExtent(track);
-  add('grass', RAPIER.ColliderDesc.cuboid(ground.halfX, 0.5, ground.halfZ).setTranslation(ground.x, -0.505, ground.z).setFriction(0.5));
+  // The ground: a heightfield just under the run-off, rolling away into hills.
+  const terrain = terrainFor(track);
+  const { nx, nz, spacing } = terrain;
+  add(
+    'grass',
+    RAPIER.ColliderDesc.heightfield(nz - 1, nx - 1, terrain.heights, { x: (nx - 1) * spacing, y: 1, z: (nz - 1) * spacing })
+      .setTranslation(terrain.x0 + ((nx - 1) * spacing) / 2, 0, terrain.z0 + ((nz - 1) * spacing) / 2)
+      .setFriction(0.5),
+  );
 
   const trimesh = (tag: SurfaceTag, r: { positions: Float32Array; indices: Uint32Array }) =>
     add(tag, RAPIER.ColliderDesc.trimesh(r.positions, r.indices).setFriction(0.5));
@@ -83,5 +79,5 @@ export function createPhysics(track: Track): Physics {
         .setFriction(0.3),
     );
   }
-  return { world, tags };
+  return { world, tags, terrain };
 }
