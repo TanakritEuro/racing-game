@@ -8,6 +8,7 @@ import { formatLapTime } from './race/timing';
 import { CarView } from './render/carView';
 import { ChaseCamera } from './render/chaseCamera';
 import { createStage, followSun } from './render/scene';
+import { Telemetry } from './render/telemetry';
 import { createTrackView } from './render/trackView';
 import { Simulation } from './sim';
 import { TEST_CIRCUIT } from './track/circuits';
@@ -32,8 +33,11 @@ const carView = new CarView(sim.car.def);
 stage.scene.add(carView.root);
 const chase = new ChaseCamera(stage.camera);
 const keyboard = new Keyboard();
+const telemetry = new Telemetry(document.body);
+telemetry.visible = new URLSearchParams(location.search).has('telemetry');
 
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyT') telemetry.toggle();
   if (e.code === 'KeyR') {
     sim.recover();
     chase.snap();
@@ -68,6 +72,7 @@ function frame(now: number): void {
   chase.update(sim.car, dt);
   followSun(stage.sun, carView.root.position);
   updateHud();
+  telemetry.update({ time: sim.time, speed: sim.car.speed, wheels: sim.car.wheels, controls });
   stage.renderer.render(stage.scene, stage.camera);
   requestAnimationFrame(frame);
 }

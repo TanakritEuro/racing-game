@@ -49,10 +49,15 @@ export interface Wheel {
   surface: SurfaceTag | null;
   /** Vertical load on the tyre (N). */
   load: number;
-  /** Slip angle (rad) and the forces the tyre made this step (N, along / across the wheel). */
+  /** Angular velocity (rad/s); positive rolls forward. */
+  omega: number;
+  /** Slip ratio and slip angle (rad), and the forces the tyre made this step (N, along / across the wheel). */
+  slipRatio: number;
   slipAngle: number;
   longForce: number;
   latForce: number;
+  /** The most force the tyre could make right now, in any direction (N). */
+  gripLimit: number;
   /** Accumulated rolling angle, for drawing (rad). */
   spin: number;
 }
@@ -119,7 +124,10 @@ export class Car {
           contact: false,
           surface: null,
           load: 0,
+          omega: 0,
+          slipRatio: 0,
           slipAngle: 0,
+          gripLimit: 0,
           longForce: 0,
           latForce: 0,
           spin: 0,
@@ -205,12 +213,13 @@ export class Car {
 
       // Steered wheels turn about the car's up axis (positive angle = right = clockwise from above).
       const heading = wheel.front ? rotateAbout(carForward, up, -this.steerAngle) : carForward;
-      wheel.spin += (dot(body.linvel(), heading) / radius) * dt;
+      wheel.omega = dot(body.linvel(), heading) / radius;
+      wheel.spin += wheel.omega * dt;
 
       if (!hit) {
         wheel.contact = false;
         wheel.surface = null;
-        wheel.load = wheel.longForce = wheel.latForce = wheel.slipAngle = 0;
+        wheel.load = wheel.longForce = wheel.latForce = wheel.slipAngle = wheel.gripLimit = 0;
         wheel.suspensionLength = S.restLength;
         continue;
       }
@@ -257,6 +266,7 @@ export class Car {
         fy *= limit / total;
       }
       wheel.slipAngle = slipAngle;
+      wheel.gripLimit = limit;
       wheel.longForce = fx;
       wheel.latForce = fy;
       body.addForceAtPoint(add(scale(fwd, fx), scale(right, fy)), contact, false);
