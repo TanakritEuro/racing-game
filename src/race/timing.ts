@@ -99,15 +99,19 @@ export class LapTimer {
     return elapsed - this.best.profile[this.reached];
   }
 
-  /** Measure against `lap` from now on (a best loaded from storage), unless this session has a better one. */
-  setBest(lap: ReferenceLap): void {
+  /**
+   * Measure against `lap` from now on (a best loaded from storage), unless this session has a
+   * better one. `sectors`: stored best sectors, kept where they beat this session's.
+   */
+  setBest(lap: ReferenceLap, sectors: Sectors = lap.sectors): void {
+    [...lap.sectors, ...sectors].forEach((t, i) => {
+      const k = i % 3;
+      const b = this.bestSectors[k];
+      if (t !== null && (b === null || t < b)) this.bestSectors[k] = t;
+    });
     if (this.best && this.best.time <= lap.time) return;
     this.best = lap;
     this.bestLap = lap.time;
-    lap.sectors.forEach((t, k) => {
-      const b = this.bestSectors[k];
-      if (b === null || t < b) this.bestSectors[k] = t;
-    });
   }
 
   /**

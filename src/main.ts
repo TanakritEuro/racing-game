@@ -13,13 +13,14 @@ import { createSceneryView } from './render/scenery';
 import { createTrackView } from './render/trackView';
 import { layoutScenery } from './track/scenery';
 import { loadSettings, saveSettings } from './settings';
-import { TimeTrial } from './race/session';
+import { TimeTrial, type LapEvent } from './race/session';
 import { GhostView } from './render/ghostView';
 import { Simulation } from './sim';
 import { TimingHud } from './ui/timingHud';
+import { bestKey, openBestStore } from './storage/bests';
 import { CIRCUITS } from './track/circuits';
 import { buildTrack } from './track/track';
-import { NO_CONTROLS, poseOnTrack } from './vehicle/car';
+import { NO_CONTROLS, poseOnTrack, type Controls } from './vehicle/car';
 import { createPose, interpolatePose } from './vehicle/pose';
 import { NEUTRAL, REVERSE } from './vehicle/gearbox';
 
@@ -67,7 +68,27 @@ const minimap = new Minimap(document.querySelector<HTMLDivElement>('#hud')!, tra
 const params = new URLSearchParams(location.search);
 telemetry.visible = params.has('telemetry');
 // ?debug exposes the simulation in the console, for poking at it while developing.
-if (params.has('debug')) Object.assign(window, { sim, poseOnTrack, session: () => session });
+if (params.has('debug')) Object.assign(window, { sim, poseOnTrack, session: () => session, step: (c: Controls) => step(c) });
+
+// Bests from earlier visits: the ghost, the delta and the sector colours carry on from them.
+const store = await openBestStore();
+const key = bestKey(circuit.id, sim.car.def.name);
+const stored = await store.load(key, session.fingerprint);
+if (stored) session.loadBest(stored.lap, stored.timeAtSample, stored.bestSectors);
+const NOT_KEPT = 'Bests are not kept in this browser';
+if (!store.persistent) timing.note = NOT_KEPT;
+let savedSectors = JSON.stringify(sim.timer.bestSectors);
+
+/** After a lap: keep a new best lap, or a new best sector. */
+function keepBests(event: LapEvent): void {
+  const bests = session.bests();
+  const sectors = JSON.stringify(sim.timer.bestSectors);
+  if (!bests || (event !== 'best' && sectors === savedSectors)) return;
+  savedSectors = sectors;
+  void store.save({ key, fingerprint: session.fingerprint, ...bests }).then((ok) => {
+    if (!ok) timing.note = NOT_KEPT;
+  });
+}
 
 // Settings: remembered between visits, applied to the simulation through its setters.
 const settings = loadSettings();
@@ -107,6 +128,14 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR') recover();
 });
 
+/** One physics step and what follows it. */
+function step(c: Controls): void {
+  controls = c;
+  sim.step(c);
+  const event = session.afterStep(c);
+  if (event) keepBests(event);
+}
+
 function recover(): void {
   sim.recover();
   input.reset();
@@ -145,9 +174,7 @@ function frame(now: number): void {
   }
   if (pad.reset) recover();
   while (accumulator >= PHYSICS_STEP) {
-    controls = input.controls(sim.car, PHYSICS_STEP);
-    sim.step(controls);
-    session.afterStep(controls);
+    step(input.controls(sim.car, PHYSICS_STEP));
     accumulator -= PHYSICS_STEP;
   }
 

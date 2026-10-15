@@ -6,7 +6,7 @@ import { trackFingerprint } from '../track/track';
 import type { Controls } from '../vehicle/car';
 import { copyPose } from '../vehicle/pose';
 import { createRecordedState, LapRecorder, type LapRecording } from './recording';
-import type { ReferenceLap } from './timing';
+import type { ReferenceLap, Sectors } from './timing';
 
 /** What a step brought: nothing, a lap, or a lap that is the new best. */
 export type LapEvent = 'lap' | 'best' | null;
@@ -76,13 +76,23 @@ export class TimeTrial {
     this.recordingFrom = null;
   }
 
-  /** Race against a stored best: its recording becomes the ghost and the timer measures against it. */
-  loadBest(rec: LapRecording, profile: Float32Array): void {
-    if (rec.fingerprint !== this.fingerprint || !rec.valid) return;
+  /**
+   * Race against a stored best: its recording becomes the ghost and the timer measures against
+   * it (its time at each sample is `profile`). Stored best sectors count too.
+   */
+  loadBest(rec: LapRecording, profile: Float32Array, bestSectors?: Sectors): void {
+    if (rec.fingerprint !== this.fingerprint || !rec.valid || profile.length !== this.sim.track.samples.length) return;
+    const best: ReferenceLap = { time: rec.lapTime, sectors: rec.sectors, profile };
+    this.sim.timer.setBest(best, bestSectors);
     if (this.ghost && this.ghost.lapTime <= rec.lapTime) return;
     this.ghost = rec;
-    const best: ReferenceLap = { time: rec.lapTime, sectors: rec.sectors, profile };
-    this.sim.timer.setBest(best);
+  }
+
+  /** What to keep of this session's bests: the ghost, the best sectors and the delta profile. */
+  bests(): { lap: LapRecording; bestSectors: Sectors; timeAtSample: Float32Array } | null {
+    const best = this.sim.timer.best;
+    if (!this.ghost || !best) return null;
+    return { lap: this.ghost, bestSectors: [...this.sim.timer.bestSectors], timeAtSample: best.profile };
   }
 
   private capture(controls: Controls): void {

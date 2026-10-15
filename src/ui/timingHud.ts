@@ -14,6 +14,7 @@ export class TimingHud {
   private readonly splits: HTMLDivElement[];
   private readonly last: HTMLDivElement;
   private readonly best: HTMLDivElement;
+  private readonly noteLine: HTMLDivElement;
   /** The bests as they stood when this lap began: splits are judged against them. */
   private refSectors: (number | null)[] = [null, null, null];
   private refLapSectors: number[] | null = null;
@@ -36,6 +37,12 @@ export class TimingHud {
     this.splits = [0, 1, 2].map(() => el('t-split', row));
     this.last = el('t-last');
     this.best = el('t-best');
+    this.noteLine = el('t-note');
+  }
+
+  /** A line under the times (e.g. that bests aren't being kept); empty hides it. */
+  set note(text: string) {
+    this.noteLine.textContent = text;
   }
 
   update(timer: LapTimer, time: number): void {

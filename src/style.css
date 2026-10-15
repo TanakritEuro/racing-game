@@ -106,6 +106,16 @@ body {
   text-shadow: none;
 }
 
+.t-note {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.t-note:empty {
+  display: none;
+}
+
 #dash {
   position: absolute;
   right: 24px;
