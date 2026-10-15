@@ -63,6 +63,13 @@ export const TUNING = {
     /** The limiter restores fuel this far below the limit (rpm). */
     limiterHysteresis: 150,
   },
+  gamepad: {
+    /** Stick travel ignored around the centre, then a response curve (1 = linear, more = finer near the centre). */
+    steerDeadZone: 0.08,
+    steerCurve: 1.6,
+    /** Trigger travel ignored at rest. */
+    triggerDeadZone: 0.04,
+  },
   surfaces: {
     /** Grip relative to the tyre's own (multiplies its μ) and extra rolling drag (fraction of load). */
     asphalt: { grip: 1, drag: 0 },

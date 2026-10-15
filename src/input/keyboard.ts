@@ -1,4 +1,4 @@
-import type { Controls } from './vehicle/car';
+import type { Controls } from '../vehicle/car';
 
 /**
  * Keyboard → Controls. Keys are digital: `steer` here is −1, 0 or +1, and the steering

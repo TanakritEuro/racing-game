@@ -2,8 +2,7 @@
 // variable-rate rendering. Everything that affects the result happens inside sim.step().
 
 import { PHYSICS_STEP } from './constants';
-import { KeyboardSteering } from './drivers/steeringAssist';
-import { Keyboard } from './input';
+import { PlayerInput } from './input';
 import { initPhysics } from './physics';
 import { formatLapTime } from './race/timing';
 import { CarView } from './render/carView';
@@ -16,7 +15,7 @@ import { loadSettings, saveSettings } from './settings';
 import { Simulation } from './sim';
 import { TEST_CIRCUIT } from './track/circuits';
 import { buildTrack } from './track/track';
-import { createPose } from './vehicle/car';
+import { createPose, NO_CONTROLS } from './vehicle/car';
 import { NEUTRAL, REVERSE } from './vehicle/gearbox';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
@@ -47,8 +46,9 @@ const carView = new CarView(
 stage.scene.add(carView.root);
 const cameras = new CameraRig(stage.camera, sim.car.def);
 const drawn = createPose();
-const keyboard = new Keyboard();
-const steering = new KeyboardSteering();
+const input = new PlayerInput();
+const steering = input.steering;
+let controls = NO_CONTROLS;
 const telemetry = new Telemetry(document.body);
 telemetry.visible = new URLSearchParams(location.search).has('telemetry');
 
@@ -75,12 +75,14 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyX') settings.tc = !settings.tc;
   if (e.code === 'KeyM') settings.gearbox = settings.gearbox === 'auto' ? 'manual' : 'auto';
   if (['KeyC', 'KeyV', 'KeyZ', 'KeyX', 'KeyM'].includes(e.code)) applySettings();
-  if (e.code === 'KeyR') {
-    sim.recover();
-    steering.reset();
-    cameras.snap();
-  }
+  if (e.code === 'KeyR') recover();
 });
+
+function recover(): void {
+  sim.recover();
+  input.reset();
+  cameras.snap();
+}
 
 function updateHud(): void {
   hud.speed.textContent = String(Math.round(Math.abs(sim.car.speed) * 3.6));
@@ -109,12 +111,15 @@ function frame(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   accumulator += dt;
-  const controls = keyboard.controls();
-  const keys = controls.steer;
+  const pad = input.poll();
+  if (pad.camera) {
+    cameras.cycle();
+    settings.camera = cameras.mode;
+    saveSettings(settings);
+  }
+  if (pad.reset) recover();
   while (accumulator >= PHYSICS_STEP) {
-    // A shift request belongs to one step, not to every step this frame runs.
-    controls.shift = keyboard.takeShift();
-    controls.steer = steering.update(keys, sim.car, PHYSICS_STEP);
+    controls = input.controls(sim.car, PHYSICS_STEP);
     sim.step(controls);
     accumulator -= PHYSICS_STEP;
   }
