@@ -19,8 +19,9 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { TUNING } from '../config';
 import { AIR_DENSITY } from '../constants';
-import { clamp, type Quat, type Vec3 } from '../math';
+import { clamp, quatFromBasis, type Quat, type Vec3 } from '../math';
 import type { Physics, SurfaceTag } from '../physics';
+import type { TrackSample } from '../track/track';
 import type { CarDef, TyreDef } from './carDef';
 import { KESTREL } from './cars';
 import { Drivetrain, type DriveOut } from './drivetrain';
@@ -113,10 +114,10 @@ interface WheelWork {
   handbrake: number;
 }
 
+/** Where to put the car: a point on the road surface and the car's orientation there. */
 export interface Pose {
   position: Vec3;
-  /** Heading: rotation about +Y (rad). 0 faces -Z. */
-  yaw: number;
+  rotation: Quat;
 }
 
 const vec = (): Vec3 => ({ x: 0, y: 0, z: 0 });
@@ -235,10 +236,14 @@ export class Car {
 
   /** Put the car at `pose`, at rest, with the wheels just touching the ground. */
   reset(pose: Pose): void {
+    // The body sits above the road along the car's up, with the wheels just touching.
     const S = this.def.suspension.front;
-    const y = pose.position.y - this.def.mountHeight + S.restLength + this.def.tyres.front.radius - 0.03;
-    this.body.setTranslation({ x: pose.position.x, y, z: pose.position.z }, true);
-    this.body.setRotation({ x: 0, y: Math.sin(pose.yaw / 2), z: 0, w: Math.cos(pose.yaw / 2) }, true);
+    const height = -this.def.mountHeight + S.restLength + this.def.tyres.front.radius - 0.03;
+    basis(pose.rotation, this.carRight, this.carUp, this.carForward);
+    const up = this.carUp;
+    const p = pose.position;
+    this.body.setTranslation({ x: p.x + up.x * height, y: p.y + up.y * height, z: p.z + up.z * height }, true);
+    this.body.setRotation(pose.rotation, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     this.steerAngle = 0;
@@ -438,7 +443,8 @@ export class Car {
       this.force.y = up.y * load;
       this.force.z = up.z * load;
       body.addForceAtPoint(this.force, work.point, false);
-      const surface = wheel.surface === 'grass' ? TUNING.surfaces.grass : TUNING.surfaces.asphalt;
+      const tag = wheel.surface;
+      const surface = TUNING.surfaces[tag === 'kerb' || tag === 'grass' || tag === 'gravel' ? tag : 'asphalt'];
       work.grip = surface.grip;
       work.rollingDrag = (wheel.tyre.rollingResistance + surface.drag) * load * wheel.tyre.radius;
       wheel.gripLimit = gripLimit(wheel.tyre, load, surface.grip);
@@ -628,8 +634,9 @@ export function copyPose(from: CarPose, to: CarPose): void {
   from.wheels.forEach((w, i) => Object.assign(to.wheels[i], w));
 }
 
-/** Where to put the car at track sample `index`, facing the driving direction. */
-export function poseOnTrack(sample: { x: number; z: number; tx: number; tz: number }): Pose {
-  // Yaw θ turns local -Z into (-sin θ, 0, -cos θ); match it to the tangent.
-  return { position: { x: sample.x, y: 0, z: sample.z }, yaw: Math.atan2(-sample.tx, -sample.tz) };
+/** Where to put the car at a track sample: on the road, facing the driving direction, pitched and banked with it. */
+export function poseOnTrack(p: TrackSample): Pose {
+  // Car local axes: +X right (the road's −left), +Y up, +Z back (−tangent).
+  const rotation = quatFromBasis({ x: -p.lx, y: -p.ly, z: -p.lz }, { x: p.ux, y: p.uy, z: p.uz }, { x: -p.tx, y: -p.ty, z: -p.tz });
+  return { position: { x: p.x, y: p.y, z: p.z }, rotation };
 }

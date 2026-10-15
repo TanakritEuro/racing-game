@@ -71,3 +71,30 @@ export function createRng(seed: number): Rng {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+/** The rotation taking the local axes to `x`, `y`, `z` (orthonormal, right-handed). */
+export function quatFromBasis(x: Vec3, y: Vec3, z: Vec3): Quat {
+  // From the rotation matrix with columns x, y, z (Shepperd's method).
+  const trace = x.x + y.y + z.z;
+  if (trace > 0) {
+    const s = 2 * Math.sqrt(trace + 1);
+    return { w: s / 4, x: (y.z - z.y) / s, y: (z.x - x.z) / s, z: (x.y - y.x) / s };
+  }
+  if (x.x > y.y && x.x > z.z) {
+    const s = 2 * Math.sqrt(1 + x.x - y.y - z.z);
+    return { w: (y.z - z.y) / s, x: s / 4, y: (y.x + x.y) / s, z: (z.x + x.z) / s };
+  }
+  if (y.y > z.z) {
+    const s = 2 * Math.sqrt(1 + y.y - x.x - z.z);
+    return { w: (z.x - x.z) / s, x: (y.x + x.y) / s, y: s / 4, z: (z.y + y.z) / s };
+  }
+  const s = 2 * Math.sqrt(1 + z.z - x.x - y.y);
+  return { w: (x.y - y.x) / s, x: (z.x + x.z) / s, y: (z.y + y.z) / s, z: s / 4 };
+}
+
+/** A rotation whose local +Z points along `dir` and whose +Y is as close to world up as it can be. */
+export function uprightAlong(dir: Vec3): Quat {
+  const z = normalize(dir);
+  const x = normalize(cross({ x: 0, y: 1, z: 0 }, z));
+  return quatFromBasis(x, cross(z, x), z);
+}

@@ -5,9 +5,10 @@ import type { TrackDef } from './track';
  * S-section. Invented layout. The first point is the start line.
  */
 export const TEST_CIRCUIT: TrackDef = {
+  id: 'proving-ground',
   name: 'Proving Ground',
   width: 12,
-  runoff: 8,
+  runoff: { width: 8, surface: 'grass' },
   points: [
     { x: 0, z: 0 },
     { x: 110, z: 0 },

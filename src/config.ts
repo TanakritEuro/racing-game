@@ -73,7 +73,10 @@ export const TUNING = {
   surfaces: {
     /** Grip relative to the tyre's own (multiplies its μ) and extra rolling drag (fraction of load). */
     asphalt: { grip: 1, drag: 0 },
+    kerb: { grip: 1, drag: 0 },
     grass: { grip: 0.6, drag: 0.08 },
+    // Loose stones: little grip and a great deal of drag, so a car sinks in and stops.
+    gravel: { grip: 0.5, drag: 0.3 },
   },
   tyreIntegration: {
     /**

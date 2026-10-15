@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Simulation } from '../src/sim';
 import { controls, NO_CONTROLS } from '../src/vehicle/car';
 import { KESTREL } from '../src/vehicle/cars';
-import { createSim, followLine, run, runUntil } from './helpers';
-import { LONG_OVAL, SKIDPAD } from './tracks';
-import { lateralOffset, nearestSample } from '../src/track/track';
+import { createSim, followLine, run, runUntil, skidpadLimit } from './helpers';
+import { BANKED_SKIDPAD, HILL, LONG_OVAL, SKIDPAD } from './tracks';
+import { nearestSample } from '../src/track/track';
+import { poseOnTrack } from '../src/vehicle/car';
 
 let sim: Simulation;
 
@@ -205,37 +206,7 @@ describe('car', () => {
   });
 
   it('holds 0.9–1.05 g on the skidpad, running out of front grip first', async () => {
-    const s = await createSim(SKIDPAD);
-    // Settle at 15 m/s, then creep the target speed up until the car can't hold the circle.
-    let target = 15;
-    const drive = () => followLine(s, target, { maxThrottle: 0.4 })();
-    let index: number | undefined;
-    let best = 0;
-    let atBest = { front: 0, rear: 0 };
-    let frontTransferShare = 0;
-    const window: number[] = [];
-    for (let i = 0; i < 75 * 120; i++) {
-      if (i > 15 * 120) target += 0.1 / 120;
-      s.step(drive());
-      const p = s.car.position;
-      index = nearestSample(s.track, p.x, p.z, index);
-      const v = s.car.body.linvel();
-      // Lateral acceleration from the speed and the radius actually driven, averaged over 1 s.
-      window.push((v.x * v.x + v.z * v.z) / Math.hypot(p.x, p.z) / 9.81);
-      if (window.length > 120) window.shift();
-      const g = window.reduce((a, b) => a + b, 0) / window.length;
-      if (i === 30 * 120) {
-        // At ~0.65 g: the front axle's share of the lateral load transfer.
-        const [fl, fr, rl, rr] = s.car.wheels;
-        const front = Math.abs(fl.load - fr.load);
-        frontTransferShare = front / (front + Math.abs(rl.load - rr.load));
-      }
-      if (window.length === 120 && Math.abs(lateralOffset(s.track, index, p.x, p.z)) < 5 && g > best) {
-        best = g;
-        const [fl, fr, rl, rr] = s.car.wheels;
-        atBest = { front: Math.abs(fl.slipAngle + fr.slipAngle) / 2, rear: Math.abs(rl.slipAngle + rr.slipAngle) / 2 };
-      }
-    }
+    const { best, atBest, frontTransferShare } = await skidpadLimit(SKIDPAD);
     expect(best).toBeGreaterThan(0.9);
     expect(best).toBeLessThan(1.05);
     // The anti-roll bars put ~45 % of the lateral load transfer on the front axle...
@@ -243,7 +214,30 @@ describe('car', () => {
     expect(frontTransferShare).toBeLessThan(0.5);
     // ...and the car still understeers mildly at the limit: fronts at their peak slip angle, rears below.
     expect(atBest.front).toBeGreaterThan(atBest.rear * 1.2);
-    expect(atBest.front).toBeGreaterThan(0.8 * s.car.wheels[0].tyre.peakSlipAngle);
+    expect(atBest.front).toBeGreaterThan(0.8 * atBest.peakSlipAngle);
+  });
+
+  it('corners harder on a 15° banked skidpad than a flat one', async () => {
+    const flat = await skidpadLimit(SKIDPAD);
+    // Ramped for longer: the banked circle holds well past the flat one's speeds.
+    const banked = await skidpadLimit(BANKED_SKIDPAD, KESTREL, 140);
+    // Banking turns part of the weight into cornering force: tan 15° ≈ 0.27 g more, less what load sensitivity takes back.
+    expect(banked.best).toBeGreaterThan(flat.best + 0.15);
+  });
+
+  it('holds still with the brake on a real 10° road slope', async () => {
+    const s = await createSim(HILL);
+    // Mid-way up the climbing straight, facing uphill.
+    const i = nearestSample(s.track, 200, 0);
+    s.car.reset(poseOnTrack(s.track.samples[i]));
+    run(s, controls({ brake: 1 }), 2);
+    const from = s.car.position;
+    run(s, controls({ brake: 1 }), 10);
+    expect(flatDistance(from, s.car.position)).toBeLessThan(0.01);
+    expect(Math.abs(from.y - s.car.position.y)).toBeLessThan(0.01);
+    expect(s.car.reversing).toBe(false);
+    // It really is on the slope: the car's nose points 10° up.
+    expect(Math.asin(s.car.forward.y)).toBeCloseTo((10 * Math.PI) / 180, 1);
   });
 
   it('makes the expected downforce at each axle at 200 km/h', async () => {

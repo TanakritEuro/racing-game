@@ -3,7 +3,7 @@ import { clamp } from '../src/math';
 import { initPhysics } from '../src/physics';
 import { Simulation } from '../src/sim';
 import { TEST_CIRCUIT } from '../src/track/circuits';
-import { buildTrack, nearestSample, type TrackDef } from '../src/track/track';
+import { buildTrack, lateralOffset, nearestSample, type TrackDef } from '../src/track/track';
 import { controls, type Controls } from '../src/vehicle/car';
 import type { CarDef } from '../src/vehicle/carDef';
 import { KESTREL } from '../src/vehicle/cars';
@@ -70,4 +70,42 @@ export function followLine(
       brake: clamp(-error * 0.3, 0, 1),
     });
   };
+}
+
+/**
+ * Steady-state cornering limit on a constant-radius circle centred on the origin: settle at
+ * 15 m/s, then creep the target speed up until the car can't hold the circle. Returns the
+ * best 1 s average of the horizontal lateral acceleration (g), the slip angles there, and
+ * the front axle's share of the lateral load transfer at ~0.65 g.
+ */
+export async function skidpadLimit(trackDef: TrackDef, carDef: CarDef = KESTREL, seconds = 75) {
+  const s = await createSim(trackDef, carDef);
+  let target = 15;
+  const drive = () => followLine(s, target, { maxThrottle: 0.4 })();
+  let index: number | undefined;
+  let best = 0;
+  const atBest = { front: 0, rear: 0, peakSlipAngle: s.car.wheels[0].tyre.peakSlipAngle };
+  let frontTransferShare = 0;
+  const window: number[] = [];
+  for (let i = 0; i < seconds * 120; i++) {
+    if (i > 15 * 120) target += 0.1 / 120;
+    s.step(drive());
+    const p = s.car.position;
+    index = nearestSample(s.track, p.x, p.z, index);
+    const v = s.car.body.linvel();
+    window.push((v.x * v.x + v.z * v.z) / Math.hypot(p.x, p.z) / 9.81);
+    if (window.length > 120) window.shift();
+    const g = window.reduce((a, b) => a + b, 0) / window.length;
+    const [fl, fr, rl, rr] = s.car.wheels;
+    if (i === 30 * 120) {
+      const front = Math.abs(fl.load - fr.load);
+      frontTransferShare = front / (front + Math.abs(rl.load - rr.load));
+    }
+    if (window.length === 120 && Math.abs(lateralOffset(s.track, index, p.x, p.z)) < 5 && g > best) {
+      best = g;
+      atBest.front = Math.abs(fl.slipAngle + fr.slipAngle) / 2;
+      atBest.rear = Math.abs(rl.slipAngle + rr.slipAngle) / 2;
+    }
+  }
+  return { best, atBest, frontTransferShare };
 }

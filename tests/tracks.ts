@@ -15,10 +15,38 @@ function arc(cx: number, cz: number, r: number, a0: number, a1: number, count: n
 
 /** Constant-radius circle for steady-state cornering: 40 m radius to the centreline, turning left. */
 export const SKIDPAD: TrackDef = {
+  id: 'skidpad',
   name: 'Skidpad',
   width: 12,
-  runoff: 8,
+  runoff: { width: 8, surface: 'grass' },
   points: [{ x: 40, z: 0 }, ...arc(0, 0, 40, 0, -2 * Math.PI, 32)],
+};
+
+/** The skidpad on a 15° bank (outer, right-hand edge raised), lifted clear of the flat ground. */
+export const BANKED_SKIDPAD: TrackDef = {
+  ...SKIDPAD,
+  id: 'banked-skidpad',
+  name: 'Banked skidpad',
+  points: SKIDPAD.points.map((p) => ({ ...p, y: 6, bank: (-15 * Math.PI) / 180 })),
+};
+
+const RISE = Math.tan((10 * Math.PI) / 180);
+
+/**
+ * A hill: a 400 m straight climbing at 10° towards +X (sample 0 at its foot), a level
+ * hairpin at the top, a straight back down and a level hairpin at the bottom.
+ */
+export const HILL: TrackDef = {
+  id: 'hill',
+  name: 'Hill',
+  width: 12,
+  runoff: { width: 8, surface: 'grass' },
+  points: [
+    ...[0, 100, 200, 300, 400].map((x) => ({ x, z: 0, y: 2 + x * RISE })),
+    ...arc(400, -60, 60, Math.PI / 2, -Math.PI / 2, 4).map((p) => ({ ...p, y: 2 + 400 * RISE })),
+    ...[400, 300, 200, 100, 0].map((x) => ({ x, z: -120, y: 2 + x * RISE })),
+    ...arc(0, -60, 60, -Math.PI / 2, -(3 * Math.PI) / 2, 4).map((p) => ({ ...p, y: 2 })),
+  ],
 };
 
 const STRAIGHT = 5000;
@@ -29,9 +57,10 @@ const END_RADIUS = 250;
  * so the car starts with 4.5 km of straight road ahead, driving towards +X.
  */
 export const LONG_OVAL: TrackDef = {
+  id: 'long-oval',
   name: 'Long oval',
   width: 15,
-  runoff: 10,
+  runoff: { width: 10, surface: 'grass' },
   points: [
     ...[500, 1500, 2500, 3500, 4500, STRAIGHT].map((x) => ({ x, z: 0 })),
     ...arc(STRAIGHT, -END_RADIUS, END_RADIUS, Math.PI / 2, -Math.PI / 2, 6),

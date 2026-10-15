@@ -16,7 +16,7 @@ export class CameraRig {
   private readonly look = new THREE.Vector3();
   private readonly target = new THREE.Vector3();
   private readonly lookTarget = new THREE.Vector3();
-  private readonly flat = new THREE.Vector3();
+  private readonly along = new THREE.Vector3();
   private readonly quaternion = new THREE.Quaternion();
   private initialised = false;
 
@@ -57,11 +57,12 @@ export class CameraRig {
     }
 
     const C = TUNING.camera.chase;
-    // Follow the heading on the ground only, so the camera doesn't pitch with the body.
-    const flat = this.flat.set(0, 0, -1).applyQuaternion(q).setY(0).normalize();
-    this.target.set(p.x, p.y, p.z).addScaledVector(flat, -C.distance);
+    // Follow the car's heading, including the road's slope (so a crest or a dip doesn't put
+    // the camera in the ground), but not its roll.
+    const along = this.along.set(0, 0, -1).applyQuaternion(q).normalize();
+    this.target.set(p.x, p.y, p.z).addScaledVector(along, -C.distance);
     this.target.y += C.height;
-    this.lookTarget.set(p.x, p.y + 0.6, p.z).addScaledVector(flat, C.lookAhead);
+    this.lookTarget.set(p.x, p.y + 0.6, p.z).addScaledVector(along, C.lookAhead);
     if (!this.initialised) {
       this.position.copy(this.target);
       this.look.copy(this.lookTarget);
