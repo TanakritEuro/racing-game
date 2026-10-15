@@ -22,6 +22,10 @@ import { formatLapTime } from './race/timing';
 import { Replay, REPLAY_SPEEDS } from './replay/replay';
 import { TvCameraView } from './render/tvCameras';
 import { placeTvCameras } from './track/cameras';
+import { carEnvelope } from './ai/envelope';
+import { racingLine } from './ai/racingLine';
+import { speedProfile } from './ai/speedProfile';
+import { createLineView } from './render/lineView';
 import { bestKey, openBestStore } from './storage/bests';
 import { CIRCUITS } from './track/circuits';
 import { buildTrack } from './track/track';
@@ -79,6 +83,11 @@ const timing = new TimingHud(document.querySelector<HTMLDivElement>('#timing')!)
 const minimap = new Minimap(document.querySelector<HTMLDivElement>('#hud')!, track);
 const params = new URLSearchParams(location.search);
 telemetry.visible = params.has('telemetry');
+// ?line draws the AI's racing line, coloured by its target speed.
+if (params.has('line')) {
+  const line = racingLine(track, sim.car.def.halfExtents.x);
+  stage.scene.add(createLineView(track, line, speedProfile(line, carEnvelope(sim.car.def))));
+}
 // ?debug exposes the simulation in the console, for poking at it while developing.
 if (params.has('debug')) Object.assign(window, { sim, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay });
 

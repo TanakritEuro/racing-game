@@ -113,4 +113,33 @@ export const TUNING = {
     /** Replay TV cameras: width of the shot at the car (m), field of view limits (degrees), aim above the car's origin (m), turn smoothing, near plane (m). */
     tv: { framing: 14, minFov: 4, maxFov: 50, aimHeight: 0.5, follow: 10, near: 0.5 },
   },
+  /** AI drivers (`ai/`). */
+  ai: {
+    envelope: {
+      /**
+       * Share of the tyres' peak grip at the static load that the whole car really reaches
+       * (load transfer, combined slip, slip angles off the peak): calibrated against the
+       * measured ~0.98 g on the skidpad and ~1 g stopping with ABS.
+       */
+      lateral: 0.9,
+      braking: 0.9,
+    },
+    line: {
+      /** Room kept from the edge of the usable road (m), and how much of a kerb the line may use. */
+      margin: 0.3,
+      kerbUse: 0.5,
+      /**
+       * Coarse-to-fine: the line is solved on every n-th sample for each stride in turn (the
+       * coarsest kept to at least 12 points), each level until no offset moves more than
+       * `tolerance` (m) in a sweep, or `maxSweeps`.
+       */
+      strides: [256, 128, 64, 32, 16, 8, 4, 2, 1],
+      tolerance: 1e-3,
+      maxSweeps: 20000,
+      /** Curvature is measured over ±this many samples, so 2 m steps don't make it noisy. */
+      curvatureSpan: 3,
+    },
+    /** Top of the speed profile on a straight (m/s), past the car's real top speed. */
+    maxSpeed: 90,
+  },
 };
