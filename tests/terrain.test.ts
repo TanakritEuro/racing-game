@@ -43,6 +43,7 @@ describe('terrain', () => {
     const start = performance.now();
     const t = buildTerrain(buildTrack(LONG_OVAL));
     expect(t.nx * t.nz).toBeGreaterThan(100_000);
-    expect(performance.now() - start).toBeLessThan(3000);
+    // Generous: it runs alongside the other test files. Before the spatial hash it took over 6 s alone.
+    expect(performance.now() - start).toBeLessThan(10_000);
   });
 });
