@@ -12,8 +12,9 @@
 import { TUNING } from '../config';
 import { GRAVITY } from '../constants';
 import { clamp, createRng, type Rng } from '../math';
-import { nearestSample, type Track } from '../track/track';
+import { lateralOffset, nearestSample, type Track } from '../track/track';
 import { controls, type Car, type Controls } from '../vehicle/car';
+import { usableLock } from '../drivers/steeringAssist';
 import type { CarDef } from '../vehicle/carDef';
 import { carEnvelope, type CarEnvelope } from './envelope';
 import { racingLine, type RacingLine } from './racingLine';
@@ -93,21 +94,30 @@ export class AiDriver {
     const k = line.curvature[(i + Math.round((D.feedForward * v) / spacing)) % n];
     const yawRate = -car.body.angvel().y; // positive turning right
     // Gentle at walking pace (joining the line from the grid), full strength at speed.
-    const crossTrackMax = D.crossTrackMax.slow + (D.crossTrackMax.fast - D.crossTrackMax.slow) * clamp(v / D.crossTrackMax.speed, 0, 1);
+    // (Or when far off it: back on the road after a spin.)
+    const crossTrackMax =
+      Math.abs(across) > D.crossTrackMax.far
+        ? D.crossTrackMax.fast
+        : D.crossTrackMax.slow + (D.crossTrackMax.fast - D.crossTrackMax.slow) * clamp(v / D.crossTrackMax.speed, 0, 1);
     const wheelAngle =
       Math.atan(wheelbase * k) +
       D.headingGain * heading +
       clamp(Math.atan((D.crossTrackGain * across) / (v + D.crossTrackSoftening)), -crossTrackMax, crossTrackMax) +
       D.yawDamping * (v * k - yawRate);
-    let steer = clamp(wheelAngle / car.def.steering.lock, -1, 1);
+    // No more lock than the front tyres can use at this speed: past their peak slip angle
+    // they only scrub, and the car ploughs straight on. Catching a slide needs all of it.
+    const sliding = Math.abs(car.bodySlipAngle) > D.slideAngle && v > 5;
+    const lock = sliding ? 1 : usableLock(car, v);
+    let steer = clamp(wheelAngle / car.def.steering.lock, -lock, lock);
     // Pointing the wrong way (after a spin): full lock round towards the line's direction.
     if (Math.abs(heading) > Math.PI / 2) steer = Math.sign(heading);
 
     // Speed: where the profile wants it a moment ahead, and what it takes to get there.
     const lead = Math.max(4, D.speedLead * v);
     const ahead = (this.index + Math.max(1, Math.round(lead / spacing))) % n;
-    const here = Math.min(this.profile[this.index] * faster, this.speedCap);
-    const target = Math.min(this.profile[ahead] * faster, this.speedCap);
+    const offLineSpeed = this.offLineLimit(aim, faster, v, spacing);
+    const here = Math.min(this.profile[this.index] * faster, this.speedCap, offLineSpeed);
+    const target = Math.min(this.profile[ahead] * faster, this.speedCap, offLineSpeed);
     const accel = (target * target - v * v) / (2 * lead) + D.speedGain * (here - v);
     let throttle = 0;
     let brake = 0;
@@ -122,17 +132,42 @@ export class AiDriver {
 
     // A slide: off the brakes (they unload the rear and feed the slide), a steady gentle
     // throttle (lifting would too), and the steering catches it.
-    if (Math.abs(car.bodySlipAngle) > D.slideAngle && v > 5) {
+    if (sliding) {
       brake = 0;
       throttle = Math.min(throttle, D.slideThrottle);
     }
 
-    // Stuck: barely moving with the throttle down, for a while.
+    // Stuck: barely moving, or off the road (in a gravel trap, beyond the run-off), for a while.
+    const offRoad = Math.abs(lateralOffset(track, this.index, p.x, p.z)) > track.samples[this.index].halfWidth + D.stuck.offRoad;
     if (Math.abs(speed) < D.stuck.speed) this.stuckFor += dt;
+    else if (offRoad) this.stuckFor += dt * (D.stuck.time / D.stuck.offRoadTime);
     else this.stuckFor = 0;
     this.stuck = this.stuckFor > D.stuck.time;
 
     return controls({ steer, throttle, brake });
+  }
+
+  /**
+   * Off its line by `aim` (m, left), the corners ahead are tighter or wider than the line's:
+   * the fastest it can be now and still brake in time for each of them at that offset.
+   */
+  private offLineLimit(aim: number, faster: number, v: number, spacing: number): number {
+    const D = TUNING.ai.driver;
+    if (Math.abs(aim) < 0.3) return Infinity;
+    const { profile, line } = this;
+    const n = profile.length;
+    const brake = this.env.brakingMu * G * D.offLineBraking;
+    const reach = Math.round(Math.max(D.offLineLook, (v * v) / (2 * brake)) / spacing);
+    let limit = Infinity;
+    for (let k = 0; k <= reach; k += 2) {
+      const j = (this.index + k) % n;
+      // A parallel path `aim` left of the line: radius 1/κ + aim turning right (κ > 0), 1/|κ| − aim turning left.
+      const scale = Math.sqrt(clamp(1 + line.curvature[j] * aim, 0.25, 1));
+      if (scale > 0.999) continue;
+      const corner = profile[j] * faster * scale;
+      limit = Math.min(limit, Math.sqrt(corner * corner + 2 * brake * k * spacing));
+    }
+    return limit;
   }
 
   /** After the car was put back on the track: forget the stuck timer and any mistake. */

@@ -130,6 +130,8 @@ const AXLES = [
 
 export class Car {
   readonly body: RAPIER.RigidBody;
+  /** The chassis box: what other cars and the barriers hit. */
+  readonly collider: RAPIER.Collider;
   readonly wheels: Wheel[];
   /** Steering rack: the wheel angle at the middle of the front axle (rad), positive = right. */
   steerAngle = 0;
@@ -179,11 +181,11 @@ export class Car {
         .setCanSleep(false)
         .setCcdEnabled(true),
     );
-    const collider = this.world.createCollider(
+    this.collider = this.world.createCollider(
       RAPIER.ColliderDesc.cuboid(h.x, h.y, h.z).setDensity(0).setFriction(0.3).setRestitution(0.1).setCollisionGroups(CAR_GROUPS),
       this.body,
     );
-    this.tags.set(collider.handle, 'car');
+    this.tags.set(this.collider.handle, 'car');
 
     this.drivetrain = new Drivetrain(def);
 

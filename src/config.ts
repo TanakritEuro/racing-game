@@ -178,31 +178,67 @@ export const TUNING = {
       /** The line wanders back and forth with this time constant (s). */
       wanderTime: 2.5,
     },
+    /** Racing in traffic (`ai/traffic.ts`). */
+    traffic: {
+      /** Space kept between cars side by side (m), and how far past a car it stays out of its way (m, bumper to bumper). */
+      clearance: 1,
+      clearBehind: 5,
+      /** Overlapping a car slightly ahead of it, it concedes and drops this much (m/s) slower than that car. */
+      concede: 1.5,
+      /** Slower than this (m/s), a car counts as out of the race for now: driven round, not followed. */
+      racingSpeed: 4,
+      /** Further than this from its line (m), a car joins it from where it is, at `sideRate`. */
+      offLine: 3,
+      /** How far ahead it looks for cars: this many seconds at its speed, at least `minLook` (m). */
+      lookTime: 2.5,
+      minLook: 25,
+      /** It acts on a car ahead in its path when it would reach it within this time (s). */
+      reactTime: 3,
+      /** Following: this gap in time (s) plus `followGap` (m) bumper to bumper, and how hard it closes up (1/s). */
+      followTime: 0.5,
+      followGap: 3,
+      followGain: 0.8,
+      /** Room it wants beyond the bare clearance to go for a gap (m), at aggression 0 (none at 1). */
+      boldness: 1.5,
+      /** How fast it moves across the road for traffic (m/s). */
+      sideRate: 2,
+      /** On the first lap: aggression and following gap scaled by these. */
+      firstLap: { aggression: 0.5, followTime: 1.5 },
+    },
     /** The AI driver (`ai/driver.ts`). */
     driver: {
       /**
        * Steering: the line's curvature is read this many seconds ahead (the rack takes time to
        * turn); heading error gain; cross-track gain (1/s), its softening (m/s) at low speed and
        * the most it may steer (rad): little when slow, so a car far off the line (on the grid)
-       * joins it gently, more by `speed` (m/s);
+       * joins it gently, more by `speed` (m/s), and all of it when more than `far` (m) off the line;
        * yaw-rate damping (s): steer less into a turn when the car is rotating faster than the line.
        */
       feedForward: 0.12,
       headingGain: 1,
       crossTrackGain: 4,
       crossTrackSoftening: 6,
-      crossTrackMax: { slow: 0.12, fast: 0.35, speed: 20 },
+      crossTrackMax: { slow: 0.12, fast: 0.35, speed: 20, far: 6 },
       yawDamping: 0.08,
       /** Speed control: how far ahead it reads the profile (s), and how hard it corrects an error in speed (1/s). */
       speedLead: 0.25,
       speedGain: 2,
+      /**
+       * Off the line (traffic, a mistake), corners tighten: it looks this far ahead (m, more at
+       * speed) and plans to brake for them at this share of its braking grip.
+       */
+      offLineLook: 60,
+      offLineBraking: 0.8,
       /** Throttle held when the target is just met (cruising), as a fraction of full. */
       cruiseThrottle: 0.15,
       /** Sliding: body slip angle (rad) past which it comes off the brakes and holds this much throttle while the steering catches the car. */
       slideAngle: 0.13,
       slideThrottle: 0.25,
-      /** Stuck: slower than this (m/s) for this long (s) and it asks to be put back on the track. */
-      stuck: { speed: 1.5, time: 5 },
+      /**
+       * Stuck: slower than this (m/s) for this long (s), or more than `offRoad` (m) beyond the
+       * road's edge for `offRoadTime` (s), and it asks to be put back on the track.
+       */
+      stuck: { speed: 1.5, time: 5, offRoad: 3, offRoadTime: 8 },
     },
   },
 };
