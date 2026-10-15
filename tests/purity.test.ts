@@ -7,6 +7,7 @@ const SOURCES = import.meta.glob<string>(
     '../src/track/**/*.ts',
     '../src/race/**/*.ts',
     '../src/ai/**/*.ts',
+    '../src/drivers/**/*.ts',
     '../src/sim.ts',
     '../src/physics.ts',
     '../src/math.ts',

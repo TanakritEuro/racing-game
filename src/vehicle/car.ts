@@ -1,7 +1,7 @@
 // The car: a Rapier rigid body for the chassis, with four raycast wheels whose suspension
 // and tyre forces are computed here each physics step and applied to the chassis.
 //
-// Pure simulation: no Three.js, DOM or audio. The presentation reads `wheels`, `steerAngle`
+// Pure simulation: no Three.js, DOM or audio. The presentation reads `wheels` (with their steer angles)
 // and the chassis transform after each step.
 //
 // Per physics step:
@@ -19,13 +19,14 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { TUNING } from '../config';
 import { AIR_DENSITY } from '../constants';
-import { clamp, damp, type Quat, type Vec3 } from '../math';
+import { clamp, type Quat, type Vec3 } from '../math';
 import type { Physics, SurfaceTag } from '../physics';
 import type { CarDef, TyreDef } from './carDef';
 import { KESTREL } from './cars';
 import { Drivetrain, type DriveOut } from './drivetrain';
 import { REVERSE } from './gearbox';
 import { spinFree, type SpinBody } from './spin';
+import { rackStep, wheelSteerAngle } from './steering';
 import { gripLimit, prepareTyre, tyreForces, type PreparedTyre, type TyreForce } from './tyre';
 
 /** One step's driver inputs. Keyboard, gamepad and AI drivers all produce these. */
@@ -59,6 +60,8 @@ export interface Wheel {
   readonly tyre: WheelTyre;
   /** Distance from the mount down to the wheel centre (m). */
   suspensionLength: number;
+  /** The wheel's steering angle (rad), positive = right. */
+  steer: number;
   contact: boolean;
   surface: SurfaceTag | null;
   /** Vertical load on the tyre (N). */
@@ -117,7 +120,7 @@ const AXLES = [
 export class Car {
   readonly body: RAPIER.RigidBody;
   readonly wheels: Wheel[];
-  /** Current front wheel angle (rad), positive = right. */
+  /** Steering rack: the wheel angle at the middle of the front axle (rad), positive = right. */
   steerAngle = 0;
   readonly drivetrain: Drivetrain;
 
@@ -178,6 +181,7 @@ export class Car {
           mount: { x: side * def.trackHalf, y: def.mountHeight, z: isFront ? -def.wheelbaseHalf : def.wheelbaseHalf },
           tyre,
           suspensionLength: (isFront ? def.suspension.front : def.suspension.rear).restLength,
+          steer: 0,
           contact: false,
           surface: null,
           load: 0,
@@ -220,6 +224,7 @@ export class Car {
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     this.steerAngle = 0;
+    for (const w of this.wheels) w.steer = 0;
     this.drivetrain.reset();
     this.wheels.forEach((w, i) => {
       w.suspensionLength = (w.front ? this.def.suspension.front : this.def.suspension.rear).restLength;
@@ -244,7 +249,7 @@ export class Car {
     this.wheels.forEach((w, i) => {
       const o = out.wheels[i];
       o.suspensionLength = w.suspensionLength;
-      o.steer = w.front ? this.steerAngle : 0;
+      o.steer = w.steer;
       o.spin = w.spin;
     });
   }
@@ -261,6 +266,19 @@ export class Car {
   get forward(): Vec3 {
     basis(this.rotation, this.carRight, this.carUp, this.carForward);
     return { ...this.carForward };
+  }
+
+  /**
+   * Body slip angle β (rad): how far the car's direction of travel is from where it
+   * points, positive when it travels to the right of its nose (a slide to the left, or
+   * oversteer in a left turn). 0 when barely moving.
+   */
+  get bodySlipAngle(): number {
+    basis(this.rotation, this.carRight, this.carUp, this.carForward);
+    const v = this.body.linvel();
+    const along = dot(v, this.carForward);
+    const across = dot(v, this.carRight);
+    return Math.hypot(along, across) < 0.5 ? 0 : Math.atan2(across, along);
   }
 
   /** In reverse gear. */
@@ -289,15 +307,18 @@ export class Car {
     const linvel = body.linvel();
     const speed = dot(linvel, fwd);
 
-    this.updateSteering(controls.steer, Math.abs(speed), dt);
+    // The rack moves towards the steering position at its own pace; Ackermann splits the angle.
+    const St = this.def.steering;
+    this.steerAngle = rackStep(this.steerAngle, clamp(controls.steer, -1, 1) * St.lock, St.rate, dt);
+    for (const w of this.wheels) {
+      w.steer = w.front ? wheelSteerAngle(this.steerAngle, w.mount.x, 2 * this.def.wheelbaseHalf, St.ackermann) : 0;
+    }
     const drivetrain = this.drivetrain;
     drivetrain.update(controls, (this.work[2].spin.omega + this.work[3].spin.omega) / 2, speed, dt);
     const pedalBrake = drivetrain.brakePedal;
 
     // 1. Suspension, contact frames and contact patch velocities.
     const B = this.def.brakes;
-    const sinSteer = Math.sin(this.steerAngle);
-    const cosSteer = Math.cos(this.steerAngle);
     for (let i = 0; i < 4; i++) {
       const wheel = this.wheels[i];
       const work = this.work[i];
@@ -350,8 +371,8 @@ export class Car {
 
       // Tyre frame on the contact plane. Steered wheels turn about the car's up axis (positive = right).
       const h = this.heading;
-      const sin = wheel.front ? sinSteer : 0;
-      const cos = wheel.front ? cosSteer : 1;
+      const sin = Math.sin(wheel.steer);
+      const cos = Math.cos(wheel.steer);
       h.x = fwd.x * cos + right.x * sin;
       h.y = fwd.y * cos + right.y * sin;
       h.z = fwd.z * cos + right.z * sin;
@@ -510,15 +531,6 @@ export class Car {
     this.force.z = vel.z * k;
     body.addForce(this.force, false);
   }
-
-  private updateSteering(input: number, speed: number, dt: number): void {
-    const St = TUNING.steering;
-    const lock = this.def.steeringLock / (1 + speed / St.halfLockSpeed);
-    const target = clamp(input, -1, 1) * lock;
-    const returning = Math.abs(target) < Math.abs(this.steerAngle);
-    this.steerAngle += (target - this.steerAngle) * damp(returning ? St.returnRate : St.rate, dt);
-  }
-
 }
 
 /** The car's right, up and forward (-Z) axes in the world, from its rotation. */

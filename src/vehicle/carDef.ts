@@ -7,6 +7,7 @@ import type { DifferentialDef } from './differential';
 import type { ClutchDef } from './drivetrain';
 import type { EngineDef } from './engine';
 import type { GearboxDef } from './gearbox';
+import type { SteeringDef } from './steering';
 import type { TyreModel } from './tyre';
 
 export interface SuspensionDef {
@@ -56,8 +57,7 @@ export interface CarDef {
   wheelbaseHalf: number;
   trackHalf: number;
   mountHeight: number;
-  /** Front wheel angle at full lock (rad). */
-  steeringLock: number;
+  steering: SteeringDef;
   suspension: { front: SuspensionDef; rear: SuspensionDef };
   tyres: { front: TyreDef; rear: TyreDef };
   engine: EngineDef;

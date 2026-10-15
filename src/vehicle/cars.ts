@@ -38,7 +38,11 @@ export const KESTREL: CarDef = {
   wheelbaseHalf: 1.3,
   trackHalf: 0.8,
   mountHeight: -0.1,
-  steeringLock: 0.6,
+  steering: {
+    lock: 0.6,
+    rate: 3, // full lock in 0.2 s
+    ackermann: 0.6,
+  },
   suspension: {
     // A stiffer rear bar: the front takes ~45 % of the lateral load transfer, for mild
     // understeer at the limit and ~0.98 g on the skidpad.

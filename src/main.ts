@@ -2,6 +2,7 @@
 // variable-rate rendering. Everything that affects the result happens inside sim.step().
 
 import { PHYSICS_STEP } from './constants';
+import { KeyboardSteering } from './drivers/steeringAssist';
 import { Keyboard } from './input';
 import { initPhysics } from './physics';
 import { formatLapTime } from './race/timing';
@@ -43,15 +44,18 @@ stage.scene.add(carView.root);
 const cameras = new CameraRig(stage.camera, sim.car.def);
 const drawn = createPose();
 const keyboard = new Keyboard();
+const steering = new KeyboardSteering();
 const telemetry = new Telemetry(document.body);
 telemetry.visible = new URLSearchParams(location.search).has('telemetry');
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyT') telemetry.toggle();
   if (e.code === 'KeyC') cameras.cycle();
+  if (e.code === 'KeyV') steering.assist = !steering.assist;
   if (e.code === 'KeyM') sim.setGearboxMode(sim.car.drivetrain.gearbox.mode === 'auto' ? 'manual' : 'auto');
   if (e.code === 'KeyR') {
     sim.recover();
+    steering.reset();
     cameras.snap();
   }
 });
@@ -76,9 +80,11 @@ function frame(now: number): void {
   last = now;
   accumulator += dt;
   const controls = keyboard.controls();
+  const keys = controls.steer;
   while (accumulator >= PHYSICS_STEP) {
     // A shift request belongs to one step, not to every step this frame runs.
     controls.shift = keyboard.takeShift();
+    controls.steer = steering.update(keys, sim.car, PHYSICS_STEP);
     sim.step(controls);
     accumulator -= PHYSICS_STEP;
   }

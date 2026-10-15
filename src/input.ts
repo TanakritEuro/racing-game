@@ -1,8 +1,8 @@
 import type { Controls } from './vehicle/car';
 
 /**
- * Keyboard → Controls. Keys are digital, so steering is smoothed inside the car's
- * simulation (`TUNING.steering`); analogue gamepad input comes in Milestone 2.
+ * Keyboard → Controls. Keys are digital: `steer` here is −1, 0 or +1, and the steering
+ * assist (`drivers/steeringAssist.ts`) turns it into a steering position each step.
  * E / Q shift up / down: each press is one shift request, taken by the next physics step.
  */
 export class Keyboard {

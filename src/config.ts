@@ -3,16 +3,27 @@
 // adjusted without hunting through the code.
 
 export const TUNING = {
-  steering: {
+  /** Keyboard steering (`drivers/steeringAssist.ts`): digital keys → a steering position. */
+  keyboardSteering: {
+    /** How fast the position moves towards the keys' target (per second) and back to centre. */
+    attack: 4,
+    release: 7,
     /**
-     * Speed (m/s) at which full lock is halved; keyboard steering needs this to be drivable.
-     * 12 gives ~10° at 100 km/h, about what the car needs at its limit (proper speed-sensitive
-     * assistance is Milestone 2), and still ~19° for a hairpin at 36 km/h.
+     * Speed-sensitive lock (assist on): full keys give the angle the front tyres can use,
+     * the geometric angle for a turn at `limitG` plus `slipMargin` × their peak slip angle.
      */
-    halfLockSpeed: 12,
-    /** How fast the wheel turns towards the keyboard's target (per second) and back to centre. */
-    rate: 4,
-    returnRate: 7,
+    limitG: 1,
+    slipMargin: 1.3,
+    /**
+     * Counter-steer help (assist on): with no key held, or a key held into the
+     * counter-steer, the target steers `counterSteer` × the body slip angle beyond
+     * `slipDeadband` (rad) against the slide, up to `counterSteerMax` of full lock.
+     */
+    counterSteer: 0.7,
+    slipDeadband: 0.05,
+    counterSteerMax: 0.5,
+    /** Below this speed (m/s) there is no slide to catch. */
+    counterSteerSpeed: 3,
   },
   transmission: {
     /** Below this speed (m/s) the car counts as stopped: the automatic's brake pedal can select reverse. */

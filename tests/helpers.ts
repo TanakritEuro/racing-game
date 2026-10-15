@@ -1,4 +1,3 @@
-import { TUNING } from '../src/config';
 import { PHYSICS_STEP } from '../src/constants';
 import { clamp } from '../src/math';
 import { initPhysics } from '../src/physics';
@@ -63,7 +62,7 @@ export function followLine(
     // Angle to the target, positive to the right; the car's right on the ground is (-fz, fx).
     const alpha = Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz);
     const wheelAngle = Math.atan((4 * car.def.wheelbaseHalf * Math.sin(alpha)) / Math.hypot(dx, dz));
-    const lock = car.def.steeringLock / (1 + Math.abs(car.speed) / TUNING.steering.halfLockSpeed);
+    const lock = car.def.steering.lock;
     const error = targetSpeed - car.speed;
     return controls({
       steer: clamp(wheelAngle / lock, -1, 1),
