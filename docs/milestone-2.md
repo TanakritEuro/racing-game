@@ -1,6 +1,10 @@
 # Milestone 2 plan: handling and controls
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (keyboard lock at speed, counter-steer
+strength, gamepad steering at speed, camera placement) stay open, and tuning from them
+lands whenever they come in.
 
 Measured by the tests: 0.98 g on the skidpad with mild understeer (front 45 % of the
 lateral load transfer), ~560 N downforce at 200 km/h, 0–100 km/h in 6.5 s with TC on

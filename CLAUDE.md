@@ -23,8 +23,8 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 ## Current state
 
-Milestone 1 (tyres and drivetrain) is done. **Milestone 2 (handling and controls) is built
-and in playtesting** (`docs/milestone-2.md`).
+Milestones 1 (tyres and drivetrain) and 2 (handling and controls) are done; **Milestone 3
+(tracks) is planned** (`docs/milestone-3.md`).
 
 A 1.4 km test circuit (`track/circuits.ts`) is built from a spline: asphalt, kerbs, edge
 lines, start line, grass run-off and tyre-wall barriers. The car, `KESTREL` (`vehicle/cars.ts`),
