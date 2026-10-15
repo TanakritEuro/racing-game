@@ -15,7 +15,7 @@ import { loadSettings, saveSettings } from './settings';
 import { Simulation } from './sim';
 import { TEST_CIRCUIT } from './track/circuits';
 import { buildTrack } from './track/track';
-import { createPose, NO_CONTROLS } from './vehicle/car';
+import { createPose, NO_CONTROLS, poseOnTrack } from './vehicle/car';
 import { NEUTRAL, REVERSE } from './vehicle/gearbox';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
@@ -50,7 +50,10 @@ const input = new PlayerInput();
 const steering = input.steering;
 let controls = NO_CONTROLS;
 const telemetry = new Telemetry(document.body);
-telemetry.visible = new URLSearchParams(location.search).has('telemetry');
+const params = new URLSearchParams(location.search);
+telemetry.visible = params.has('telemetry');
+// ?debug exposes the simulation in the console, for poking at it while developing.
+if (params.has('debug')) Object.assign(window, { sim, poseOnTrack });
 
 // Settings: remembered between visits, applied to the simulation through its setters.
 const settings = loadSettings();

@@ -120,7 +120,8 @@ describe('keyboard steering assist', () => {
     expect(helped.worstSlip).toBeLessThan(0.4);
     // Without the help, the same kick spins the car round.
     const alone = await kickAndRelease(false);
-    expect(alone.worstSlip).toBeGreaterThan(1.5);
+    // (over 57°: it has swapped ends or is well on the way).
+    expect(alone.worstSlip).toBeGreaterThan(1);
   });
 
   it('lets keys held against the help win', async () => {

@@ -1,7 +1,7 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { GRAVITY, PHYSICS_STEP } from './constants';
 import { uprightAlong } from './math';
-import { barrierOffset, barriers, road, strip } from './track/geometry';
+import { barriers, kerbs, road, runoff } from './track/geometry';
 import { buildTerrain, type Terrain } from './track/terrain';
 import type { Track } from './track/track';
 
@@ -15,6 +15,21 @@ export interface Physics {
   /** The ground around the track (also drawn by the view). */
   terrain: Terrain;
 }
+
+/**
+ * Collision groups: (membership << 16) | filter. Everything collides with everything, but
+ * membership tells wheels (which only look for GROUND) what they can stand on.
+ */
+const GROUND = 1;
+const BARRIER = 2;
+const CAR = 4;
+const ALL = 0xffff;
+const groups = (membership: number, filter: number) => ((membership << 16) | filter) >>> 0;
+export const GROUND_GROUPS = groups(GROUND, ALL);
+export const BARRIER_GROUPS = groups(BARRIER, ALL);
+export const CAR_GROUPS = groups(CAR, ALL);
+/** For a wheel's contact cast: only what a tyre can stand on. */
+export const WHEEL_QUERY_GROUPS = groups(ALL, GROUND);
 
 export const BARRIER_HEIGHT = 1.0;
 export const BARRIER_THICKNESS = 0.6;
@@ -39,7 +54,10 @@ export function createPhysics(track: Track): Physics {
   const world = new RAPIER.World({ x: 0, y: GRAVITY, z: 0 });
   world.timestep = PHYSICS_STEP;
   const tags = new Map<number, SurfaceTag>();
-  const add = (tag: SurfaceTag, desc: RAPIER.ColliderDesc) => tags.set(world.createCollider(desc).handle, tag);
+  const add = (tag: SurfaceTag, desc: RAPIER.ColliderDesc) => {
+    desc.setCollisionGroups(tag === 'barrier' ? BARRIER_GROUPS : GROUND_GROUPS);
+    tags.set(world.createCollider(desc).handle, tag);
+  };
 
   // The ground: a heightfield just under the run-off, rolling away into hills.
   const terrain = terrainFor(track);
@@ -54,18 +72,9 @@ export function createPhysics(track: Track): Physics {
   const trimesh = (tag: SurfaceTag, r: { positions: Float32Array; indices: Uint32Array }) =>
     add(tag, RAPIER.ColliderDesc.trimesh(r.positions, r.indices).setFriction(0.5));
   trimesh('asphalt', road(track));
-  // Run-off from each road edge to the barrier.
-  const edge = (p: { halfWidth: number }) => p.halfWidth;
-  const outer = (p: Parameters<typeof barrierOffset>[1]) => barrierOffset(track, p);
-  trimesh(track.def.runoff.surface, strip(track, edge, outer));
-  trimesh(
-    track.def.runoff.surface,
-    strip(
-      track,
-      (p) => -outer(p),
-      (p) => -edge(p),
-    ),
-  );
+  for (const k of kerbs(track)) trimesh('kerb', k);
+  // Run-off from the kerbs (or road edges) to the barriers, grass or gravel.
+  for (const surface of ['grass', 'gravel'] as const) for (const r of runoff(track, surface)) trimesh(surface, r);
 
   for (const b of barriers(track)) {
     // Upright boxes along the segment, their bottom edge on the run-off.

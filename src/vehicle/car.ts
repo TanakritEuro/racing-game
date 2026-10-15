@@ -20,7 +20,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { TUNING } from '../config';
 import { AIR_DENSITY } from '../constants';
 import { clamp, quatFromBasis, type Quat, type Vec3 } from '../math';
-import type { Physics, SurfaceTag } from '../physics';
+import { CAR_GROUPS, WHEEL_QUERY_GROUPS, type Physics, type SurfaceTag } from '../physics';
 import type { TrackSample } from '../track/track';
 import type { CarDef, TyreDef } from './carDef';
 import { KESTREL } from './cars';
@@ -144,7 +144,10 @@ export class Car {
   private readonly tags: Map<number, SurfaceTag>;
   private readonly work: WheelWork[];
   // Scratch, so the per-step maths allocates nothing of its own.
-  private readonly ray: RAPIER.Ray;
+  private readonly ray = new RAPIER.Ray(vec(), vec());
+  private readonly treadToi = [0, 0, 0];
+  private readonly mountPoint = vec();
+  private readonly normal = vec();
   private readonly carRight = vec();
   private readonly carUp = vec();
   private readonly carForward = vec();
@@ -176,11 +179,11 @@ export class Car {
         .setCcdEnabled(true),
     );
     const collider = this.world.createCollider(
-      RAPIER.ColliderDesc.cuboid(h.x, h.y, h.z).setDensity(0).setFriction(0.3).setRestitution(0.1),
+      RAPIER.ColliderDesc.cuboid(h.x, h.y, h.z).setDensity(0).setFriction(0.3).setRestitution(0.1).setCollisionGroups(CAR_GROUPS),
       this.body,
     );
     this.tags.set(collider.handle, 'car');
-    this.ray = new RAPIER.Ray(vec(), vec());
+
     this.drivetrain = new Drivetrain(def);
 
     const front = prepareTyre(def.tyres.front);
@@ -353,15 +356,55 @@ export class Car {
       const ox = pos.x + right.x * m.x + up.x * m.y - fwd.x * m.z;
       const oy = pos.y + right.y * m.x + up.y * m.y - fwd.y * m.z;
       const oz = pos.z + right.z * m.x + up.z * m.y - fwd.z * m.z;
-      const o = this.ray.origin;
+      const o = this.mountPoint;
       o.x = ox;
       o.y = oy;
       o.z = oz;
-      const d = this.ray.dir;
-      d.x = -up.x;
-      d.y = -up.y;
-      d.z = -up.z;
-      const hit = this.world.castRayAndGetNormal(this.ray, S.restLength + radius, true, undefined, undefined, undefined, body);
+      // Three rays down across the tread (its edges and middle, along the steered axle), the
+      // highest hit taken: the tyre meets a kerb with its width, not a single thin ray. Rays,
+      // not a swept cylinder: a shape-cast's tolerance put a 1 mm ripple at every mesh edge.
+      const sinS = Math.sin(wheel.steer);
+      const cosS = Math.cos(wheel.steer);
+      const axleX = right.x * cosS - fwd.x * sinS;
+      const axleY = right.y * cosS - fwd.y * sinS;
+      const axleZ = right.z * cosS - fwd.z * sinS;
+      const ray = this.ray;
+      ray.dir.x = -up.x;
+      ray.dir.y = -up.y;
+      ray.dir.z = -up.z;
+      let hit: RAPIER.RayColliderIntersection | null = null;
+      let hitToi = Infinity;
+      const tois = this.treadToi;
+      for (let r = 0; r < TREAD.length; r++) {
+        const a = TREAD[r] * wheel.tyre.width * 0.5;
+        ray.origin.x = ox + axleX * a;
+        ray.origin.y = oy + axleY * a;
+        ray.origin.z = oz + axleZ * a;
+        const h = this.world.castRayAndGetNormal(ray, S.restLength + radius, true, undefined, WHEEL_QUERY_GROUPS, undefined, body);
+        tois[r] = h ? h.timeOfImpact : Infinity;
+        // Prefer the middle ray on a tie, so a flat road gives the middle of the tread.
+        if (h && h.timeOfImpact < hitToi - (r === 1 ? -TREAD_TIE : 0)) {
+          hitToi = Math.min(hitToi, h.timeOfImpact);
+          hit = h;
+        }
+      }
+      // The contact is the middle of the rays that touch within TREAD_TIE of the highest:
+      // the whole tread on a flat road, only the raised part on a kerb. (Taking just the
+      // highest flipped between rays on rounding noise and shook the car.)
+      let across = 0;
+      let touching = 0;
+      for (let r = 0; r < TREAD.length; r++) {
+        if (tois[r] > hitToi + TREAD_TIE) continue;
+        across += TREAD[r];
+        touching++;
+      }
+      if (hit) {
+        const a = (across / touching) * wheel.tyre.width * 0.5;
+        const p = work.point;
+        p.x = ox + axleX * a - up.x * hitToi;
+        p.y = oy + axleY * a - up.y * hitToi;
+        p.z = oz + axleZ * a - up.z * hitToi;
+      }
 
       const share = wheel.front ? B.frontBias : 1 - B.frontBias;
       work.spin.friction = 0;
@@ -378,8 +421,7 @@ export class Car {
       }
 
       // Suspension: spring, bump / rebound damping and the bump stop.
-      const toi = hit.timeOfImpact;
-      const length = Math.max(0, toi - radius);
+      const length = Math.max(0, hitToi - radius);
       const mountVel = body.velocityAtPoint(o);
       const compressionRate = -dot(mountVel, up);
       const damping = compressionRate > 0 ? S.bump : S.rebound;
@@ -391,9 +433,13 @@ export class Car {
       wheel.load = load;
 
       const p = work.point;
-      p.x = ox - up.x * toi;
-      p.y = oy - up.y * toi;
-      p.z = oz - up.z * toi;
+      // The ground's normal, kept within MAX_NORMAL_TILT of the car's up: the face of a kerb
+      // bumps the tyre up without turning its force sideways.
+      const n = this.normal;
+      n.x = hit.normal.x;
+      n.y = hit.normal.y;
+      n.z = hit.normal.z;
+      limitTilt(n, up);
 
       // Tyre frame on the contact plane. Steered wheels turn about the car's up axis (positive = right).
       const h = this.heading;
@@ -402,7 +448,6 @@ export class Car {
       h.x = fwd.x * cos + right.x * sin;
       h.y = fwd.y * cos + right.y * sin;
       h.z = fwd.z * cos + right.z * sin;
-      const n = hit.normal;
       const hn = dot(h, n);
       const tf = work.fwd;
       tf.x = h.x - n.x * hn;
@@ -569,7 +614,8 @@ export class Car {
       wheel.latForce = work.fySum / substeps;
       wheel.driveTorque = work.driveSum / substeps;
       wheel.brakeTorque = work.brakeSum / substeps;
-      wheel.locked = wheel.contact && wheel.brakeTorque > 0 && wheel.omega === 0 && Math.abs(work.vLong) > 0.5;
+      // Locked: braked and turning at under LOCKED_SLIP of the road speed under it.
+      wheel.locked = wheel.contact && wheel.brakeTorque > 0 && Math.abs(work.vLong) > 0.5 && Math.abs(wheel.omega * wheel.tyre.radius) < LOCKED_SLIP * Math.abs(work.vLong);
       if (!wheel.contact) continue;
       const f = this.force;
       f.x = work.fwd.x * wheel.longForce + work.right.x * wheel.latForce;
@@ -586,6 +632,42 @@ export class Car {
     this.force.z = vel.z * k;
     body.addForce(this.force, false);
   }
+}
+
+/** A braked wheel turning at under this fraction of the road speed counts as locked. */
+const LOCKED_SLIP = 0.05;
+
+/** Where the wheel's contact rays sit across the tread, as fractions of half its width. */
+const TREAD = [-0.9, 0, 0.9];
+/** Rays touching within this of the highest one count as touching too (m). */
+const TREAD_TIE = 0.003;
+
+/** How far the ground normal under a tyre may tilt from the car's up (rad). */
+const MAX_NORMAL_TILT = Math.PI / 4;
+const COS_TILT = Math.cos(MAX_NORMAL_TILT);
+const SIN_TILT = Math.sin(MAX_NORMAL_TILT);
+
+/** Tilt `n` (unit) back towards `up` (unit) so the angle between them is at most MAX_NORMAL_TILT. */
+function limitTilt(n: Vec3, up: Vec3): void {
+  const along = dot(n, up);
+  if (along >= COS_TILT) return;
+  // The sideways part of n, rescaled so n sits exactly on the cone's edge.
+  let sx = n.x - up.x * along;
+  let sy = n.y - up.y * along;
+  let sz = n.z - up.z * along;
+  const l = Math.hypot(sx, sy, sz);
+  if (l < 1e-9) {
+    n.x = up.x;
+    n.y = up.y;
+    n.z = up.z;
+    return;
+  }
+  sx /= l;
+  sy /= l;
+  sz /= l;
+  n.x = up.x * COS_TILT + sx * SIN_TILT;
+  n.y = up.y * COS_TILT + sy * SIN_TILT;
+  n.z = up.z * COS_TILT + sz * SIN_TILT;
 }
 
 /** The car's right, up and forward (-Z) axes in the world, from its rotation. */

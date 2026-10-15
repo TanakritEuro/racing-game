@@ -31,6 +31,8 @@ export interface SuspensionDef {
 
 export interface TyreDef extends TyreModel {
   radius: number; // m
+  /** Tread width (m): the contact rays span it. */
+  width: number;
   /** Wheel, tyre and brake disc about the axle (kg·m²). */
   inertia: number;
   /** Distance the tyre rolls for its slip to build up (m): longitudinal and lateral relaxation lengths. */

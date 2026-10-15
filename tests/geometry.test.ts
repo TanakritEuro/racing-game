@@ -42,8 +42,11 @@ describe('track geometry', () => {
       // Each segment's middle sits on one of the run-off's outer edges.
       let closest = Infinity;
       for (const p of hill.samples) {
-        for (const side of [1, -1]) {
-          const e = crossSection(p, side * barrierOffset(hill, p));
+        for (const [side, k] of [
+          ['left', 1],
+          ['right', -1],
+        ] as const) {
+          const e = crossSection(p, k * barrierOffset(p, side));
           closest = Math.min(closest, Math.hypot(e.x - b.centre.x, e.y - b.centre.y, e.z - b.centre.z));
         }
       }

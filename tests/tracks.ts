@@ -69,3 +69,15 @@ export const LONG_OVAL: TrackDef = {
     { x: 0, z: 0 },
   ],
 };
+
+/** The long oval with a kerb along the right of the first straight, from 100 m to 1500 m. */
+export const KERBED_OVAL: TrackDef = {
+  ...LONG_OVAL,
+  id: 'kerbed-oval',
+  name: 'Kerbed oval',
+  kerbs: [{ from: 100, to: 1500, side: 'right' }],
+};
+
+/** The long oval with 40 m of run-off: all grass, or all gravel. */
+export const GRASS_PAD: TrackDef = { ...LONG_OVAL, id: 'grass-pad', name: 'Grass pad', runoff: { width: 40, surface: 'grass' } };
+export const GRAVEL_PAD: TrackDef = { ...LONG_OVAL, id: 'gravel-pad', name: 'Gravel pad', runoff: { width: 40, surface: 'gravel' } };

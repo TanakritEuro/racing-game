@@ -5,6 +5,7 @@ import type { CarDef, TyreDef } from './carDef';
 /** A road-going performance tyre: peaks at about 10 % slip and 8°, slides at ~80 % of peak. */
 const SPORT_TYRE: TyreDef = {
   radius: 0.33,
+  width: 0.225,
   inertia: 0.9,
   long: { B: 18, C: 1.45, E: 0 },
   lat: { B: 14, C: 1.35, E: -0.5 },

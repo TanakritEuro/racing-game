@@ -50,7 +50,7 @@ export function buildTerrain(track: Track, def: TerrainDef = { hills: 0, seed: 1
   let maxZ = -Infinity;
   let meanY = 0;
   for (const p of samples) {
-    const reach = barrierOffset(track, p);
+    const reach = Math.max(barrierOffset(p, 'left'), barrierOffset(p, 'right'));
     minX = Math.min(minX, p.x - reach);
     maxX = Math.max(maxX, p.x + reach);
     minZ = Math.min(minZ, p.z - reach);
@@ -139,7 +139,7 @@ export function buildTerrain(track: Track, def: TerrainDef = { hills: 0, seed: 1
       if (parts.length === 0) h = far(x, z);
       else {
         // Inside the barriers of the nearest part: just under its run-off.
-        const nearest = sideOf(track, samples[parts[0]], x, z);
+        const nearest = sideOf(samples[parts[0]], x, z);
         if (nearest.inside) h = nearest.edge;
         else {
           // Outside: a blend of each nearby part's barrier-edge height and the far hills,
@@ -147,7 +147,7 @@ export function buildTerrain(track: Track, def: TerrainDef = { hills: 0, seed: 1
           let sum = far(x, z) / (BLEND * BLEND);
           let weight = 1 / (BLEND * BLEND);
           for (const i of parts) {
-            const s = sideOf(track, samples[i], x, z);
+            const s = sideOf(samples[i], x, z);
             // Fades to nothing at the edge of the search, so there's no seam where a part drops out.
             const w = Math.max(0, 1 / (s.beyond + 1) ** 2 - 1 / (SEARCH - s.reach + 1) ** 2);
             sum += s.edge * w;
@@ -167,9 +167,9 @@ export function buildTerrain(track: Track, def: TerrainDef = { hills: 0, seed: 1
  * far it is beyond them (straight-line, so a point far ahead along the track counts as far),
  * and the height the ground should have under the run-off, clamped to the barrier.
  */
-function sideOf(track: Track, p: TrackSample, x: number, z: number): { inside: boolean; beyond: number; edge: number; reach: number } {
-  const reach = barrierOffset(track, p);
+function sideOf(p: TrackSample, x: number, z: number): { inside: boolean; beyond: number; edge: number; reach: number } {
   const across = (x - p.x) * p.nx + (z - p.z) * p.nz;
+  const reach = barrierOffset(p, across >= 0 ? 'left' : 'right');
   const distance = Math.hypot(x - p.x, z - p.z);
   const clamped = Math.max(-reach, Math.min(reach, across));
   // Height of the cross-section at that offset (banked), less the depth.

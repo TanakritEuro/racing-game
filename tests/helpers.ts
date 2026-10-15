@@ -43,14 +43,15 @@ export function runUntil(sim: Simulation, driver: Driver, done: () => boolean, l
 
 /**
  * A test driver that follows the centreline at `targetSpeed` (m/s): pure-pursuit steering
- * towards a point `lookahead` seconds ahead (at least `minLookahead` metres), proportional
- * throttle (up to `maxThrottle`) and brake. It drives through `Controls` like any other
- * driver, so it gets no help from the car model.
+ * towards a point `lookahead` seconds ahead (at least `minLookahead` metres), `offset`
+ * metres left of the centreline (negative = right), proportional throttle (up to
+ * `maxThrottle`) and brake. It drives through `Controls` like any other driver, so it gets
+ * no help from the car model.
  */
 export function followLine(
   sim: Simulation,
   targetSpeed: number,
-  { maxThrottle = 1, lookahead = 0.8, minLookahead = 12 } = {},
+  { maxThrottle = 1, lookahead = 0.8, minLookahead = 12, offset = 0 } = {},
 ): () => Controls {
   const { track, car } = sim;
   const n = track.samples.length;
@@ -65,8 +66,8 @@ export function followLine(
     index = nearestSample(track, p.x, p.z, index);
     const ahead = Math.round(Math.max(minLookahead, lookahead * Math.abs(car.speed)) / spacing);
     const target = track.samples[(index + ahead) % n];
-    const dx = target.x - p.x;
-    const dz = target.z - p.z;
+    const dx = target.x + target.nx * offset - p.x;
+    const dz = target.z + target.nz * offset - p.z;
     // Angle to the target, positive to the right; the car's right on the ground is (-fz, fx).
     const alpha = Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz);
     const wheelAngle = Math.atan((4 * car.def.wheelbaseHalf * Math.sin(alpha)) / Math.hypot(dx, dz));

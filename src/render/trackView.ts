@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { uprightAlong } from '../math';
 import { BARRIER_HEIGHT, BARRIER_THICKNESS } from '../physics';
-import { barrierOffset, barriers, crossSection, road, strip, type Offset, type Ribbon } from '../track/geometry';
+import { barriers, crossSection, KERB_STRIPE, kerbs, road, runoff, strip, type Offset, type Ribbon, type Sweep } from '../track/geometry';
 import type { Terrain } from '../track/terrain';
 import type { Track, TrackSample } from '../track/track';
 import { createTerrainView } from './terrainView';
@@ -32,21 +32,33 @@ export function createTrackView(track: Track, terrain: Terrain): THREE.Group {
         );
 
   const lineMat = new THREE.MeshBasicMaterial({ color: 0xf2f2f2, ...decal });
-  const kerbMat = new THREE.MeshStandardMaterial({ map: kerbTexture(), roughness: 0.8, ...decal });
-  const runoffMat = new THREE.MeshStandardMaterial({ map: grass, roughness: 1 });
-  for (const s of [1, -1]) {
-    group.add(mesh(side(s, (p) => p.halfWidth - 0.45, (p) => p.halfWidth - 0.3, 0.01), lineMat));
-    const kerb = mesh(side(s, (p) => p.halfWidth, (p) => p.halfWidth + 0.8, 0.005), kerbMat, 2);
-    kerb.receiveShadow = true;
-    group.add(kerb);
-    const runoff = mesh(side(s, (p) => p.halfWidth, (p) => barrierOffset(track, p)), runoffMat, 10);
-    runoff.receiveShadow = true;
-    group.add(runoff);
-  }
+  for (const s of [1, -1]) group.add(mesh(side(s, (p) => p.halfWidth - 0.45, (p) => p.halfWidth - 0.3, 0.01), lineMat));
+
+  // Kerbs: one paint stripe per KERB_STRIPE, red over the ridges.
+  const kerbMat = new THREE.MeshStandardMaterial({ map: kerbTexture(), roughness: 0.8 });
+  for (const k of kerbs(track)) group.add(sweepMesh(k, kerbMat, 2 * KERB_STRIPE));
+  const grassMat = new THREE.MeshStandardMaterial({ map: grass, roughness: 1 });
+  const gravelMat = new THREE.MeshStandardMaterial({ map: gravelTexture(), roughness: 1 });
+  for (const r of runoff(track, 'grass')) group.add(sweepMesh(r, grassMat, 10));
+  for (const r of runoff(track, 'gravel')) group.add(sweepMesh(r, gravelMat, 4));
 
   group.add(createStartLine(track));
   group.add(createBarriers(track));
   return group;
+}
+
+/** A mesh from a sweep, its texture repeating every `repeat` metres along. */
+function sweepMesh(sw: Sweep, material: THREE.Material, repeat: number): THREE.Mesh {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(sw.positions, 3));
+  const uv = sw.uv.slice();
+  for (let i = 1; i < uv.length; i += 2) uv[i] /= repeat;
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setIndex(new THREE.BufferAttribute(sw.indices, 1));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, material);
+  m.receiveShadow = true;
+  return m;
 }
 
 /** A BufferGeometry from a ribbon, with UVs: u across, v along the track every `repeat` metres. */
@@ -82,6 +94,24 @@ function grassTexture(): THREE.Texture {
   return tex;
 }
 
+function gravelTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#b9a98a';
+  ctx.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 2500; i++) {
+    const g = 140 + Math.floor(Math.random() * 70);
+    ctx.fillStyle = `rgb(${g},${g - 12},${g - 35})`;
+    ctx.fillRect(Math.random() * 128, Math.random() * 128, 2, 2);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 8;
+  return tex;
+}
+
 function asphaltTexture(): THREE.Texture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 256;
@@ -100,14 +130,15 @@ function asphaltTexture(): THREE.Texture {
   return tex;
 }
 
+/** Red over white along v, so with the canvas flipped red covers the first half of each tile, over the ridges. */
 function kerbTexture(): THREE.Texture {
   const canvas = document.createElement('canvas');
   canvas.width = 4;
   canvas.height = 2;
   const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#d42a24';
-  ctx.fillRect(0, 0, 4, 1);
   ctx.fillStyle = '#f4f4f4';
+  ctx.fillRect(0, 0, 4, 1);
+  ctx.fillStyle = '#d42a24';
   ctx.fillRect(0, 1, 4, 1);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;

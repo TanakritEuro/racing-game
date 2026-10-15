@@ -71,7 +71,25 @@ export interface TrackSample {
   uz: number;
   bank: number;
   halfWidth: number;
+  /** What lies beyond each road edge here. */
+  left: SideProfile;
+  right: SideProfile;
 }
+
+/** One side of the track beyond the road edge, at a sample. */
+export interface SideProfile {
+  /** Kerb width (m): 0 with no kerb, tapering in and out at a kerb's ends. */
+  kerb: number;
+  /** Run-off width from the kerb (or road edge) to the barrier (m). */
+  runoff: number;
+  runoffSurface: RunoffSurface;
+}
+
+/** Full kerb width (m), and the distance over which a kerb tapers in at each end. */
+export const KERB_WIDTH = 1;
+const KERB_TAPER = 3;
+/** Distance over which a gravel trap's width blends in from the grass run-off's (m). */
+const GRAVEL_TAPER = 15;
 
 export interface Track {
   def: TrackDef;
@@ -171,9 +189,39 @@ export function buildTrack(def: TrackDef): Track {
       uz: uz0 * c - nz * sn,
       bank: p.bank,
       halfWidth: p.width / 2,
+      left: sideProfile(def, 'left', (i / count) * length, length),
+      right: sideProfile(def, 'right', (i / count) * length, length),
     };
   });
   return { def, samples, length };
+}
+
+/** How far into span `span` distance `s` is from its nearer end (m), or −1 outside it. Spans may wrap past the start line. */
+function insideSpan(span: Span, s: number, length: number): number {
+  const fromStart = (s - span.from + length) % length;
+  const toEnd = (span.to - s + length) % length;
+  const spanLength = (span.to - span.from + length) % length;
+  return fromStart <= spanLength && toEnd <= spanLength ? Math.min(fromStart, toEnd) : -1;
+}
+
+function sideProfile(def: TrackDef, side: Side, s: number, length: number): SideProfile {
+  let kerb = 0;
+  for (const span of def.kerbs ?? []) {
+    if (span.side !== side) continue;
+    const d = insideSpan(span, s, length);
+    if (d >= 0) kerb = Math.max(kerb, KERB_WIDTH * Math.min(1, d / KERB_TAPER));
+  }
+  let runoff = def.runoff.width;
+  let runoffSurface = def.runoff.surface;
+  for (const span of def.gravel ?? []) {
+    if (span.side !== side) continue;
+    const d = insideSpan(span, s, length);
+    if (d < 0) continue;
+    runoffSurface = 'gravel';
+    const width = span.width ?? def.runoff.width;
+    runoff = def.runoff.width + (width - def.runoff.width) * Math.min(1, d / GRAVEL_TAPER);
+  }
+  return { kerb, runoff, runoffSurface };
 }
 
 /**

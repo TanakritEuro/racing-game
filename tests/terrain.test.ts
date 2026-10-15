@@ -11,9 +11,8 @@ describe('terrain', () => {
 
     it(`${def.name}: lies under the road and run-off everywhere inside the barriers`, () => {
       for (const p of track.samples) {
-        const reach = barrierOffset(track, p);
         for (let k = -10; k <= 10; k++) {
-          const q = crossSection(p, (k / 10) * reach);
+          const q = crossSection(p, (k / 10) * barrierOffset(p, k >= 0 ? 'left' : 'right'));
           expect(terrainHeight(terrain, q.x, q.z)).toBeLessThan(q.y - 0.2);
         }
       }
