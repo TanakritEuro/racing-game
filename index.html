@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Racing</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="hud">
+      <div id="timing">
+        <div id="lap"></div>
+        <div id="last"></div>
+        <div id="best"></div>
+      </div>
+      <div id="dash">
+        <div id="speed">0</div>
+        <div id="unit">KM/H</div>
+        <div id="gear">D</div>
+      </div>
+      <div id="keys">W/S or ↑/↓ throttle · brake/reverse &nbsp; A/D or ←/→ steer &nbsp; R reset</div>
+    </div>
+    <div id="loading">Loading…</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
