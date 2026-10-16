@@ -155,6 +155,24 @@ export const TUNING = {
     /** After the leader finishes, cars still running are classified where they are after this long (s). */
     classifyAfter: 90,
   },
+  /** Online races (`online/session.ts`). */
+  online: {
+    /**
+     * Clock sync: `pings` answered before the guest is ready, one every `pingInterval` (s);
+     * then one every `pingAfter` (s) for as long as the race lasts, refining the estimate.
+     */
+    pings: 12,
+    pingInterval: 0.1,
+    pingAfter: 0.25,
+    /** A car's state goes out every this many physics steps (4 at 120 Hz: 30 a second). */
+    stateEvery: 4,
+    /** Nothing heard for this long (s) and the other player is gone. */
+    quiet: 6,
+    /** Behind the clock by more than this (s, a hidden tab), the rest is skipped rather than caught up. */
+    catchUp: 0.25,
+    /** Distance between the checkpoints the gap is timed at (m). */
+    checkpoint: 20,
+  },
   /** AI drivers (`ai/`). */
   ai: {
     envelope: {

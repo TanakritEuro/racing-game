@@ -48,6 +48,16 @@ describe('race', () => {
     }
   });
 
+  it('counts laps from zero again after a restart', async () => {
+    await initPhysics();
+    const race = new Race(track, { opponents: 1, laps: 2, difficulty: 'medium', seed: 4 });
+    // As if a lap had been done before Backspace.
+    for (const t of race.sim.timers) t.laps = 1;
+    race.restart();
+    expect(race.sim.timers.map((t) => t.laps)).toEqual([0, 0]);
+    expect(race.phase).toBe('lights');
+  });
+
   it('runs a whole race: every car takes the flag, in order, nobody stuck', async () => {
     await initPhysics();
     const race = new Race(track, { opponents: 7, laps: 2, difficulty: 'hard', seed: 5 });

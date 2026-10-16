@@ -32,6 +32,8 @@ export interface SimOptions {
   cars?: number;
   /** Grid slot of each car (default: car i in slot i). Slot 0 is pole. */
   slots?: readonly number[];
+  /** Cars on the grid, counting other players' (default: `cars`). A car alone starts on the centreline. */
+  field?: number;
 }
 
 /** A hard knock this step: for sparks and sounds. */
@@ -80,6 +82,7 @@ export class Simulation {
   /** Chassis collider handle → car index. */
   private readonly carByCollider = new Map<number, number>();
   private readonly slots: readonly number[];
+  private readonly lone: boolean;
 
   constructor(
     readonly track: Track,
@@ -89,6 +92,7 @@ export class Simulation {
     this.physics = createPhysics(track);
     const count = options.cars ?? 1;
     this.slots = options.slots ?? Array.from({ length: count }, (_, i) => i);
+    this.lone = (options.field ?? count) === 1;
     for (let i = 0; i < count; i++) {
       const pose = this.gridPose(i);
       this.cars.push(new Car(this.physics, pose, carDef));
@@ -116,17 +120,22 @@ export class Simulation {
   /** Where car `i` starts: a lone car on the centreline; a field on a staggered two-by-two grid. */
   gridPose(i: number): Pose {
     const { samples } = this.track;
+    if (this.lone) return poseOnTrack(samples[samples.length - GRID.first]);
+    return this.slotPose(this.slots[i]);
+  }
+
+  /** Grid slot `slot` (0 = pole) on the staggered two-by-two grid. */
+  slotPose(slot: number): Pose {
+    const { samples } = this.track;
     const n = samples.length;
     const spacing = this.track.length / n;
-    if (this.slots.length === 1) return poseOnTrack(samples[n - GRID.first]);
-    const slot = this.slots[i];
     const right = slot % 2 === 1;
     const back = GRID.first * spacing + Math.floor(slot / 2) * GRID.row + (right ? GRID.stagger : 0);
     const p = samples[n - Math.round(back / spacing)];
     return offsetPose(p, (right ? -1 : 1) * GRID.across * p.halfWidth);
   }
 
-  /** Back to the grid for an out lap; the best laps are kept. */
+  /** Back to the grid for an out lap; the best laps are kept (and the lap count: a race resets it). */
   restart(): void {
     this.cars.forEach((car, i) => {
       const pose = this.gridPose(i);

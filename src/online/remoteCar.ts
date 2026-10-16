@@ -13,6 +13,8 @@ const KEEP = 12;
 const MAX_EXTRAPOLATION = 0.35;
 /** How quickly a correction is eased out (s, time constant). */
 const EASE = 0.12;
+/** A state this far (m) from where the car was thought to be is a teleport (put back on the track, a restart): shown at once. */
+const SNAP = 4;
 
 export class RemoteCar {
   private readonly states: CarState[] = [];
@@ -30,7 +32,20 @@ export class RemoteCar {
 
   /** A state arrived (any order; stale or repeated ones are ignored). */
   receive(state: CarState): void {
-    const newest = this.latest;
+    let newest = this.latest;
+    if (newest && state.time > newest.time) {
+      this.predict(state.time, this.scratch);
+      const a = this.scratch.position;
+      const b = state.pose.position;
+      if (Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) > SNAP) {
+        // No sliding from where it was to where it went.
+        this.states.length = 0;
+        this.error.x = this.error.y = this.error.z = 0;
+        this.errorRotation = { x: 0, y: 0, z: 0, w: 1 };
+        this.lastTime = null;
+        newest = null;
+      }
+    }
     if (newest && state.time <= newest.time) {
       // Late: it can still fill a gap between older states.
       if (this.states.some((s) => s.time === state.time) || state.time < this.states[0].time) return;

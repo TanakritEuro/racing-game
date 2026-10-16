@@ -17,10 +17,13 @@ export type Message =
   /** Clock sync: a ping with the sender's time, and the answer with the answerer's. */
   | { type: 'ping'; t: number }
   | { type: 'pong'; t: number; at: number }
-  /** Host → guest: the lights go out at this time on the host's clock (s). */
-  | { type: 'lights'; outAt: number }
-  /** A car's packed state (state.ts), on the unordered channel. */
-  | { type: 'state'; data: ArrayBuffer }
+  /**
+   * Host → guest: the lights go out at `outAt` on the host's clock (s); all five were lit
+   * `wait` seconds before that, one a second before them.
+   */
+  | { type: 'lights'; outAt: number; wait: number }
+  /** A car's packed state (state.ts), on the unordered channel: car 0 is the sender's own (later ones the host's AI). */
+  | { type: 'state'; car: number; data: ArrayBuffer }
   /** Took the flag: race time (s) and best lap. */
   | { type: 'finish'; time: number; best: number | null }
   /** Wants another race on the same circuit. */
@@ -50,9 +53,11 @@ export function parseMessage(raw: unknown): Message | null {
     case 'pong':
       return isNumber(raw.t) && isNumber(raw.at) ? { type: 'pong', t: raw.t, at: raw.at } : null;
     case 'lights':
-      return isNumber(raw.outAt) ? { type: 'lights', outAt: raw.outAt } : null;
+      return isNumber(raw.outAt) && isNumber(raw.wait) && raw.wait >= 0 && raw.wait < 10 ? { type: 'lights', outAt: raw.outAt, wait: raw.wait } : null;
     case 'state':
-      return raw.data instanceof ArrayBuffer ? { type: 'state', data: raw.data } : null;
+      return Number.isInteger(raw.car) && (raw.car as number) >= 0 && (raw.car as number) < 16 && raw.data instanceof ArrayBuffer
+        ? { type: 'state', car: raw.car as number, data: raw.data }
+        : null;
     case 'finish':
       return isNumber(raw.time) && (raw.best === null || isNumber(raw.best)) ? { type: 'finish', time: raw.time, best: raw.best as number | null } : null;
     case 'rematch':

@@ -115,6 +115,7 @@ export class Race {
   /** Back to the grid, lights and all. */
   restart(): void {
     this.sim.restart();
+    for (const t of this.sim.timers) t.laps = 0;
     this.gridTime = this.sim.time;
     this.drivers.forEach((d) => d?.reset());
     this.traffic.reset();

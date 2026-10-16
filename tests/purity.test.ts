@@ -8,6 +8,7 @@ const SOURCES = import.meta.glob<string>(
     '../src/race/**/*.ts',
     '../src/ai/**/*.ts',
     '../src/drivers/**/*.ts',
+    '../src/online/{clock,state,remoteCar,session}.ts',
     '../src/sim.ts',
     '../src/physics.ts',
     '../src/math.ts',

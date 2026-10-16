@@ -256,14 +256,9 @@ export class Car {
 
   /** Put the car at `pose`, at rest, with the wheels just touching the ground. */
   reset(pose: Pose): void {
-    // The body sits above the road along the car's up, with the wheels just touching.
-    const S = this.def.suspension.front;
-    const height = -this.def.mountHeight + S.restLength + this.def.tyres.front.radius - 0.03;
-    basis(pose.rotation, this.carRight, this.carUp, this.carForward);
-    const up = this.carUp;
-    const p = pose.position;
-    this.body.setTranslation({ x: p.x + up.x * height, y: p.y + up.y * height, z: p.z + up.z * height }, true);
-    this.body.setRotation(pose.rotation, true);
+    const body = restingPose(this.def, pose);
+    this.body.setTranslation(body.position, true);
+    this.body.setRotation(body.rotation, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     this.steerAngle = 0;
@@ -712,6 +707,17 @@ function normalise(v: Vec3): void {
     v.y /= l;
     v.z /= l;
   }
+}
+
+/** The body's pose for a car at rest at `pose` on the road: raised along its up until the wheels just touch. */
+export function restingPose(def: CarDef, pose: Pose): Pose {
+  const height = -def.mountHeight + def.suspension.front.restLength + def.tyres.front.radius - 0.03;
+  const right = { x: 0, y: 0, z: 0 };
+  const up = { x: 0, y: 0, z: 0 };
+  const forward = { x: 0, y: 0, z: 0 };
+  basis(pose.rotation, right, up, forward);
+  const p = pose.position;
+  return { position: { x: p.x + up.x * height, y: p.y + up.y * height, z: p.z + up.z * height }, rotation: { ...pose.rotation } };
 }
 
 /** Where to put the car at a track sample: on the road, facing the driving direction, pitched and banked with it. */

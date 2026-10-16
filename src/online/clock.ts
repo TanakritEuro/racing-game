@@ -16,11 +16,15 @@ export class ClockSync {
   /** Host clock minus local clock (s); 0 until there is a sample. */
   offset = 0;
 
+  /** `keep`: the most recent samples used (clocks drift a little, so old ones go). */
+  constructor(private readonly keep = 64) {}
+
   /** A ping sent at local `sentAt`, stamped `hostAt` by the host, back at local `receivedAt`. */
   add(sentAt: number, hostAt: number, receivedAt: number): void {
     const rtt = receivedAt - sentAt;
     if (!(rtt >= 0)) return;
     this.samples.push({ rtt, offset: hostAt - (sentAt + receivedAt) / 2 });
+    if (this.samples.length > this.keep) this.samples.shift();
     const quickest = [...this.samples].sort((a, b) => a.rtt - b.rtt).slice(0, Math.max(1, Math.ceil(this.samples.length / 3)));
     const offsets = quickest.map((s) => s.offset).sort((a, b) => a - b);
     this.offset = offsets[Math.floor(offsets.length / 2)];
