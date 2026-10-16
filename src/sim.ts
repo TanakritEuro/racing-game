@@ -164,6 +164,12 @@ export class Simulation {
     copyPose(pose, this.proxies[i].target);
   }
 
+  /** Make proxy `i` solid (it pushes and can be hit) or a ghost that cars pass through. */
+  setProxySolid(i: number, solid: boolean): void {
+    const { collider } = this.proxies[i];
+    if (collider.isEnabled() !== solid) collider.setEnabled(solid);
+  }
+
   /** One fixed step: `controls` for the player alone, or one per car. */
   step(controls: Controls | readonly Controls[]): void {
     const list = Array.isArray(controls) ? (controls as readonly Controls[]) : null;

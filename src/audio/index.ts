@@ -24,6 +24,16 @@ export interface Listener {
   rightZ: number;
 }
 
+/** Another player's car (online): where it is drawn, and what its states say about its engine. */
+export interface RemoteSound {
+  x: number;
+  z: number;
+  def: CarDef;
+  rpm: number;
+  throttle: number;
+  speed: number;
+}
+
 export class GameAudio {
   private own: CarVoice | null = null;
   private others: CarVoice[] = [];
@@ -42,8 +52,8 @@ export class GameAudio {
     return true;
   }
 
-  /** Each frame: every voice from the cars as they are. `controls[k]` is car k's last controls. */
-  update(sim: Simulation, controls: readonly Controls[], listener: Listener): void {
+  /** Each frame: every voice from the cars as they are. `controls[k]` is car k's last controls; `remotes`: other players' cars. */
+  update(sim: Simulation, controls: readonly Controls[], listener: Listener, remotes: readonly RemoteSound[] = []): void {
     if (!this.ready()) return;
     const car = sim.car;
     const c = controls[0];
@@ -56,10 +66,21 @@ export class GameAudio {
     if (gear !== this.lastGear && (c?.throttle ?? 0) > 0.3) this.sound.pop(1);
     this.lastGear = gear;
 
-    // The nearest other cars.
-    const near = sim.cars
-      .map((other, k) => ({ k, d: k === 0 ? Infinity : Math.hypot(other.position.x - listener.x, other.position.z - listener.z) }))
-      .filter((o) => o.k !== 0)
+    // The nearest other cars: simulated here, or another player's (no tyre sound: its slip isn't sent).
+    const sources = [
+      ...sim.cars.slice(1).map((other, i) => ({
+        x: other.position.x,
+        z: other.position.z,
+        def: other.def,
+        rpm: other.drivetrain.rpm,
+        throttle: controls[i + 1]?.throttle ?? 0.5,
+        speed: Math.abs(other.speed),
+        slide: Math.max(...other.wheels.map(slideAmount)),
+      })),
+      ...remotes.map((r) => ({ ...r, speed: Math.abs(r.speed), slide: 0 })),
+    ];
+    const near = sources
+      .map((s) => ({ s, d: Math.hypot(s.x - listener.x, s.z - listener.z) }))
       .sort((a, b) => a.d - b.d)
       .slice(0, VOICES);
     this.others.forEach((voice, v) => {
@@ -68,16 +89,9 @@ export class GameAudio {
         voice.silence();
         return;
       }
-      const other = sim.cars[o.k];
-      const p = other.position;
-      const pan = ((p.x - listener.x) * listener.rightX + (p.z - listener.z) * listener.rightZ) / Math.max(1, o.d);
-      const otherSlide = Math.max(...other.wheels.map(slideAmount));
-      voice.update(
-        engineVoice(other.def.engine, other.drivetrain.rpm, controls[o.k]?.throttle ?? 0.5),
-        squeal(otherSlide, Math.abs(other.speed)),
-        OTHERS * distanceGain(o.d),
-        pan,
-      );
+      const { s } = o;
+      const pan = ((s.x - listener.x) * listener.rightX + (s.z - listener.z) * listener.rightZ) / Math.max(1, o.d);
+      voice.update(engineVoice(s.def.engine, s.rpm, s.throttle), squeal(s.slide, s.speed), OTHERS * distanceGain(o.d), pan);
     });
   }
 

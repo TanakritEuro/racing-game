@@ -132,7 +132,7 @@ export class OnlineRace {
   /** The guest's estimate of the host's clock (the host's own offset stays 0). */
   readonly sync = new ClockSync();
   phase: OnlinePhase = 'waiting';
-  /** Why the race ended early (the other player left, the line went quiet), or null. */
+  /** Why the race ended early (the other player left, the link lost touch), or null. */
   closed: string | null = null;
   /** Race time each car took the flag (s), or null: this player's, then the other's. */
   readonly finishTimes: [number | null, number | null] = [null, null];
@@ -152,7 +152,6 @@ export class OnlineRace {
   private theyAreReady = false;
   private pingsSent = 0;
   private nextPing = 0;
-  private lastHeard: number;
   /** Clock time this player completed each lap. */
   private crossings: number[] = [];
   /** The first clock time each car reached each checkpoint, and the last checkpoint marked. */
@@ -160,6 +159,8 @@ export class OnlineRace {
   private readonly lastKey = [-Infinity, -Infinity];
   private readonly rng;
   private readonly proxyPose = createPose();
+  /** The other car is solid (not a ghost while its states are stale). */
+  private proxySolid = true;
   private readonly state = createState();
   private readonly incoming = createState();
 
@@ -179,7 +180,6 @@ export class OnlineRace {
     this.synced = setup.role === 'host';
     const now = options.clock();
     this.base = now;
-    this.lastHeard = now;
     link.onMessage = (raw) => {
       const m = parseMessage(raw);
       if (m) this.receive(m);
@@ -192,6 +192,11 @@ export class OnlineRace {
   /** On the grid: held on the brakes (revving allowed) until the lights go out. */
   get held(): boolean {
     return this.phase === 'waiting' || this.phase === 'lights';
+  }
+
+  /** Laps in the race. */
+  get laps(): number {
+    return this.setup.laps;
   }
 
   /** The shared clock's time at the simulation's last step (s). */
@@ -221,7 +226,7 @@ export class OnlineRace {
    * Run the simulation up to the clock's time, asking `drive` for this player's controls each
    * step. Returns how far into the next step the clock is (0–1), for drawing in between.
    */
-  advance(drive: () => Controls): number {
+  advance(drive: () => Controls, after?: () => void): number {
     this.talk();
     const C = TUNING.online;
     const behind = this.clockNow() - this.now;
@@ -229,8 +234,17 @@ export class OnlineRace {
     const run = Math.min(due, Math.ceil(C.catchUp / PHYSICS_STEP));
     // Far behind (a hidden tab): skip the rest rather than race through it.
     this.base += (due - run) * PHYSICS_STEP;
-    for (let k = 0; k < run; k++) this.step(drive());
+    for (let k = 0; k < run; k++) {
+      this.step(drive());
+      after?.();
+    }
     return Math.max(0, Math.min(1, (this.clockNow() - this.now) / PHYSICS_STEP));
+  }
+
+  /** Waiting for the other player: still syncing the clock (the guest), or for the lights. */
+  get waitingFor(): 'player' | 'clock' | null {
+    if (this.phase !== 'waiting') return null;
+    return this.theyAreReady && !this.synced ? 'clock' : 'player';
   }
 
   /** Ask for another race on the same circuit (it starts when both have asked). */
@@ -289,6 +303,7 @@ export class OnlineRace {
     const controls = this.held ? { ...input, brake: 1, handbrake: 1 } : input;
     // The proxy goes where the other car is at the end of this step.
     if (this.remote.sample(this.now + PHYSICS_STEP, this.proxyPose)) sim.setProxyPose(0, this.proxyPose);
+    this.updateProxySolid();
     const laps = sim.timer.laps;
     sim.step(controls);
     this.controls = controls;
@@ -300,6 +315,20 @@ export class OnlineRace {
     if (sim.timer.laps > laps) this.crossings.push(now);
     this.mark(ME, this.progress(ME), now);
     this.score();
+  }
+
+  /** A ghost while the other car's states are stale; solid again once fresh and clear of this car. */
+  private updateProxySolid(): void {
+    const C = TUNING.online;
+    const latest = this.remote.latest;
+    const fresh = latest !== null && this.now - latest.time < C.stale;
+    if (!fresh) this.proxySolid = false;
+    else if (!this.proxySolid) {
+      const a = this.sim.car.position;
+      const b = this.proxyPose.position;
+      this.proxySolid = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) > C.clearance;
+    }
+    this.sim.setProxySolid(0, this.proxySolid);
   }
 
   /** The flag for this player, and the end of the race. */
@@ -364,32 +393,30 @@ export class OnlineRace {
     return this.synced ? this.sync.toHost(local) : local;
   }
 
-  /** What is due on the line: the guest's pings, and noticing a line gone quiet. */
+  /**
+   * What is due on the line: the guest's pings and the host's lights. Only from `advance`, so
+   * nothing starts before this side's frames are running. (A line gone quiet is the link's to
+   * notice, from its heartbeats: a player whose tab is hidden sends no states, but is still there.)
+   */
   private talk(): void {
     if (this.closed) return;
     const C = TUNING.online;
     const local = this.options.clock();
-    if (this.theyAreReady && local - this.lastHeard > C.quiet) {
-      this.link.close();
-      this.close('The connection to your opponent was lost.');
-      return;
-    }
     if (this.setup.role === 'guest' && this.theyAreReady && local >= this.nextPing) {
       this.link.send({ type: 'ping', t: local });
       this.pingsSent++;
       this.nextPing = local + (this.pingsSent < C.pings ? C.pingInterval : C.pingAfter);
     }
+    // The host: the guest is built and knows the host's clock, and so is this side: start.
+    if (this.setup.role === 'host' && this.theyAreReady && this.outAt === null) this.scheduleLights();
   }
 
   private receive(m: Message): void {
     if (this.closed) return;
     const local = this.options.clock();
-    this.lastHeard = local;
     switch (m.type) {
       case 'ready':
         this.theyAreReady = true;
-        // The guest is built and knows the host's clock: start.
-        if (this.setup.role === 'host' && this.outAt === null) this.scheduleLights();
         break;
       case 'ping':
         this.link.send({ type: 'pong', t: m.t, at: this.clockNow() });

@@ -213,7 +213,7 @@ export class Car {
         this.wheels.push({
           front: isFront,
           driven: !isFront, // rear-wheel drive
-          mount: { x: side * def.trackHalf, y: def.mountHeight, z: isFront ? -def.wheelbaseHalf : def.wheelbaseHalf },
+          mount: wheelMount(def, isFront, side),
           tyre,
           suspensionLength: (isFront ? def.suspension.front : def.suspension.rear).restLength,
           steer: 0,
@@ -707,6 +707,16 @@ function normalise(v: Vec3): void {
     v.y /= l;
     v.z /= l;
   }
+}
+
+/** Where wheel's suspension is mounted on the body (car frame): front or rear, left (−1) or right (1). */
+function wheelMount(def: CarDef, front: boolean, side: number): Vec3 {
+  return { x: side * def.trackHalf, y: def.mountHeight, z: front ? -def.wheelbaseHalf : def.wheelbaseHalf };
+}
+
+/** The four wheels' mounts in the order a `Car` keeps them (front left, front right, rear left, rear right). */
+export function wheelMounts(def: CarDef): Vec3[] {
+  return [wheelMount(def, true, -1), wheelMount(def, true, 1), wheelMount(def, false, -1), wheelMount(def, false, 1)];
 }
 
 /** The body's pose for a car at rest at `pose` on the road: raised along its up until the wheels just touch. */

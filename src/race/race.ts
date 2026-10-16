@@ -100,6 +100,11 @@ export class Race {
     this.lightsOutAt = this.drawLightsOut();
   }
 
+  /** Laps in the race. */
+  get laps(): number {
+    return this.options.laps;
+  }
+
   /** Lights lit (0–5) during the countdown; 0 once they are out. */
   get lights(): number {
     if (this.phase !== 'lights') return 0;

@@ -647,3 +647,67 @@ body.standings-up .results,
 body.standings-up .race-panel {
   display: none !important;
 }
+
+/* Online: the connection screens and the status line over the race. */
+.online-menu {
+  width: min(460px, calc(100vw - 32px));
+  text-align: center;
+}
+
+.online-code {
+  margin: 6px 0 14px;
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  padding-left: 0.3em;
+  color: #f0c419;
+  user-select: all;
+}
+
+.online-code.hidden,
+.online-status.hidden {
+  display: none;
+}
+
+.online-text {
+  margin-bottom: 14px;
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.online-menu .menu-row {
+  justify-content: center;
+}
+
+.online-status {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: rgba(14, 20, 30, 0.8);
+  color: #fff;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.menu-code {
+  width: 7em;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+}
+
+.menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

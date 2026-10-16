@@ -1,7 +1,9 @@
 // Two ends of a link in one process, for tests (after five-a-side's): each message arrives at
 // the other end as a structured clone (nothing shared, as over a network), after a delay
 // with jitter on a virtual clock that the test moves on with `advance(now)`. The unordered
-// channel may reorder (as a real one can); the reliable one keeps its order.
+// channel may reorder (as a real one can); the reliable one keeps its order. A cut line is
+// noticed as a real link notices it, by the heartbeats stopping: both ends close after
+// `silence` seconds.
 
 import { createRng } from '../math';
 import type { Channel, Link } from './link';
@@ -11,6 +13,8 @@ export interface LoopbackOptions {
   delay?: number;
   jitter?: number;
   seed?: number;
+  /** How long after a cut each end gives up (s), as link.ts does on missing heartbeats. */
+  silence?: number;
 }
 
 interface Item {
@@ -30,12 +34,13 @@ export interface Loopback {
   cut(): void;
 }
 
-export function loopback({ delay = 0, jitter = 0, seed = 1 }: LoopbackOptions = {}): Loopback {
+export function loopback({ delay = 0, jitter = 0, seed = 1, silence = 6 }: LoopbackOptions = {}): Loopback {
   const rng = createRng(seed);
   let queue: Item[] = [];
   let now = 0;
   let order = 0;
   let cut = false;
+  let lostAt = Infinity;
   // The reliable channel never overtakes itself: each message no earlier than the last.
   const lastReliable = new Map<LoopLink, number>();
   const post = (to: LoopLink, item: Omit<Item, 'to' | 'at' | 'order'>, channel: Channel) => {
@@ -60,11 +65,16 @@ export function loopback({ delay = 0, jitter = 0, seed = 1 }: LoopbackOptions = 
         if (item.close) item.to.remoteClosed();
         else if (!item.to.closed) item.to.onMessage(item.message);
       }
+      if (t >= lostAt) {
+        lostAt = Infinity;
+        for (const end of [a, b]) end.remoteClosed('Lost touch with your opponent.');
+      }
       return due.length;
     },
     cut(): void {
       cut = true;
       queue = [];
+      lostAt = now + silence;
     },
   };
 }
@@ -86,10 +96,10 @@ class LoopLink implements Link {
     this.post({ close: true }, 'events');
   }
 
-  /** The other end hung up. */
-  remoteClosed(): void {
+  /** The other end hung up, or the line was lost. */
+  remoteClosed(reason = 'Your opponent left the race.'): void {
     if (this.closed) return;
     this.closed = true;
-    this.onClose('Your opponent left the race.');
+    this.onClose(reason);
   }
 }

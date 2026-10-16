@@ -1,11 +1,21 @@
 // The race panel: position, lap and the gaps to the cars either side; the start lights; and
 // the results once you take the flag. Reads the race; never writes to it.
 
-import { AI_NAMES, type Race, type Standing } from '../race/race';
+import { AI_NAMES, type Standing } from '../race/race';
 import { formatLapTime } from '../race/timing';
 
 /** The name shown for car k (0 is the player). */
 export const carName = (k: number): string => (k === 0 ? 'You' : AI_NAMES[k - 1]);
+
+/** What the panel needs from a race: an offline `Race` or an `OnlineRace`. */
+export interface RaceLike {
+  standings(): Standing[];
+  readonly laps: number;
+  /** Lights lit, race time since they went out (or null), and the phase. */
+  readonly lights: number;
+  readonly time: number | null;
+  readonly phase: string;
+}
 
 /** How long the lights panel says GO after they go out (s). */
 const GO_FOR = 1.2;
@@ -21,10 +31,11 @@ export class RaceHud {
   private readonly results: HTMLDivElement;
   private shownResults = '';
 
-  /** `footer`: the keys line under the results (a championship round has its own way on). */
+  /** `footer`: the keys line under the results (a championship round has its own way on); `name`: each car's driver. */
   constructor(
     root: HTMLElement,
     private readonly footer = '⌫ race again &nbsp; Tab time trial &nbsp; N next circuit',
+    private readonly name: (car: number) => string = carName,
   ) {
     const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent: HTMLElement) => {
       const e = document.createElement(tag);
@@ -42,17 +53,17 @@ export class RaceHud {
     this.results = el('div', 'results', root);
   }
 
-  update(race: Race): void {
+  update(race: RaceLike): void {
     const rows = race.standings();
     const me = rows.find((r) => r.car === 0)!;
     const n = rows.length;
     this.position.innerHTML = `P${me.position}<small> / ${n}</small>`;
-    const lap = Math.min(race.options.laps, Math.max(1, me.laps + 1));
-    this.lap.textContent = me.finished ? 'FINISHED' : `LAP ${lap} / ${race.options.laps}`;
+    const lap = Math.min(race.laps, Math.max(1, me.laps + 1));
+    this.lap.textContent = me.finished ? 'FINISHED' : `LAP ${lap} / ${race.laps}`;
     const above = rows[me.position - 2];
     const below = rows[me.position];
-    this.ahead.textContent = above ? `▲ ${carName(above.car)}  ${gapText(me, above)}` : '';
-    this.behind.textContent = below ? `▼ ${carName(below.car)}  ${gapText(below, me)}` : '';
+    this.ahead.textContent = above ? `▲ ${this.name(above.car)}  ${gapText(me, above)}` : '';
+    this.behind.textContent = below ? `▼ ${this.name(below.car)}  ${gapText(below, me)}` : '';
 
     // The lights: lit one by one, then GO for a moment.
     const lit = race.lights;
@@ -66,7 +77,7 @@ export class RaceHud {
     const show = me.finished;
     this.results.style.display = show ? 'block' : 'none';
     if (show) {
-      const html = resultsTable(rows, race.phase === 'finished', this.footer);
+      const html = resultsTable(rows, race.phase === 'finished', this.footer, this.name);
       if (html !== this.shownResults) {
         this.results.innerHTML = html;
         this.shownResults = html;
@@ -82,11 +93,11 @@ function gapText(back: Standing, front: Standing): string {
   return `+${Math.max(0, back.gap - front.gap).toFixed(1)}`;
 }
 
-function resultsTable(rows: Standing[], final: boolean, footer: string): string {
+function resultsTable(rows: Standing[], final: boolean, footer: string, name: (car: number) => string): string {
   const leader = rows[0];
   const line = (r: Standing) => {
     const time = !r.finished ? 'running' : r === leader ? formatLapTime(r.time) : r.lapsDown > 0 ? `+${r.lapsDown} lap${r.lapsDown > 1 ? 's' : ''}` : `+${r.gap.toFixed(3)}`;
-    return `<tr class="${r.car === 0 ? 'me' : ''}"><td>${r.position}</td><td>${carName(r.car)}</td><td>${time}</td><td>${formatLapTime(r.bestLap)}</td></tr>`;
+    return `<tr class="${r.car === 0 ? 'me' : ''}"><td>${r.position}</td><td>${name(r.car)}</td><td>${time}</td><td>${formatLapTime(r.bestLap)}</td></tr>`;
   };
   return `<h2>${final ? 'RESULTS' : 'PROVISIONAL RESULTS'}</h2>
     <table><thead><tr><th></th><th>Driver</th><th>Time</th><th>Best lap</th></tr></thead><tbody>${rows.map(line).join('')}</tbody></table>

@@ -124,6 +124,34 @@ describe('an online race', () => {
     expect(h.outAt).toBe(g.outAt);
   }, 240_000);
 
+  it('makes the other car a ghost while its states are stale, and solid again once clear', async () => {
+    const { line, clock, h, g } = await pair();
+    const run = (seconds: number, guest = true) => {
+      const end = clock.now + seconds;
+      while (clock.now < end) {
+        clock.now += 0.01;
+        line.advance(clock.now);
+        h.advance(() => NO_CONTROLS);
+        if (guest) g.advance(() => NO_CONTROLS);
+      }
+    };
+    const solid = () => h.sim.proxies[0].collider.isEnabled();
+    run(3);
+    expect(solid()).toBe(true);
+    // The guest's tab stops running frames: no more states.
+    run(1, false);
+    expect(solid()).toBe(false);
+    // Back, but where the host's car is (as after being put back on the track): still a ghost.
+    g.sim.car.reset(h.sim.gridPose(0));
+    run(1);
+    expect(solid()).toBe(false);
+    // Once it is clear (moved away up the road), solid again.
+    const s = g.sim.track.samples[40];
+    g.sim.car.reset({ position: { x: s.x, y: s.y, z: s.z }, rotation: g.sim.current.rotation });
+    run(1);
+    expect(solid()).toBe(true);
+  }, 60_000);
+
   it('ends on both sides when one leaves, or when the line goes quiet', async () => {
     for (const how of ['leave', 'cut'] as const) {
       const { line, clock, h, g } = await pair();

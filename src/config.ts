@@ -166,12 +166,17 @@ export const TUNING = {
     pingAfter: 0.25,
     /** A car's state goes out every this many physics steps (4 at 120 Hz: 30 a second). */
     stateEvery: 4,
-    /** Nothing heard for this long (s) and the other player is gone. */
-    quiet: 6,
     /** Behind the clock by more than this (s, a hidden tab), the rest is skipped rather than caught up. */
     catchUp: 0.25,
     /** Distance between the checkpoints the gap is timed at (m). */
     checkpoint: 20,
+    /**
+     * The other car's newest state older than this (s, a hidden tab, a stall) and it becomes a
+     * ghost, so it can't jump into your car when its states resume; solid again once fresh and
+     * at least `clearance` (m) from your car.
+     */
+    stale: 0.5,
+    clearance: 6,
   },
   /** AI drivers (`ai/`). */
   ai: {

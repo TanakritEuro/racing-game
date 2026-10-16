@@ -39,7 +39,10 @@ import { DEFAULT_RACE, Race, type RaceOptions } from './race/race';
 import { DIFFICULTIES, type Difficulty } from './ai/skill';
 import { carName, RaceHud } from './ui/raceHud';
 import { buildTrack, trackFingerprint } from './track/track';
-import { NO_CONTROLS, poseOnTrack, type Controls } from './vehicle/car';
+import { NO_CONTROLS, poseOnTrack, wheelMounts, type Controls } from './vehicle/car';
+import { cleanRoomCode, joinRoom, openRoom, type Link } from './online/link';
+import { guestHandshake, hostHandshake, OnlineError, OnlineRace, type OnlineSetup } from './online/session';
+import { OnlinePanel } from './ui/onlinePanel';
 import { CARS, KESTREL } from './vehicle/cars';
 import { createPose, interpolatePose } from './vehicle/pose';
 import { NEUTRAL, REVERSE } from './vehicle/gearbox';
@@ -56,27 +59,81 @@ const params = new URLSearchParams(location.search);
 const settings = loadSettings();
 // A link that names the circuit, car or mode starts straight away; otherwise the start menu
 // opens over the last circuit and car picked there.
+// Online (?online=host&track=&laps=&car=, or ?online=join&code=ABCD&car=): connect first; the
+// host's choice of circuit and laps comes back from the handshake.
+const onlinePanel = params.has('online') ? new OnlinePanel(document.body) : null;
+const connected = onlinePanel ? await connect(params.get('online') === 'join') : null;
 // A championship round (?season): the saved season's next round, on its circuit, in its car.
-let season = loadSeason();
+let season = connected ? null : loadSeason();
 const seasonRound = params.has('season') && season && !seasonOver(season) ? roundRace(season) : null;
 if (!seasonRound) season = null;
-const fromUrl = seasonRound !== null || ['track', 'car', 'mode'].some((k) => params.has(k));
+const fromUrl = seasonRound !== null || connected !== null || ['track', 'car', 'mode'].some((k) => params.has(k));
 const circuit =
-  CIRCUITS.find((c) => c.id === (seasonRound ? seasonRound.track : fromUrl ? params.get('track') : settings.start.track)) ?? CIRCUITS[0];
+  CIRCUITS.find((c) => c.id === (connected ? connected.setup.track : seasonRound ? seasonRound.track : fromUrl ? params.get('track') : settings.start.track)) ?? CIRCUITS[0];
 const track = buildTrack(circuit);
 document.querySelector('#track-name')!.textContent = circuit.name.toUpperCase();
 // Race mode (?mode=race, Tab switches): ?difficulty=easy|medium|hard, ?opponents=0..7, ?laps=N.
 // The car: ?car=wren|kestrel|harrier (Kestrel by default). In a race everyone drives it.
-const carId = season ? season.car.toLowerCase() : fromUrl ? params.get('car') : settings.start.car.toLowerCase();
+const carId = connected ? connected.setup.mine.toLowerCase() : season ? season.car.toLowerCase() : fromUrl ? params.get('car') : settings.start.car.toLowerCase();
 const carDef = CARS.find((c) => c.name.toLowerCase() === carId) ?? KESTREL;
-const race = seasonRound
-  ? new Race(track, seasonRound.options, carDef)
-  : params.get('mode') === 'race'
-    ? new Race(track, raceOptions(params), carDef)
-    : null;
+const race = connected
+  ? null
+  : seasonRound
+    ? new Race(track, seasonRound.options, carDef)
+    : params.get('mode') === 'race'
+      ? new Race(track, raceOptions(params), carDef)
+      : null;
 /** This championship round's result has been recorded (it can't be run again). */
 let recorded = false;
-const sim = race ? race.sim : new Simulation(track, carDef);
+const online = connected
+  ? new OnlineRace(connected.link, connected.setup, track, carDef, CARS.find((c) => c.name === connected.setup.theirs) ?? KESTREL, {
+      clock: () => performance.now() / 1000,
+      seed: 1 + Math.floor(Math.random() * 2 ** 30),
+    })
+  : null;
+const sim = online ? online.sim : race ? race.sim : new Simulation(track, carDef);
+
+/** Open or join a room and agree the race; on failure, say why and offer the way back. */
+async function connect(joining: boolean): Promise<{ link: Link; setup: OnlineSetup }> {
+  const panel = onlinePanel!;
+  const back = { label: 'Back to menu', onClick: () => goTo({}) };
+  document.querySelector('#loading')?.remove();
+  const names = CARS.map((c) => c.name);
+  const car = (CARS.find((c) => c.name.toLowerCase() === params.get('car')) ?? KESTREL).name;
+  try {
+    if (!joining) {
+      panel.show('Online race', 'Opening a room…', { buttons: [back] });
+      const room = await openRoom();
+      panel.show('Your room code', 'Give the other player this code. Waiting for them to join…', {
+        code: room.code,
+        buttons: [
+          {
+            label: 'Cancel',
+            onClick: () => {
+              room.cancel();
+              goTo({});
+            },
+          },
+        ],
+      });
+      const link = await room.guest;
+      panel.show('Online race', 'Connected: setting up the race…');
+      const laps = Math.max(1, Math.min(50, Number.parseInt(params.get('laps') ?? '', 10) || 3));
+      const trackId = (CIRCUITS.find((c) => c.id === params.get('track')) ?? CIRCUITS[0]).id;
+      return { link, setup: await hostHandshake(link, { track: trackId, laps, car }, names) };
+    }
+    const code = cleanRoomCode(params.get('code') ?? '');
+    if (!code) throw new OnlineError('That is not a room code: it is four letters and digits, as the host sees it.');
+    panel.show('Online race', `Joining room ${code}…`, { buttons: [back] });
+    const link = await joinRoom(code);
+    panel.show('Online race', 'Connected: setting up the race…');
+    return { link, setup: await guestHandshake(link, car, CIRCUITS.map((c) => c.id), names) };
+  } catch (e) {
+    panel.show('Could not connect', e instanceof Error ? e.message : String(e), { buttons: [back] });
+    // Nothing more to build: the way on is the button.
+    return new Promise(() => {});
+  }
+}
 
 function raceOptions(p: URLSearchParams): RaceOptions {
   const int = (name: string, lo: number, hi: number, fallback: number) => {
@@ -101,14 +158,23 @@ const carView = new CarView(
   sim.car.wheels.map((w) => w.mount),
 );
 stage.scene.add(carView.root);
-// The other cars, each in its own colour.
+// The other cars, each in its own colour: the AI's, then other players' (online).
 const AI_COLOURS = [0xd8342c, 0x2f6fd8, 0x2fa84f, 0xeeeeee, 0xf08a24, 0x8e44c8, 0x1fb5b0];
-const others = sim.cars.slice(1).map((car, k) => {
-  const view = new CarView(car.def, car.wheels.map((w) => w.mount), { colour: AI_COLOURS[k % AI_COLOURS.length] });
-  stage.scene.add(view.root);
-  return { view, drawn: createPose(), colour: `#${AI_COLOURS[k % AI_COLOURS.length].toString(16).padStart(6, '0')}` };
-});
-const raceHud = race ? new RaceHud(document.querySelector<HTMLDivElement>('#hud')!, season ? 'The championship standings follow when everyone has finished.' : undefined) : null;
+const others = [...sim.cars.slice(1).map((car, k) => ({ def: car.def, poses: sim.poses[k + 1] })), ...sim.proxies.map((p) => ({ def: p.def, poses: p }))].map(
+  ({ def, poses }, k) => {
+    const view = new CarView(def, wheelMounts(def), { colour: AI_COLOURS[k % AI_COLOURS.length] });
+    stage.scene.add(view.root);
+    return { def, view, poses, drawn: createPose(), colour: `#${AI_COLOURS[k % AI_COLOURS.length].toString(16).padStart(6, '0')}` };
+  },
+);
+const raceHud =
+  race || online
+    ? new RaceHud(
+        document.querySelector<HTMLDivElement>('#hud')!,
+        online ? 'Enter rematch &nbsp; Esc leave' : season ? 'The championship standings follow when everyone has finished.' : undefined,
+        online ? (k) => (k === 0 ? 'You' : `Opponent (${online.setup.theirs})`) : undefined,
+      )
+    : null;
 const colourOf = (entry: number) => `#${(entry === 0 ? 0xe0b020 : AI_COLOURS[(entry - 1) % AI_COLOURS.length]).toString(16).padStart(6, '0')}`;
 const standingsScreen = new StandingsScreen(
   document.body,
@@ -160,7 +226,7 @@ if (params.has('line')) {
 // ?autopilot hands your car to the AI (for watching it, and checking it).
 const autopilot = params.has('autopilot') ? createAiDriver(track, sim.car.def) : null;
 // ?debug exposes the simulation in the console, for poking at it while developing.
-if (params.has('debug')) Object.assign(window, { sim, race, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay, autopilot, effects, sound: () => sound, stage });
+if (params.has('debug')) Object.assign(window, { sim, race, online, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay, autopilot, effects, sound: () => sound, stage });
 
 // Bests from earlier visits: the ghost, the delta and the sector colours carry on from them.
 const store = await openBestStore();
@@ -174,7 +240,7 @@ let savedSectors = JSON.stringify(sim.timer.bestSectors);
 /** After a lap: keep a new best lap, or a new best sector. */
 function keepBests(event: LapEvent): void {
   // Race laps (in traffic, from a standing start) aren't time-trial bests.
-  if (race) return;
+  if (race || online) return;
   const bests = session.bests();
   const sectors = JSON.stringify(sim.timer.bestSectors);
   if (!bests || (event !== 'best' && sectors === savedSectors)) return;
@@ -226,6 +292,12 @@ const menu = new Menu(
         goTo({ season: '' });
         return;
       }
+      if (choice.mode === 'online') {
+        const car = choice.car.toLowerCase();
+        if (choice.online === 'host') goTo({ online: 'host', track: choice.track, laps: String(choice.laps), car });
+        else if (cleanRoomCode(choice.code)) goTo({ online: 'join', code: choice.code, car });
+        return;
+      }
       const p = new URLSearchParams();
       p.set('track', choice.track);
       p.set('car', choice.car.toLowerCase());
@@ -249,7 +321,10 @@ const menu = new Menu(
       restart();
     },
     onContinueSeason: () => goTo({ season: '' }),
-    onQuit: () => goTo({}),
+    onQuit: () => {
+      online?.leave();
+      goTo({});
+    },
     onSettings: applySettings,
   },
   { ...settings.start },
@@ -269,6 +344,10 @@ const menu = new Menu(
   settings,
 );
 if (!fromUrl) menu.showStart();
+if (online) {
+  menu.setOnline();
+  document.querySelector('#keys')!.innerHTML = 'Esc menu (the race goes on) &nbsp; R back on the track &nbsp; C camera &nbsp; Enter rematch';
+}
 // The championship in progress, for Continue.
 {
   const saved = loadSeason();
@@ -309,6 +388,14 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && !replay.active) {
     pauseGame();
     return;
+  }
+  if (online) {
+    // Online: no replays, restarts or other modes mid-race; Enter asks for a rematch.
+    if (e.code === 'Enter') online.requestRematch();
+    if (['KeyP', 'KeyN', 'Backspace', 'Tab'].includes(e.code)) {
+      e.preventDefault();
+      return;
+    }
   }
   if (e.code === 'KeyU' && !e.repeat) {
     settings.muted = !settings.muted;
@@ -355,9 +442,14 @@ window.addEventListener('keydown', (e) => {
 
 /** One physics step and what follows it. */
 function step(c: Controls): void {
-  controls = c;
   if (race) race.step(c);
   else sim.step(c);
+  afterStep(c);
+}
+
+/** What follows each physics step (online, the race takes the step itself). */
+function afterStep(c: Controls): void {
+  controls = c;
   effects.afterStep(sim);
   audio.knocks(sim.contacts, listener);
   const event = session.afterStep(c);
@@ -428,8 +520,8 @@ function drawReplay(t: number, dt: number): void {
 
 /** Back to the grid (time trial) or the start of the race. */
 function restart(): void {
-  // A championship round that has counted can't be run again.
-  if (season && recorded) return;
+  // A championship round that has counted can't be run again; an online race goes on.
+  if ((season && recorded) || online) return;
   if (race) {
     race.restart();
     session.forgetLap();
@@ -441,7 +533,8 @@ function restart(): void {
 
 function pauseGame(): void {
   menu.showPause();
-  sound.suspend(true);
+  // Online, the race doesn't stop for the menu.
+  if (!online) sound.suspend(true);
 }
 
 function recover(): void {
@@ -470,7 +563,9 @@ function updateHud(dt: number): void {
     dt,
   );
   timing.update(sim.timer, sim.time);
-  if (race) raceHud?.update(race);
+  const racing = race ?? online;
+  if (racing) raceHud?.update(racing);
+  if (online) onlinePanel?.setStatus(onlineStatus(online));
   // A championship round over: count it, save the season, and show the standings.
   if (season && race && race.phase === 'finished' && !recorded) {
     recorded = true;
@@ -480,6 +575,18 @@ function updateHud(dt: number): void {
     document.body.classList.add('standings-up');
     standingsScreen.show(season);
   }
+}
+
+/** The line over an online race: what it's waiting for, or why it ended. */
+function onlineStatus(o: OnlineRace): string {
+  if (o.closed) return `${o.closed} Esc for the menu.`;
+  if (o.waitingFor === 'clock') return 'Setting the start clock…';
+  if (o.waitingFor === 'player') return 'Waiting for the other player…';
+  if (o.phase !== 'finished') return '';
+  const [mine, theirs] = o.rematch;
+  if (mine) return 'Rematch: waiting for your opponent…';
+  if (theirs) return 'Your opponent wants a rematch: press Enter.';
+  return '';
 }
 
 let last = performance.now();
@@ -510,7 +617,24 @@ function frame(now: number): void {
     }
   }
   if (pad.reset) recover();
-  while (accumulator >= PHYSICS_STEP) {
+  if (online) {
+    // Online the clock is shared: the race runs the steps that are due, menu or not.
+    const alpha = online.advance(
+      () => {
+        if (!autopilot) return menu.open ? NO_CONTROLS : input.controls(sim.car, PHYSICS_STEP);
+        if (online.held) return NO_CONTROLS;
+        const c = autopilot.drive(sim.car, PHYSICS_STEP);
+        if (autopilot.stuck) {
+          recover();
+          autopilot.recovered();
+        }
+        return c;
+      },
+      () => afterStep(online.controls ?? NO_CONTROLS),
+    );
+    accumulator = alpha * PHYSICS_STEP;
+  }
+  while (!online && accumulator >= PHYSICS_STEP) {
     if (autopilot) {
       race?.traffic.advise(0, autopilot, PHYSICS_STEP, sim.timer.laps < 1);
       step(autopilot.drive(sim.car, PHYSICS_STEP));
@@ -525,15 +649,14 @@ function frame(now: number): void {
   // Draw the car the right fraction of the way into the step that hasn't happened yet.
   interpolatePose(sim.previous, sim.current, accumulator / PHYSICS_STEP, drawn);
   carView.update(drawn);
-  others.forEach((o, k) => {
-    const poses = sim.poses[k + 1];
-    interpolatePose(poses.previous, poses.current, accumulator / PHYSICS_STEP, o.drawn);
+  others.forEach((o) => {
+    interpolatePose(o.poses.previous, o.poses.current, accumulator / PHYSICS_STEP, o.drawn);
     o.view.root.visible = true;
     o.view.update(o.drawn);
   });
   // The ghost at the same moment between steps as the car is drawn (not in a race).
   const lapTime = session.lapTime;
-  ghost.update(session.ghost, lapTime === null ? null : lapTime - PHYSICS_STEP * (1 - accumulator / PHYSICS_STEP), settings.ghost && !race);
+  ghost.update(session.ghost, lapTime === null ? null : lapTime - PHYSICS_STEP * (1 - accumulator / PHYSICS_STEP), settings.ghost && !race && !online);
   minimap.update(
     drawn,
     others.map((o) => ({ x: o.drawn.position.x, z: o.drawn.position.z, colour: o.colour })),
@@ -559,7 +682,15 @@ function frame(now: number): void {
   listener.z = cam.position.z;
   listener.rightX = m[0] / rl;
   listener.rightZ = m[2] / rl;
-  audio.update(sim, race ? race.controls : [controls], listener);
+  // Online, the other player's engine from its states, where its car is drawn.
+  const theirs = online?.theirs;
+  const remote = theirs ? others[others.length - 1] : null;
+  audio.update(
+    sim,
+    race ? race.controls : [controls],
+    listener,
+    remote && theirs ? [{ x: remote.drawn.position.x, z: remote.drawn.position.z, def: remote.def, rpm: theirs.rpm, throttle: theirs.throttle, speed: theirs.speed }] : [],
+  );
   updateHud(dt);
   telemetry.update({
     time: sim.time,
@@ -574,4 +705,5 @@ function frame(now: number): void {
 }
 
 document.querySelector('#loading')?.remove();
+onlinePanel?.hide();
 requestAnimationFrame(frame);

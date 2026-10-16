@@ -1,5 +1,5 @@
 // The menus (after five-a-side's): a start menu (mode, circuit, car, and the race's
-// difficulty, opponents and laps), a pause menu, and settings. Plain DOM over the canvas.
+// difficulty, opponents and laps; online, host or join), a pause menu, and settings. Plain DOM over the canvas.
 // Choices go out through `MenuEvents`; the menus never touch the game themselves.
 
 import type { Difficulty } from '../ai/skill';
@@ -7,7 +7,7 @@ import { formatLapTime } from '../race/timing';
 import { ROUNDS } from '../race/championship';
 import type { Settings } from '../settings';
 
-export type Mode = 'trial' | 'race' | 'season';
+export type Mode = 'trial' | 'race' | 'season' | 'online';
 
 /** A championship in progress, for the start menu. */
 export interface SeasonInfo {
@@ -28,6 +28,9 @@ export interface StartChoice {
   difficulty: Difficulty;
   opponents: number;
   laps: number;
+  /** Online: host a race or join one, and the room code to join. */
+  online: 'host' | 'join';
+  code: string;
 }
 
 export interface CircuitInfo {
@@ -77,6 +80,8 @@ export class Menu {
   private settingsFrom: HTMLElement;
   private bestFor: (track: string, car: string) => number | null = () => null;
   private season: SeasonInfo | null = null;
+  private readonly restartButton: HTMLButtonElement;
+  private readonly quitButton: HTMLButtonElement;
 
   constructor(
     parent: HTMLElement,
@@ -98,6 +103,36 @@ export class Menu {
     this.choiceButton(modeRow, 'Time trial', () => choice.mode === 'trial', () => (choice.mode = 'trial'));
     this.choiceButton(modeRow, 'Race', () => choice.mode === 'race', () => (choice.mode = 'race'));
     this.choiceButton(modeRow, 'Championship', () => choice.mode === 'season', () => (choice.mode = 'season'));
+    this.choiceButton(modeRow, 'Online', () => choice.mode === 'online', () => (choice.mode = 'online'));
+
+    // Online: host (pick the circuit and laps, get a code) or join (type the code).
+    const onlineRows = div(this.start, 'menu-group');
+    const roleRow = this.row(onlineRows, 'Online');
+    this.choiceButton(roleRow, 'Host a race', () => choice.online === 'host', () => (choice.online = 'host'));
+    this.choiceButton(roleRow, 'Join a race', () => choice.online === 'join', () => (choice.online = 'join'));
+    const codeRow = this.row(onlineRows, 'Room code');
+    const code = document.createElement('input');
+    code.className = 'menu-code';
+    code.maxLength = 4;
+    code.placeholder = 'ABCD';
+    code.autocomplete = 'off';
+    code.spellcheck = false;
+    codeRow.appendChild(code);
+    code.addEventListener('input', () => {
+      code.value = code.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      choice.code = code.value;
+      this.update();
+    });
+    const onlineHelp = div(onlineRows, 'menu-help');
+    this.refresh.push(() => {
+      onlineRows.classList.toggle('hidden', choice.mode !== 'online');
+      codeRow.parentElement!.classList.toggle('hidden', choice.online !== 'join');
+      if (code.value !== choice.code) code.value = choice.code;
+      onlineHelp.textContent =
+        choice.online === 'host'
+          ? 'Pick the circuit, the laps and your car; you get a four-character code to give the other player.'
+          : 'Type the code the host gave you and pick your car; the host has picked the circuit and the laps.';
+    });
 
     const circuitRow = this.row(this.start, 'Circuit');
     circuitRow.classList.add('menu-cards');
@@ -113,8 +148,8 @@ export class Menu {
         best.textContent = t === null ? 'No best yet' : `Best ${formatLapTime(t)}`;
       });
     }
-    // A championship visits every circuit: no picking one.
-    this.refresh.push(() => circuitRow.parentElement!.classList.toggle('hidden', choice.mode === 'season'));
+    // A championship visits every circuit, and an online host picks for both: no picking one.
+    this.refresh.push(() => circuitRow.parentElement!.classList.toggle('hidden', choice.mode === 'season' || (choice.mode === 'online' && choice.online === 'join')));
     const seasonInfo = div(this.start, 'menu-help');
     seasonInfo.textContent = `Four rounds against the same seven drivers: ${seasonRounds(circuits)}. Points for the top eight: 10, 8, 6, 5, 4, 3, 2, 1.`;
     this.refresh.push(() => seasonInfo.classList.toggle('hidden', choice.mode !== 'season'));
@@ -137,10 +172,12 @@ export class Menu {
     const lapRow = this.row(raceRows, 'Laps');
     for (const n of LAPS) this.choiceButton(lapRow, String(n), () => choice.laps === n, () => (choice.laps = n));
     this.refresh.push(() => {
-      raceRows.classList.toggle('hidden', choice.mode === 'trial');
-      // A championship sets its own field and laps.
+      const hosting = choice.mode === 'online' && choice.online === 'host';
+      raceRows.classList.toggle('hidden', choice.mode === 'trial' || (choice.mode === 'online' && !hosting));
+      // A championship sets its own field and laps; online it's the two of you.
+      diffRow.parentElement!.classList.toggle('hidden', choice.mode === 'online');
       oppRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race');
-      lapRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race');
+      lapRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race' && !hosting);
     });
 
     const go = div(this.start, 'menu-row');
@@ -153,8 +190,10 @@ export class Menu {
       const continuing = choice.mode === 'season' && s !== null;
       cont.classList.toggle('hidden', !continuing);
       if (s) cont.textContent = `Continue: round ${s.round} of ${s.rounds} · P${s.position}, ${s.points} pts`;
-      start.textContent = continuing ? 'New championship' : 'Start';
+      const online = choice.mode === 'online';
+      start.textContent = continuing ? 'New championship' : online ? (choice.online === 'host' ? 'Host' : 'Join') : 'Start';
       start.classList.toggle('menu-go', !continuing);
+      start.disabled = online && choice.online === 'join' && choice.code.length !== 4;
     });
     button(go, 'Settings').addEventListener('click', () => this.showSettings(this.start));
     div(this.start, 'menu-help', KEYS);
@@ -163,9 +202,11 @@ export class Menu {
     div(this.pause, 'menu-title', 'Paused');
     const pauseRow = div(this.pause, 'menu-row');
     button(pauseRow, 'Resume', 'menu-go').addEventListener('click', () => events.onResume());
-    button(pauseRow, 'Restart').addEventListener('click', () => events.onRestart());
+    this.restartButton = button(pauseRow, 'Restart');
+    this.restartButton.addEventListener('click', () => events.onRestart());
     button(pauseRow, 'Settings').addEventListener('click', () => this.showSettings(this.pause));
-    button(pauseRow, 'Quit to menu').addEventListener('click', () => events.onQuit());
+    this.quitButton = button(pauseRow, 'Quit to menu');
+    this.quitButton.addEventListener('click', () => events.onQuit());
     div(this.pause, 'menu-help', KEYS);
 
     // Settings.
@@ -220,6 +261,12 @@ export class Menu {
   get panel(): 'start' | 'pause' | 'settings' | null {
     if (!this.open) return null;
     return !this.start.classList.contains('hidden') ? 'start' : !this.pause.classList.contains('hidden') ? 'pause' : 'settings';
+  }
+
+  /** An online race: the pause menu can't restart it, and quitting leaves it. */
+  setOnline(): void {
+    this.restartButton.classList.add('hidden');
+    this.quitButton.textContent = 'Leave race';
   }
 
   /** The championship in progress, if any (for Continue). */
