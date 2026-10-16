@@ -1,30 +1,37 @@
-// An online race between two browsers. Each simulates only its own car and sends that car's
-// state 30 times a second; the other car is a proxy in its simulation, placed where the other
-// player's states say it is now (remoteCar.ts).
+// An online race between two browsers, and the host's AI opponents if it asked for them. Each
+// browser simulates only its own cars (the guest its car; the host its car and the AI) and
+// sends their states 30 times a second; the other browser's cars are proxies in its
+// simulation, placed where their states say they are now (remoteCar.ts).
 //
 // The order of things:
 //   1. Handshake (before either side builds the circuit): the guest says hello with its version
-//      and car, the host answers with the circuit, the laps and its own car.
+//      and car, the host answers with the circuit, the laps, the AI field and its own car.
 //   2. Each side builds its world and starts an `OnlineRace`; the host says it is ready. The
 //      guest then times a dozen pings to learn the host's clock, and says it is ready too.
 //   3. The host schedules the lights to go out at a moment on its clock. From then on both
 //      simulations step in time with that clock, their steps falling at the same moments, so
-//      both cars are released on the same step and both race times run from the same instant.
-//   4. Each side times its own laps and reports its finishing time; both compare the same two
-//      times, so both agree on the result.
+//      every car is released on the same step and all race times run from the same instant.
+//   4. Each side times its own cars' laps and reports their finishing times; both sides rank
+//      the same times, so both agree on the result.
 //   5. Rematch (both ask, the host schedules new lights) or leave.
+//
+// Cars have the same ids on both screens' standings: 0 is this player's, 1 the other
+// player's, 2 and up the AI's. On the wire, 0 is the host's and 1 the guest's.
 //
 // The clock is passed in (seconds), so tests run two of these over a loopback on a virtual one.
 
 import { TUNING } from '../config';
 import { PHYSICS_STEP } from '../constants';
+import { createAiDriver, type AiDriver } from '../ai/driver';
+import { fieldSkills, type Difficulty } from '../ai/skill';
+import { Traffic, type Mover } from '../ai/traffic';
 import { createRng } from '../math';
 import type { Standing } from '../race/race';
 import { Simulation } from '../sim';
 import type { Track } from '../track/track';
-import { restingPose, type Controls } from '../vehicle/car';
+import { controls as makeControls, restingPose, type Controls } from '../vehicle/car';
 import type { CarDef } from '../vehicle/carDef';
-import { createPose } from '../vehicle/pose';
+import { createPose, type CarPose } from '../vehicle/pose';
 import { ClockSync } from './clock';
 import type { Link } from './link';
 import { parseMessage, PROTOCOL, type Message } from './protocol';
@@ -36,15 +43,19 @@ export type Role = 'host' | 'guest';
 /** What the handshake agreed. */
 export interface OnlineSetup {
   role: Role;
-  /** Circuit id and laps (the host's choice). */
+  /** Circuit id, laps and AI opponents (the host's choice). */
   track: string;
   laps: number;
-  /** This player's car and the other's (car names). */
+  opponents: number;
+  /** This player's car and the other's (car names). The AI drive the host's. */
   mine: string;
   theirs: string;
   /** Messages that arrived after the handshake, before the race was built: the race reads them first. */
   inbox: Message[];
 }
+
+/** The most AI opponents online (as offline). */
+export const MAX_OPPONENTS = 7;
 
 /** Why an online race couldn't start or carry on: shown to the player as it is. */
 export class OnlineError extends Error {}
@@ -63,7 +74,11 @@ function buffered(link: Link, setup: Omit<OnlineSetup, 'inbox'>): OnlineSetup {
  * The host's side: wait for the guest's hello and send it the race. `cars` are the car names
  * this version knows.
  */
-export function hostHandshake(link: Link, race: { track: string; laps: number; car: string }, cars: readonly string[]): Promise<OnlineSetup> {
+export function hostHandshake(
+  link: Link,
+  race: { track: string; laps: number; car: string; opponents: number },
+  cars: readonly string[],
+): Promise<OnlineSetup> {
   return new Promise((resolve, reject) => {
     link.onClose = (reason) => reject(new OnlineError(reason));
     link.onMessage = (raw) => {
@@ -81,8 +96,9 @@ export function hostHandshake(link: Link, race: { track: string; laps: number; c
         reject(new OnlineError(problem));
         return;
       }
-      link.send({ type: 'welcome', track: race.track, laps: race.laps, car: race.car });
-      resolve(buffered(link, { role: 'host', track: race.track, laps: race.laps, mine: race.car, theirs: m.car }));
+      const opponents = Math.max(0, Math.min(MAX_OPPONENTS, race.opponents));
+      link.send({ type: 'welcome', track: race.track, laps: race.laps, car: race.car, opponents });
+      resolve(buffered(link, { role: 'host', track: race.track, laps: race.laps, opponents, mine: race.car, theirs: m.car }));
     };
   });
 }
@@ -104,7 +120,7 @@ export function guestHandshake(link: Link, car: string, tracks: readonly string[
           reject(new OnlineError(reason));
           return;
         }
-        resolve(buffered(link, { role: 'guest', track: m.track, laps: m.laps, mine: car, theirs: m.car }));
+        resolve(buffered(link, { role: 'guest', track: m.track, laps: m.laps, opponents: m.opponents, mine: car, theirs: m.car }));
       }
     };
     link.send({ type: 'hello', version: PROTOCOL, car });
@@ -117,34 +133,49 @@ export type OnlinePhase = 'waiting' | 'lights' | 'racing' | 'finished';
 export interface OnlineOptions {
   /** The clock (s): any steady one, such as performance.now() / 1000. */
   clock: () => number;
-  /** For the wait before the lights go out (the host draws it). */
+  /** For the wait before the lights go out and the AI's skills (the host draws them). */
   seed?: number;
+  /** The AI's difficulty (the host's choice). */
+  difficulty?: Difficulty;
 }
 
-/** Car 0 is this player's, car 1 the other's. */
+/** This player's car, and the other player's. */
 const ME = 0;
 const THEM = 1;
 
+/** An AI car on the grid. */
+const HELD: Controls = makeControls({ brake: 1 });
+
+/** A simulated car (index into `sim.cars`) or a proxy (index into `sim.proxies`). */
+type Where = { car: number; proxy?: undefined } | { proxy: number; car?: undefined };
+
 export class OnlineRace {
   readonly sim: Simulation;
-  /** The other car's states, turned into where it is now. */
-  readonly remote = new RemoteCar();
+  /** Every car in the race: the two players and the AI. */
+  readonly count: number;
+  /** Each proxy's states, turned into where its car is now (proxy 0 is always the other player). */
+  readonly remotes: RemoteCar[] = [];
   /** The guest's estimate of the host's clock (the host's own offset stays 0). */
   readonly sync = new ClockSync();
+  /** The host's AI drivers (none on the guest, which only sees their cars). */
+  readonly drivers: AiDriver[] = [];
   phase: OnlinePhase = 'waiting';
   /** Why the race ended early (the other player left, the link lost touch), or null. */
   closed: string | null = null;
-  /** Race time each car took the flag (s), or null: this player's, then the other's. */
-  readonly finishTimes: [number | null, number | null] = [null, null];
-  /** The other car's best lap, as it reported at the flag. */
-  theirBest: number | null = null;
+  /** Race time each car took the flag (s), or null; by car id. */
+  readonly finishTimes: (number | null)[];
   /** Who wants a rematch: this player, the other. */
   readonly rematch: [boolean, boolean] = [false, false];
   /** The moment the lights go out on the host's clock (s), or null before it is set. */
   outAt: number | null = null;
-  /** This player's controls on the last step (held on the grid). */
-  controls: Controls | null = null;
+  /** The simulated cars' controls on the last step (this player's first, held on the grid). */
+  controls: Controls[] = [];
 
+  private readonly traffic: Traffic | null = null;
+  /** Traffic sees the simulated cars and the other player's. */
+  private readonly movers: Mover[];
+  /** Best laps the other side reported at the flag, by car id. */
+  private readonly reportedBest: (number | null)[];
   private wait = 0;
   /** Clock time (host's once synced, local before) at simulation step 0. */
   private base: number;
@@ -152,15 +183,16 @@ export class OnlineRace {
   private theyAreReady = false;
   private pingsSent = 0;
   private nextPing = 0;
-  /** Clock time this player completed each lap. */
-  private crossings: number[] = [];
-  /** The first clock time each car reached each checkpoint, and the last checkpoint marked. */
-  private readonly reached = [new Map<number, number>(), new Map<number, number>()];
-  private readonly lastKey = [-Infinity, -Infinity];
+  /** Clock time each simulated car completed each lap. */
+  private crossings: number[][];
+  private readonly lapsBefore: number[];
+  /** The first clock time each car reached each checkpoint, and the last checkpoint marked; by car id. */
+  private readonly reached: Map<number, number>[];
+  private readonly lastKey: number[];
   private readonly rng;
   private readonly proxyPose = createPose();
-  /** The other car is solid (not a ghost while its states are stale). */
-  private proxySolid = true;
+  /** Each proxy is solid (not a ghost while its states are stale). */
+  private readonly proxySolid: boolean[] = [];
   private readonly state = createState();
   private readonly incoming = createState();
 
@@ -172,21 +204,53 @@ export class OnlineRace {
     theirs: CarDef,
     private readonly options: OnlineOptions,
   ) {
-    // The host on pole, the guest beside it.
-    const slots = setup.role === 'host' ? [0, 1] : [1, 0];
-    this.sim = new Simulation(track, mine, { cars: 1, slots: [slots[0]], field: 2 });
-    this.sim.addProxy(theirs, restingPose(theirs, this.sim.slotPose(slots[1])));
+    const host = setup.role === 'host';
+    const n = setup.opponents;
+    this.count = 2 + n;
+    // The two players together in the middle of the grid, the AI around them.
+    const players = 2 * Math.round(n / 4);
+    const slot = (entry: number) => (entry < 2 ? players + entry : entry - 2 < players ? entry - 2 : entry);
+    const ai = Array.from({ length: n }, (_, k) => 2 + k);
+    // The host simulates itself and the AI (in its car); the guest only itself.
+    const own = host ? [0, ...ai] : [1];
+    const proxies = host ? [1] : [0, ...ai];
+    this.sim = new Simulation(track, mine, { cars: own.length, slots: own.map(slot), field: this.count });
+    for (const entry of proxies) {
+      this.sim.addProxy(theirs, restingPose(theirs, this.sim.slotPose(slot(entry))));
+      this.remotes.push(new RemoteCar());
+      this.proxySolid.push(true);
+    }
     this.rng = createRng(options.seed ?? 1);
-    this.synced = setup.role === 'host';
-    const now = options.clock();
-    this.base = now;
+    if (host && n > 0) {
+      fieldSkills(options.difficulty ?? 'medium', n, this.rng).forEach((skill, k) => this.drivers.push(createAiDriver(track, mine, skill, (options.seed ?? 1) * 100 + k)));
+      const other = this.sim.proxies[0];
+      const remote = this.remotes[0];
+      this.movers = [
+        ...this.sim.cars,
+        {
+          position: other.current.position,
+          get speed() {
+            return remote.latest?.speed ?? 0;
+          },
+        },
+      ];
+      this.traffic = new Traffic(track, this.movers, mine);
+    } else this.movers = [];
+    this.finishTimes = Array.from({ length: this.count }, () => null);
+    this.reportedBest = Array.from({ length: this.count }, () => null);
+    this.reached = Array.from({ length: this.count }, () => new Map());
+    this.lastKey = Array.from({ length: this.count }, () => -Infinity);
+    this.crossings = this.sim.cars.map(() => []);
+    this.lapsBefore = this.sim.cars.map(() => 0);
+    this.synced = host;
+    this.base = options.clock();
     link.onMessage = (raw) => {
       const m = parseMessage(raw);
       if (m) this.receive(m);
     };
     link.onClose = (reason) => this.close(reason);
     for (const m of setup.inbox.splice(0)) this.receive(m);
-    if (setup.role === 'host') link.send({ type: 'ready' });
+    if (host) link.send({ type: 'ready' });
   }
 
   /** On the grid: held on the brakes (revving allowed) until the lights go out. */
@@ -217,14 +281,29 @@ export class OnlineRace {
     return Math.max(0, Math.min(L.count, Math.floor((this.now - firstAt) / L.interval) + 1));
   }
 
-  /** The other car's latest state (speed, RPM, throttle for the HUD and its sound), or null. */
+  /** The other player's latest state (speed, RPM, throttle for its sound), or null. */
   get theirs(): CarState | null {
-    return this.remote.latest;
+    return this.remotes[0].latest;
+  }
+
+  /** Waiting for the other player: still syncing the clock (the guest), or for the lights. */
+  get waitingFor(): 'player' | 'clock' | null {
+    if (this.phase !== 'waiting') return null;
+    return this.theyAreReady && !this.synced ? 'clock' : 'player';
+  }
+
+  /** The car id of simulated car `k`, and of proxy `j`. */
+  idOfCar(k: number): number {
+    return k === 0 ? ME : 1 + k;
+  }
+  idOfProxy(j: number): number {
+    return 1 + j;
   }
 
   /**
    * Run the simulation up to the clock's time, asking `drive` for this player's controls each
-   * step. Returns how far into the next step the clock is (0–1), for drawing in between.
+   * step (and calling `after` after each). Returns how far into the next step the clock is
+   * (0–1), for drawing in between.
    */
   advance(drive: () => Controls, after?: () => void): number {
     this.talk();
@@ -239,12 +318,6 @@ export class OnlineRace {
       after?.();
     }
     return Math.max(0, Math.min(1, (this.clockNow() - this.now) / PHYSICS_STEP));
-  }
-
-  /** Waiting for the other player: still syncing the clock (the guest), or for the lights. */
-  get waitingFor(): 'player' | 'clock' | null {
-    if (this.phase !== 'waiting') return null;
-    return this.theyAreReady && !this.synced ? 'clock' : 'player';
   }
 
   /** Ask for another race on the same circuit (it starts when both have asked). */
@@ -263,128 +336,180 @@ export class OnlineRace {
     this.closed = 'You left the race.';
   }
 
-  /** Both cars' places: finishers by time, then the rest by distance covered. Car 0 is this player's. */
+  /** Every car's place: finishers in the order they took the flag, then the rest by distance covered. */
   standings(): Standing[] {
     const length = this.track.length;
-    const rows: Standing[] = [ME, THEM].map((car) => ({
-      car,
-      position: 0,
-      laps: car === ME ? this.sim.timer.laps : (this.theirs?.laps ?? 0),
-      progress: this.progress(car),
-      gap: 0,
-      lapsDown: 0,
-      bestLap: car === ME ? this.sim.timer.bestLap : this.theirBest,
-      finished: this.finishTimes[car] !== null,
-      time: this.finishTimes[car],
-    }));
+    const rows: Standing[] = this.finishTimes.map((time, car) => {
+      const where = this.where(car);
+      const timer = where.car === undefined ? null : this.sim.timers[where.car];
+      return {
+        car,
+        position: 0,
+        laps: timer ? timer.laps : (this.remotes[where.proxy!].latest?.laps ?? 0),
+        progress: this.progress(car),
+        gap: 0,
+        lapsDown: 0,
+        bestLap: timer ? timer.bestLap : this.reportedBest[car],
+        finished: time !== null,
+        time,
+      };
+    });
     rows.sort((a, b) => {
       if (a.finished && b.finished) return a.time! - b.time!;
       if (a.finished !== b.finished) return a.finished ? -1 : 1;
       return b.progress - a.progress;
     });
-    const [leader, other] = rows;
-    leader.position = 1;
-    other.position = 2;
-    other.lapsDown = Math.max(0, Math.floor(leader.progress - other.progress));
-    if (other.finished) other.gap = other.time! - leader.time!;
-    else {
-      // How long ago the leader was where the other car is now.
-      const key = Math.floor((other.progress * length) / TUNING.online.checkpoint);
-      const theirs = this.reached[other.car].get(key);
-      const leaders = this.reached[leader.car].get(key);
-      other.gap = theirs === undefined || leaders === undefined ? 0 : Math.max(0, theirs - leaders);
-    }
+    const leader = rows[0];
+    rows.forEach((r, i) => {
+      r.position = i + 1;
+      if (i === 0) return;
+      r.lapsDown = Math.max(0, Math.floor(leader.progress - r.progress));
+      if (r.finished) r.gap = r.time! - leader.time!;
+      else {
+        // How long ago the leader was where this car is now.
+        const key = Math.floor((r.progress * length) / TUNING.online.checkpoint);
+        const mine = this.reached[r.car].get(key);
+        const leaders = this.reached[leader.car].get(key);
+        r.gap = mine === undefined || leaders === undefined ? 0 : Math.max(0, mine - leaders);
+      }
+    });
     return rows;
   }
 
-  /** One fixed step of this player's car, with the other's proxy where it is reported to be. */
+  /** Where car `id` is in this simulation: a car of its own, or a proxy. */
+  private where(id: number): Where {
+    if (id === ME) return { car: 0 };
+    if (id === THEM) return { proxy: 0 };
+    return this.setup.role === 'host' ? { car: id - 1 } : { proxy: id - 1 };
+  }
+
+  /** Car id ↔ the id on the wire (the host's car is 0 there, the guest's 1). */
+  private wire(id: number): number {
+    return this.setup.role === 'guest' && id < 2 ? 1 - id : id;
+  }
+
+  /** One fixed step of this side's cars, with the other side's proxies where they are reported to be. */
   private step(input: Controls): void {
-    const { sim } = this;
-    const controls = this.held ? { ...input, brake: 1, handbrake: 1 } : input;
-    // The proxy goes where the other car is at the end of this step.
-    if (this.remote.sample(this.now + PHYSICS_STEP, this.proxyPose)) sim.setProxyPose(0, this.proxyPose);
-    this.updateProxySolid();
-    const laps = sim.timer.laps;
-    sim.step(controls);
-    this.controls = controls;
+    const { sim, traffic } = this;
+    const held = this.held;
+    // The proxies go where their cars are at the end of this step.
+    this.remotes.forEach((remote, j) => {
+      if (remote.sample(this.now + PHYSICS_STEP, this.proxyPose)) sim.setProxyPose(j, this.proxyPose);
+      this.updateProxySolid(j);
+    });
+    const all = [held ? { ...input, brake: 1, handbrake: 1 } : input];
+    if (traffic) {
+      traffic.update(this.movers);
+      this.drivers.forEach((d, k) => {
+        const i = 1 + k;
+        if (held) all.push(HELD);
+        else {
+          traffic.advise(i, d, PHYSICS_STEP, sim.timers[i].laps < 1);
+          all.push(d.drive(sim.cars[i], PHYSICS_STEP));
+        }
+      });
+    }
+    sim.timers.forEach((t, k) => (this.lapsBefore[k] = t.laps));
+    sim.step(all);
+    this.controls = all;
+    this.drivers.forEach((d, k) => {
+      if (d.stuck) {
+        sim.recover(1 + k);
+        d.recovered();
+      }
+    });
     const now = this.now;
     if (this.phase === 'lights' && this.outAt !== null && now >= this.outAt - 1e-6) this.phase = 'racing';
     // States go out once they can carry the host's time (the guest's after the sync).
-    if (sim.steps % TUNING.online.stateEvery === 0 && this.synced && !this.closed) this.sendState();
-    if (this.held) return;
-    if (sim.timer.laps > laps) this.crossings.push(now);
-    this.mark(ME, this.progress(ME), now);
+    if (sim.steps % TUNING.online.stateEvery === 0 && this.synced && !this.closed) sim.cars.forEach((_, k) => this.sendState(k));
+    if (held) return;
+    sim.timers.forEach((t, k) => {
+      if (t.laps > this.lapsBefore[k]) this.crossings[k].push(now);
+      const id = this.idOfCar(k);
+      this.mark(id, this.progress(id), now);
+    });
     this.score();
   }
 
-  /** A ghost while the other car's states are stale; solid again once fresh and clear of this car. */
-  private updateProxySolid(): void {
+  /** A ghost while its states are stale; solid again once fresh and clear of this side's cars. */
+  private updateProxySolid(j: number): void {
     const C = TUNING.online;
-    const latest = this.remote.latest;
+    const latest = this.remotes[j].latest;
     const fresh = latest !== null && this.now - latest.time < C.stale;
-    if (!fresh) this.proxySolid = false;
-    else if (!this.proxySolid) {
-      const a = this.sim.car.position;
-      const b = this.proxyPose.position;
-      this.proxySolid = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) > C.clearance;
+    if (!fresh) this.proxySolid[j] = false;
+    else if (!this.proxySolid[j]) {
+      const b = this.sim.proxies[j].target.position;
+      this.proxySolid[j] = this.sim.cars.every((car) => {
+        const a = car.position;
+        return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) > C.clearance;
+      });
     }
-    this.sim.setProxySolid(0, this.proxySolid);
+    this.sim.setProxySolid(j, this.proxySolid[j]);
   }
 
-  /** The flag for this player, and the end of the race. */
+  /** The flag for this side's cars, and the end of the race. */
   private score(): void {
     const outAt = this.outAt!;
-    if (this.finishTimes[ME] === null) {
-      // The race distance, or the next line after the other car took the flag (a lapped car).
-      const theirsAt = this.finishTimes[THEM] === null ? null : outAt + this.finishTimes[THEM];
-      const candidates = [this.crossings[this.setup.laps - 1], theirsAt === null ? undefined : this.crossings.find((t) => t > theirsAt)];
-      const at = Math.min(...candidates.filter((t): t is number => t !== undefined));
-      if (Number.isFinite(at)) {
-        this.finishTimes[ME] = at - outAt;
-        if (!this.closed) this.link.send({ type: 'finish', time: at - outAt, best: this.sim.timer.bestLap });
-      }
-    }
-    const done = this.finishTimes.filter((t): t is number => t !== null);
-    if (done.length === 2 || (done.length === 1 && this.now >= outAt + done[0] + TUNING.race.classifyAfter)) this.phase = 'finished';
+    // When the first car took the flag (clock time), if one has.
+    let first = Infinity;
+    for (const t of this.finishTimes) if (t !== null) first = Math.min(first, outAt + t);
+    this.sim.timers.forEach((timer, k) => {
+      const id = this.idOfCar(k);
+      if (this.finishTimes[id] !== null) return;
+      // The race distance, or the next line after the first car took the flag (a lapped car).
+      const crossings = this.crossings[k];
+      const at = Math.min(crossings[this.setup.laps - 1] ?? Infinity, crossings.find((t) => t > first) ?? Infinity);
+      if (!Number.isFinite(at)) return;
+      this.finishTimes[id] = at - outAt;
+      first = Math.min(first, at);
+      if (!this.closed) this.link.send({ type: 'finish', car: this.wire(id), time: at - outAt, best: timer.bestLap });
+    });
+    const all = this.finishTimes.every((t) => t !== null);
+    if (all || this.now >= first + TUNING.race.classifyAfter) this.phase = 'finished';
   }
 
-  /** Laps plus the fraction of the current one for car `car` (negative before the first line). */
-  private progress(car: number): number {
-    if (car === THEM) {
-      const s = this.theirs;
+  /** Laps plus the fraction of the current one for car `id` (negative before the first line). */
+  private progress(id: number): number {
+    const where = this.where(id);
+    if (where.proxy !== undefined) {
+      const s = this.remotes[where.proxy].latest;
       return s ? s.laps + s.distance / this.track.length : 0;
     }
-    const timer = this.sim.timer;
+    const timer = this.sim.timers[where.car];
     const fraction = timer.index / this.track.samples.length;
     if (timer.current(this.sim.time) === null) return fraction > 0.5 ? fraction - 1 : fraction;
     // Just across the line the timer has counted the lap before the position wraps: no jump back.
     return timer.laps + (fraction > 0.9 && timer.index < this.track.samples.length * 0.1 ? 0 : fraction);
   }
 
-  /** Car `car` reached `progress` at clock time `at`: stamp the checkpoints up to there. */
-  private mark(car: number, progress: number, at: number): void {
+  /** Car `id` reached `progress` at clock time `at`: stamp the checkpoints up to there. */
+  private mark(id: number, progress: number, at: number): void {
     const key = Math.floor((progress * this.track.length) / TUNING.online.checkpoint);
-    const map = this.reached[car];
-    for (let k = Math.max(key - 50, this.lastKey[car] + 1); k <= key; k++) if (!map.has(k)) map.set(k, at);
-    this.lastKey[car] = Math.max(this.lastKey[car], key);
+    const map = this.reached[id];
+    for (let k = Math.max(key - 50, this.lastKey[id] + 1); k <= key; k++) if (!map.has(k)) map.set(k, at);
+    this.lastKey[id] = Math.max(this.lastKey[id], key);
   }
 
-  private sendState(): void {
+  /** Simulated car `k`'s state to the other side. */
+  private sendState(k: number): void {
     const { sim, state } = this;
+    const car = sim.cars[k];
+    const pose: CarPose = sim.poses[k].current;
+    const id = this.idOfCar(k);
     state.time = this.now;
-    Object.assign(state.pose.position, sim.current.position);
-    Object.assign(state.pose.rotation, sim.current.rotation);
-    sim.current.wheels.forEach((w, i) => Object.assign(state.pose.wheels[i], w));
-    const v = sim.car.body.linvel();
-    const w = sim.car.body.angvel();
+    Object.assign(state.pose.position, pose.position);
+    Object.assign(state.pose.rotation, pose.rotation);
+    pose.wheels.forEach((w, i) => Object.assign(state.pose.wheels[i], w));
+    const v = car.body.linvel();
+    const w = car.body.angvel();
     state.velocity = { x: v.x, y: v.y, z: v.z };
     state.angular = { x: w.x, y: w.y, z: w.z };
-    state.speed = sim.car.speed;
-    state.rpm = sim.car.drivetrain.rpm;
-    state.throttle = this.controls?.throttle ?? 0;
-    state.laps = sim.timer.laps;
-    state.distance = (this.progress(ME) - sim.timer.laps) * this.track.length;
-    this.link.send({ type: 'state', car: 0, data: packState(state) }, 'frames');
+    state.speed = car.speed;
+    state.rpm = car.drivetrain.rpm;
+    state.throttle = this.controls[k]?.throttle ?? 0;
+    state.laps = sim.timers[k].laps;
+    state.distance = (this.progress(id) - sim.timers[k].laps) * this.track.length;
+    this.link.send({ type: 'state', car: this.wire(id), data: packState(state) }, 'frames');
   }
 
   /** The clock now: the host's (as well as this side knows it), or this side's own before the sync. */
@@ -426,9 +551,8 @@ export class OnlineRace {
         this.sync.add(m.t, m.at, local);
         if (!this.synced && this.sync.samples.length >= TUNING.online.pings) {
           // From here the simulation keeps the host's time: same steps, same moment.
-          const steps = this.sim.steps * PHYSICS_STEP;
           this.synced = true;
-          this.base = this.sync.toHost(local) - steps;
+          this.base = this.sync.toHost(local) - this.sim.steps * PHYSICS_STEP;
           this.link.send({ type: 'ready' });
         }
         break;
@@ -436,19 +560,23 @@ export class OnlineRace {
         if (this.setup.role === 'guest') this.startLights(m.outAt, m.wait);
         break;
       case 'state': {
-        if (m.car !== 0) break;
+        const id = this.wire(m.car);
+        if (id >= this.count) break;
+        const where = this.where(id);
+        if (where.proxy === undefined) break;
         const s = unpackState(m.data, this.incoming);
         if (!s) break;
-        this.remote.receive(s);
-        if (this.outAt !== null && s.time >= this.outAt) this.mark(THEM, s.laps + s.distance / this.track.length, s.time);
+        this.remotes[where.proxy].receive(s);
+        if (this.outAt !== null && s.time >= this.outAt) this.mark(id, s.laps + s.distance / this.track.length, s.time);
         break;
       }
-      case 'finish':
-        if (this.finishTimes[THEM] === null && !this.held) {
-          this.finishTimes[THEM] = m.time;
-          this.theirBest = m.best;
-        }
+      case 'finish': {
+        const id = this.wire(m.car);
+        if (id >= this.count || this.where(id).proxy === undefined || this.finishTimes[id] !== null || this.held) break;
+        this.finishTimes[id] = m.time;
+        this.reportedBest[id] = m.best;
         break;
+      }
       case 'rematch':
         if (this.phase === 'finished') {
           this.rematch[THEM] = true;
@@ -485,12 +613,14 @@ export class OnlineRace {
   private startLights(outAt: number, wait: number): void {
     if (this.phase !== 'waiting') {
       this.sim.restart();
-      this.sim.timer.laps = 0;
-      this.crossings = [];
+      for (const t of this.sim.timers) t.laps = 0;
+      this.drivers.forEach((d) => d.reset());
+      this.traffic?.reset();
+      this.crossings = this.sim.cars.map(() => []);
       this.reached.forEach((r) => r.clear());
       this.lastKey.fill(-Infinity);
       this.finishTimes.fill(null);
-      this.theirBest = null;
+      this.reportedBest.fill(null);
       this.rematch.fill(false);
     }
     // Shift the steps by under half a step so one falls exactly on the lights going out.

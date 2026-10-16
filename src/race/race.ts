@@ -95,7 +95,7 @@ export class Race {
     const skills = fieldSkills(options.difficulty, count - 1, this.rng);
     this.skills = options.skills ? options.skills.slice(0, count).map((s, k) => (k === 0 ? null : s)) : [null, ...skills];
     this.drivers = this.skills.map((s, k) => (s ? createAiDriver(track, def, s, options.seed * 100 + k) : null));
-    this.traffic = new Traffic(track, this.sim.cars);
+    this.traffic = new Traffic(track, this.sim.cars, def);
     this.finishTimes = this.sim.cars.map(() => null);
     this.lightsOutAt = this.drawLightsOut();
   }

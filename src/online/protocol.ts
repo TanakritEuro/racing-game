@@ -4,13 +4,13 @@
 //
 // Bump PROTOCOL whenever a message changes: mismatched versions refuse to race.
 
-export const PROTOCOL = 1;
+export const PROTOCOL = 2;
 
 export type Message =
   /** Guest → host on connecting: its version and the car it will drive. */
   | { type: 'hello'; version: number; car: string }
-  /** Host → guest: the race, and the host's car. */
-  | { type: 'welcome'; track: string; laps: number; car: string }
+  /** Host → guest: the race, the host's car (the AI's too), and how many AI opponents. */
+  | { type: 'welcome'; track: string; laps: number; car: string; opponents: number }
   | { type: 'reject'; reason: string }
   /** The circuit is built and the car is on the grid. */
   | { type: 'ready' }
@@ -22,10 +22,10 @@ export type Message =
    * `wait` seconds before that, one a second before them.
    */
   | { type: 'lights'; outAt: number; wait: number }
-  /** A car's packed state (state.ts), on the unordered channel: car 0 is the sender's own (later ones the host's AI). */
+  /** A car's packed state (state.ts), on the unordered channel: car 0 is the host's, 1 the guest's, 2 and up the host's AI. */
   | { type: 'state'; car: number; data: ArrayBuffer }
-  /** Took the flag: race time (s) and best lap. */
-  | { type: 'finish'; time: number; best: number | null }
+  /** A car (numbered as for states) took the flag: race time (s) and best lap. */
+  | { type: 'finish'; car: number; time: number; best: number | null }
   /** Wants another race on the same circuit. */
   | { type: 'rematch' }
   | { type: 'bye'; reason: string };
@@ -33,6 +33,7 @@ export type Message =
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 const isNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isString = (v: unknown, max = 200): v is string => typeof v === 'string' && v.length <= max;
+const isCount = (v: unknown, lo: number, hi: number): v is number => Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi;
 
 /** A message from the network, or null if it isn't one this version understands. */
 export function parseMessage(raw: unknown): Message | null {
@@ -41,8 +42,8 @@ export function parseMessage(raw: unknown): Message | null {
     case 'hello':
       return isNumber(raw.version) && isString(raw.car, 40) ? { type: 'hello', version: raw.version, car: raw.car } : null;
     case 'welcome':
-      return isString(raw.track, 40) && Number.isInteger(raw.laps) && (raw.laps as number) >= 1 && (raw.laps as number) <= 50 && isString(raw.car, 40)
-        ? { type: 'welcome', track: raw.track, laps: raw.laps as number, car: raw.car }
+      return isString(raw.track, 40) && isCount(raw.laps, 1, 50) && isString(raw.car, 40) && isCount(raw.opponents, 0, 7)
+        ? { type: 'welcome', track: raw.track, laps: raw.laps, car: raw.car, opponents: raw.opponents }
         : null;
     case 'reject':
       return isString(raw.reason) ? { type: 'reject', reason: raw.reason } : null;
@@ -55,11 +56,11 @@ export function parseMessage(raw: unknown): Message | null {
     case 'lights':
       return isNumber(raw.outAt) && isNumber(raw.wait) && raw.wait >= 0 && raw.wait < 10 ? { type: 'lights', outAt: raw.outAt, wait: raw.wait } : null;
     case 'state':
-      return Number.isInteger(raw.car) && (raw.car as number) >= 0 && (raw.car as number) < 16 && raw.data instanceof ArrayBuffer
-        ? { type: 'state', car: raw.car as number, data: raw.data }
-        : null;
+      return isCount(raw.car, 0, 15) && raw.data instanceof ArrayBuffer ? { type: 'state', car: raw.car, data: raw.data } : null;
     case 'finish':
-      return isNumber(raw.time) && (raw.best === null || isNumber(raw.best)) ? { type: 'finish', time: raw.time, best: raw.best as number | null } : null;
+      return isCount(raw.car, 0, 15) && isNumber(raw.time) && (raw.best === null || isNumber(raw.best))
+        ? { type: 'finish', car: raw.car, time: raw.time, best: raw.best as number | null }
+        : null;
     case 'rematch':
       return { type: 'rematch' };
     case 'bye':

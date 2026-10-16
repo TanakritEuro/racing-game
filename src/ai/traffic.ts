@@ -5,10 +5,17 @@
 // steering and speed control stay the driver's own. It never blocks or defends. Pure simulation.
 
 import { TUNING } from '../config';
-import { clamp } from '../math';
+import { clamp, type Vec3 } from '../math';
 import { lateralOffset, nearestSample, type Track } from '../track/track';
-import type { Car } from '../vehicle/car';
+import type { CarDef } from '../vehicle/carDef';
 import type { AiDriver } from './driver';
+
+/** A car as traffic sees it: a simulated `Car`, or another player's car (online). */
+export interface Mover {
+  readonly position: Vec3;
+  /** Forward speed (m/s). */
+  readonly speed: number;
+}
 
 export interface TrackPosition {
   /** Nearest track sample. */
@@ -29,15 +36,17 @@ export class Traffic {
   private readonly width: number;
   private readonly carLength: number;
 
+  /** `def`: the car whose size sets the gaps kept. */
   constructor(
     readonly track: Track,
-    cars: readonly Car[],
+    cars: readonly Mover[],
+    def: CarDef,
   ) {
     this.positions = cars.map(() => ({ index: -1, distance: 0, lateral: 0, speed: 0 }));
     this.side = cars.map(() => null);
     this.length = track.length;
-    this.width = 2 * cars[0].def.halfExtents.x;
-    this.carLength = 2 * cars[0].def.halfExtents.z;
+    this.width = 2 * def.halfExtents.x;
+    this.carLength = 2 * def.halfExtents.z;
   }
 
   /** Back to the grid: every car on its own line again. */
@@ -47,7 +56,7 @@ export class Traffic {
   }
 
   /** Every car's place on the track. Call after each step. */
-  update(cars: readonly Car[]): void {
+  update(cars: readonly Mover[]): void {
     const { track } = this;
     const spacing = track.length / track.samples.length;
     cars.forEach((car, k) => {

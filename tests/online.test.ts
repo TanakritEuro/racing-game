@@ -21,19 +21,20 @@ const FRAME = 0.002;
 let track: Track | null = null;
 
 /** A host and a guest over a loopback with 50 ± 20 ms each way, on a shared virtual clock. */
-async function pair(laps = 1) {
+async function pair(laps = 1, opponents = 0) {
   await initPhysics();
   track ??= buildTrack(TEST_CIRCUIT);
   const line = loopback({ delay: 0.05, jitter: 0.02, seed: 3 });
   const clock = { now: 0 };
-  const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps, car: 'Kestrel' }, NAMES);
+  const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps, car: 'Kestrel', opponents }, NAMES);
   const guest = guestHandshake(line.b, 'Wren', TRACKS, NAMES);
   await pump(line, clock, 0.3);
   const [hs, gs] = await Promise.all([host, guest]);
   expect(hs.theirs).toBe('Wren');
   expect(gs.track).toBe(TEST_CIRCUIT.id);
   expect(gs.laps).toBe(laps);
-  const h = new OnlineRace(line.a, hs, track, KESTREL, WREN, { clock: () => clock.now + AHEAD, seed: 5 });
+  expect(gs.opponents).toBe(opponents);
+  const h = new OnlineRace(line.a, hs, track, KESTREL, WREN, { clock: () => clock.now + AHEAD, seed: 5, difficulty: 'hard' });
   // The guest takes a little longer to build its world.
   await pump(line, clock, 0.4);
   const g = new OnlineRace(line.b, gs, track, WREN, KESTREL, { clock: () => clock.now });
@@ -124,6 +125,43 @@ describe('an online race', () => {
     expect(h.outAt).toBe(g.outAt);
   }, 240_000);
 
+  it('runs AI opponents on the host, seen by the guest where the host has them, with one result', async () => {
+    const { line, clock, h, g } = await pair(1, 3);
+    expect(h.count).toBe(5);
+    expect(g.count).toBe(5);
+    expect(h.drivers.length).toBe(3);
+    expect(g.drivers.length).toBe(0);
+    expect(g.sim.proxies.length).toBe(4);
+    const hDrive = aiFor(h, KESTREL);
+    const gDrive = aiFor(g, WREN, 1);
+    const errors: number[] = [];
+    while (clock.now < 300 && !(h.phase === 'finished' && g.phase === 'finished')) {
+      clock.now += FRAME;
+      line.advance(clock.now);
+      h.advance(hDrive);
+      g.advance(gDrive);
+      // The AI on the guest's screen, against the host's own cars, at the same step.
+      if (h.phase === 'racing' && Math.abs(h.now - g.now) < 1e-4) {
+        for (let k = 1; k <= 3; k++) {
+          const shown = g.sim.proxies[k].current.position;
+          const real = h.sim.cars[k].position;
+          errors.push(Math.hypot(shown.x - real.x, shown.z - real.z));
+        }
+      }
+    }
+    expect(h.phase).toBe('finished');
+    expect(g.phase).toBe('finished');
+    // Close all the time, but for a moment after an AI car is put back on the track (the
+    // guest sees the jump on its next state).
+    errors.sort((a, b) => a - b);
+    expect(errors[Math.floor(errors.length * 0.99)]).toBeLessThan(0.5);
+    // Every car's time the same on both screens (the two players swap ids), and the same order.
+    const swap = (id: number) => (id < 2 ? 1 - id : id);
+    expect(g.finishTimes).toEqual(h.finishTimes.map((_, id) => h.finishTimes[swap(id)]));
+    expect(h.finishTimes.every((t) => t !== null)).toBe(true);
+    expect(g.standings().map((r) => swap(r.car))).toEqual(h.standings().map((r) => r.car));
+  }, 300_000);
+
   it('makes the other car a ghost while its states are stale, and solid again once clear', async () => {
     const { line, clock, h, g } = await pair();
     const run = (seconds: number, guest = true) => {
@@ -184,7 +222,7 @@ describe('an online race', () => {
   it('turns away a guest with another version', async () => {
     const line = loopback({ delay: 0.02 });
     const clock = { now: 0 };
-    const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps: 3, car: 'Kestrel' }, NAMES);
+    const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps: 3, car: 'Kestrel', opponents: 0 }, NAMES);
     const heard: (Message | null)[] = [];
     line.b.onMessage = (raw) => heard.push(parseMessage(raw));
     line.b.send({ type: 'hello', version: 0, car: 'Wren' });

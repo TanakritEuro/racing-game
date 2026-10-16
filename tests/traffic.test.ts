@@ -16,7 +16,7 @@ async function race(skills: Skill[], slots: number[], seconds: number, until?: (
   await initPhysics();
   const sim = new Simulation(track, KESTREL, { cars: skills.length, slots });
   const drivers: AiDriver[] = skills.map((s, k) => createAiDriver(track, KESTREL, s, k + 1));
-  const traffic = new Traffic(track, sim.cars);
+  const traffic = new Traffic(track, sim.cars, sim.car.def);
   let touching = 0;
   for (let k = 0; k < seconds * 120; k++) {
     traffic.update(sim.cars);

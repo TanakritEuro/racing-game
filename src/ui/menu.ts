@@ -63,7 +63,8 @@ export interface MenuEvents {
 }
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
-const OPPONENTS = [1, 3, 5, 7];
+/** None: online only (the two of you). */
+const OPPONENTS = [0, 1, 3, 5, 7];
 const LAPS = [1, 3, 5, 10];
 
 /** Every key, for the start and pause menus. */
@@ -130,8 +131,8 @@ export class Menu {
       if (code.value !== choice.code) code.value = choice.code;
       onlineHelp.textContent =
         choice.online === 'host'
-          ? 'Pick the circuit, the laps and your car; you get a four-character code to give the other player.'
-          : 'Type the code the host gave you and pick your car; the host has picked the circuit and the laps.';
+          ? 'Pick the circuit, the laps, any AI opponents and your car; you get a four-character code to give the other player.'
+          : 'Type the code the host gave you and pick your car; the host picks the circuit, the laps and the field.';
     });
 
     const circuitRow = this.row(this.start, 'Circuit');
@@ -168,15 +169,17 @@ export class Menu {
     const diffRow = this.row(raceRows, 'Difficulty');
     for (const d of DIFFICULTIES) this.choiceButton(diffRow, cap(d), () => choice.difficulty === d, () => (choice.difficulty = d));
     const oppRow = this.row(raceRows, 'Opponents');
-    for (const n of OPPONENTS) this.choiceButton(oppRow, String(n), () => choice.opponents === n, () => (choice.opponents = n));
+    for (const n of OPPONENTS) {
+      const b = this.choiceButton(oppRow, n === 0 ? 'None' : String(n), () => choice.opponents === n, () => (choice.opponents = n));
+      if (n === 0) this.refresh.push(() => b.classList.toggle('hidden', choice.mode !== 'online'));
+    }
     const lapRow = this.row(raceRows, 'Laps');
     for (const n of LAPS) this.choiceButton(lapRow, String(n), () => choice.laps === n, () => (choice.laps = n));
     this.refresh.push(() => {
       const hosting = choice.mode === 'online' && choice.online === 'host';
       raceRows.classList.toggle('hidden', choice.mode === 'trial' || (choice.mode === 'online' && !hosting));
-      // A championship sets its own field and laps; online it's the two of you.
-      diffRow.parentElement!.classList.toggle('hidden', choice.mode === 'online');
-      oppRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race');
+      // A championship sets its own field and laps; online the host sets them.
+      oppRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race' && !hosting);
       lapRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race' && !hosting);
     });
 
