@@ -7,6 +7,7 @@ import { formatLapTime } from '../race/timing';
 import { ROUNDS } from '../race/championship';
 import type { Settings } from '../settings';
 import { CONDITIONS, type Conditions } from '../track/weather';
+import { WEAR_RATES, type WearRate } from '../vehicle/wear';
 
 export type Mode = 'trial' | 'race' | 'season' | 'online';
 
@@ -31,6 +32,8 @@ export interface StartChoice {
   laps: number;
   /** The weather (time trial, race, hosting online). */
   weather: Conditions;
+  /** Tyre wear in a race (or hosting online). */
+  wear: WearRate;
   /** Online: host a race or join one, and the room code to join. */
   online: 'host' | 'join';
   code: string;
@@ -186,12 +189,15 @@ export class Menu {
     }
     const lapRow = this.row(raceRows, 'Laps');
     for (const n of LAPS) this.choiceButton(lapRow, String(n), () => choice.laps === n, () => (choice.laps = n));
+    const wearRow = this.row(raceRows, 'Tyre wear');
+    for (const w of WEAR_RATES) this.choiceButton(wearRow, cap(w), () => choice.wear === w, () => (choice.wear = w));
     this.refresh.push(() => {
       const hosting = choice.mode === 'online' && choice.online === 'host';
       raceRows.classList.toggle('hidden', choice.mode === 'trial' || (choice.mode === 'online' && !hosting));
       // A championship sets its own field and laps; online the host sets them.
       oppRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race' && !hosting);
       lapRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race' && !hosting);
+      wearRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race' && !hosting);
     });
 
     const go = div(this.start, 'menu-row');

@@ -76,6 +76,7 @@ describe('championship', () => {
     const a = newSeason(42, 'hard', 'Kestrel');
     expect(a.rounds.map((_, r) => roundConditions(a, r))).toEqual(newSeason(42, 'hard', 'Kestrel').rounds.map((_, r) => roundConditions(a, r)));
     expect(roundRace(a).options.conditions).toBe(roundConditions(a, 0));
+    expect(roundRace(a).options.wear).toBe('normal');
     const counts = { dry: 0, damp: 0, wet: 0 };
     for (let seed = 1; seed <= 400; seed++) {
       const s = newSeason(seed, 'medium', 'Kestrel');

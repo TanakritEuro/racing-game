@@ -138,6 +138,8 @@ export function roundRace(season: Season): { track: string; options: RaceOptions
     track: round.track,
     options: {
       conditions: roundConditions(season, r),
+      // Tyres wear as normal; the rounds stay sprints, so a stop only pays if you ruin a set.
+      wear: 'normal',
       opponents: ENTRIES - 1,
       laps: round.laps,
       difficulty: season.difficulty,

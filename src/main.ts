@@ -134,9 +134,9 @@ async function connect(joining: boolean): Promise<{ link: Link; setup: OnlineSet
       });
       const link = await room.guest;
       panel.show('Online race', 'Connected: setting up the race…');
-      const { laps, opponents, conditions } = raceOptions(params, 0);
+      const { laps, opponents, conditions, wear } = raceOptions(params, 0);
       const trackId = (CIRCUITS.find((c) => c.id === params.get('track')) ?? CIRCUITS[0]).id;
-      return { link, setup: await hostHandshake(link, { track: trackId, laps, car, opponents, conditions: conditions ?? 'dry' }, names) };
+      return { link, setup: await hostHandshake(link, { track: trackId, laps, car, opponents, conditions: conditions ?? 'dry', wear: wear ?? 'off' }, names) };
     }
     const code = cleanRoomCode(params.get('code') ?? '');
     if (!code) throw new OnlineError('That is not a room code: it is four letters and digits, as the host sees it.');
@@ -331,7 +331,7 @@ const menu = new Menu(
       if (choice.mode === 'online') {
         const car = choice.car.toLowerCase();
         if (choice.online === 'host')
-          goTo({ online: 'host', track: choice.track, laps: String(choice.laps), opponents: String(choice.opponents), difficulty: choice.difficulty, weather: choice.weather, car });
+          goTo({ online: 'host', track: choice.track, laps: String(choice.laps), opponents: String(choice.opponents), difficulty: choice.difficulty, weather: choice.weather, wear: choice.wear, car });
         else if (cleanRoomCode(choice.code)) goTo({ online: 'join', code: choice.code, car });
         return;
       }
@@ -344,6 +344,7 @@ const menu = new Menu(
         p.set('difficulty', choice.difficulty);
         p.set('opponents', String(choice.opponents));
         p.set('laps', String(choice.laps));
+        p.set('wear', choice.wear);
       }
       for (const k of ['debug', 'telemetry', 'line']) if (params.has(k)) p.set(k, '');
       location.search = p.toString();
@@ -645,7 +646,7 @@ function updateHud(dt: number): void {
   );
   timing.update(sim.timer, sim.time);
   // BOX: the same call the AI acts on.
-  tyresHud.update(sim.car, sim.pits?.state[0] ?? null, race?.boxCalls[0] ?? false);
+  tyresHud.update(sim.car, sim.pits?.state[0] ?? null, race?.boxCalls[0] ?? online?.boxCall ?? false);
   const racing = race ?? online;
   if (racing) raceHud?.update(racing);
   if (online) onlinePanel?.setStatus(onlineStatus(online));

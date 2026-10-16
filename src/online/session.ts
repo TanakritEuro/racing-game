@@ -38,6 +38,9 @@ import { parseMessage, PROTOCOL, type Message } from './protocol';
 import { RemoteCar } from './remoteCar';
 import { createState, packState, unpackState, type CarState } from './state';
 import type { Conditions } from '../track/weather';
+import type { WearRate } from '../vehicle/wear';
+import { raceFuel } from '../race/race';
+import { PitCalls } from '../race/pitCalls';
 
 export type Role = 'host' | 'guest';
 
@@ -48,8 +51,9 @@ export interface OnlineSetup {
   track: string;
   laps: number;
   opponents: number;
-  /** The weather (the host's choice). */
+  /** The weather and tyre wear (the host's choice). */
   conditions: Conditions;
+  wear: WearRate;
   /** This player's car and the other's (car names). The AI drive the host's. */
   mine: string;
   theirs: string;
@@ -79,7 +83,7 @@ function buffered(link: Link, setup: Omit<OnlineSetup, 'inbox'>): OnlineSetup {
  */
 export function hostHandshake(
   link: Link,
-  race: { track: string; laps: number; car: string; opponents: number; conditions: Conditions },
+  race: { track: string; laps: number; car: string; opponents: number; conditions: Conditions; wear: WearRate },
   cars: readonly string[],
 ): Promise<OnlineSetup> {
   return new Promise((resolve, reject) => {
@@ -100,8 +104,8 @@ export function hostHandshake(
         return;
       }
       const opponents = Math.max(0, Math.min(MAX_OPPONENTS, race.opponents));
-      link.send({ type: 'welcome', track: race.track, laps: race.laps, car: race.car, opponents, conditions: race.conditions });
-      resolve(buffered(link, { role: 'host', track: race.track, laps: race.laps, opponents, conditions: race.conditions, mine: race.car, theirs: m.car }));
+      link.send({ type: 'welcome', track: race.track, laps: race.laps, car: race.car, opponents, conditions: race.conditions, wear: race.wear });
+      resolve(buffered(link, { role: 'host', track: race.track, laps: race.laps, opponents, conditions: race.conditions, wear: race.wear, mine: race.car, theirs: m.car }));
     };
   });
 }
@@ -123,7 +127,7 @@ export function guestHandshake(link: Link, car: string, tracks: readonly string[
           reject(new OnlineError(reason));
           return;
         }
-        resolve(buffered(link, { role: 'guest', track: m.track, laps: m.laps, opponents: m.opponents, conditions: m.conditions, mine: car, theirs: m.car }));
+        resolve(buffered(link, { role: 'guest', track: m.track, laps: m.laps, opponents: m.opponents, conditions: m.conditions, wear: m.wear, mine: car, theirs: m.car }));
       }
     };
     link.send({ type: 'hello', version: PROTOCOL, car });
@@ -177,6 +181,8 @@ export class OnlineRace {
   controls: Controls[] = [];
 
   private readonly traffic: Traffic | null = null;
+  /** The pit wall's BOX calls for this side's cars (its AI act on their own). */
+  private readonly pitWall: PitCalls;
   /** Traffic sees the simulated cars and the other player's. */
   private readonly movers: Mover[];
   /** Best laps the other side reported at the flag, by car id. */
@@ -220,7 +226,9 @@ export class OnlineRace {
     const own = host ? [0, ...ai] : [1];
     const proxies = host ? [1] : [0, ...ai];
     const stock = options.stock ?? mine;
-    this.sim = new Simulation(track, stock, { cars: own.length, slots: own.map(slot), field: this.count, defs: [mine], conditions: setup.conditions });
+    this.sim = new Simulation(track, stock, { cars: own.length, slots: own.map(slot), field: this.count, defs: [mine], conditions: setup.conditions, wear: setup.wear });
+    this.pitWall = new PitCalls(own.length);
+    this.refuel();
     for (const entry of proxies) {
       this.sim.addProxy(theirs, restingPose(theirs, this.sim.slotPose(slot(entry))));
       this.remotes.push(new RemoteCar());
@@ -296,6 +304,20 @@ export class OnlineRace {
   get waitingFor(): 'player' | 'clock' | null {
     if (this.phase !== 'waiting') return null;
     return this.theyAreReady && !this.synced ? 'clock' : 'player';
+  }
+
+  /** This player should come in for tyres this lap. */
+  get boxCall(): boolean {
+    return this.pitWall.box[0];
+  }
+
+  /** Every car of this side's fuelled for the race, on fresh tyres. */
+  private refuel(): void {
+    this.pitWall.reset();
+    for (const car of this.sim.cars) {
+      car.setFuel(raceFuel(car.def, this.track, this.setup.laps));
+      car.changeTyres();
+    }
   }
 
   /** The car id of simulated car `k`, and of proxy `j`. */
@@ -431,6 +453,7 @@ export class OnlineRace {
     // States go out once they can carry the host's time (the guest's after the sync).
     if (sim.steps % TUNING.online.stateEvery === 0 && this.synced && !this.closed) sim.cars.forEach((_, k) => this.sendState(k));
     if (held) return;
+    this.pitWall.update(sim, this.setup.laps, (k) => this.finishTimes[this.idOfCar(k)] !== null, [null, ...this.drivers]);
     sim.timers.forEach((t, k) => {
       if (t.laps > this.lapsBefore[k]) this.crossings[k].push(now);
       const id = this.idOfCar(k);
@@ -468,9 +491,11 @@ export class OnlineRace {
       const crossings = this.crossings[k];
       const at = Math.min(crossings[this.setup.laps - 1] ?? Infinity, crossings.find((t) => t > first) ?? Infinity);
       if (!Number.isFinite(at)) return;
-      this.finishTimes[id] = at - outAt;
+      // Penalties are served at the flag.
+      const time = at - outAt + (this.sim.pits?.state[k].penalty ?? 0);
+      this.finishTimes[id] = time;
       first = Math.min(first, at);
-      if (!this.closed) this.link.send({ type: 'finish', car: this.wire(id), time: at - outAt, best: timer.bestLap });
+      if (!this.closed) this.link.send({ type: 'finish', car: this.wire(id), time, best: timer.bestLap });
     });
     const all = this.finishTimes.every((t) => t !== null);
     if (all || this.now >= first + TUNING.race.classifyAfter) this.phase = 'finished';
@@ -622,6 +647,7 @@ export class OnlineRace {
     if (this.phase !== 'waiting') {
       this.sim.restart();
       for (const t of this.sim.timers) t.laps = 0;
+      this.refuel();
       this.drivers.forEach((d) => d.reset());
       this.traffic?.reset();
       this.crossings = this.sim.cars.map(() => []);

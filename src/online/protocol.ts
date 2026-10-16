@@ -5,14 +5,15 @@
 // Bump PROTOCOL whenever a message changes: mismatched versions refuse to race.
 
 import { CONDITIONS, type Conditions } from '../track/weather';
+import { WEAR_RATES, type WearRate } from '../vehicle/wear';
 
-export const PROTOCOL = 3;
+export const PROTOCOL = 4;
 
 export type Message =
   /** Guest → host on connecting: its version and the car it will drive. */
   | { type: 'hello'; version: number; car: string }
-  /** Host → guest: the race, the host's car (the AI's too), how many AI opponents, and the weather. */
-  | { type: 'welcome'; track: string; laps: number; car: string; opponents: number; conditions: Conditions }
+  /** Host → guest: the race, the host's car (the AI's too), how many AI opponents, the weather and tyre wear. */
+  | { type: 'welcome'; track: string; laps: number; car: string; opponents: number; conditions: Conditions; wear: WearRate }
   | { type: 'reject'; reason: string }
   /** The circuit is built and the car is on the grid. */
   | { type: 'ready' }
@@ -44,8 +45,13 @@ export function parseMessage(raw: unknown): Message | null {
     case 'hello':
       return isNumber(raw.version) && isString(raw.car, 40) ? { type: 'hello', version: raw.version, car: raw.car } : null;
     case 'welcome':
-      return isString(raw.track, 40) && isCount(raw.laps, 1, 50) && isString(raw.car, 40) && isCount(raw.opponents, 0, 7) && CONDITIONS.includes(raw.conditions as Conditions)
-        ? { type: 'welcome', track: raw.track, laps: raw.laps, car: raw.car, opponents: raw.opponents, conditions: raw.conditions as Conditions }
+      return isString(raw.track, 40) &&
+        isCount(raw.laps, 1, 50) &&
+        isString(raw.car, 40) &&
+        isCount(raw.opponents, 0, 7) &&
+        CONDITIONS.includes(raw.conditions as Conditions) &&
+        WEAR_RATES.includes(raw.wear as WearRate)
+        ? { type: 'welcome', track: raw.track, laps: raw.laps, car: raw.car, opponents: raw.opponents, conditions: raw.conditions as Conditions, wear: raw.wear as WearRate }
         : null;
     case 'reject':
       return isString(raw.reason) ? { type: 'reject', reason: raw.reason } : null;

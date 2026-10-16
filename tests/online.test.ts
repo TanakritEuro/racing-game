@@ -27,7 +27,7 @@ async function pair(laps = 1, opponents = 0, conditions: Conditions = 'dry') {
   track ??= buildTrack(TEST_CIRCUIT);
   const line = loopback({ delay: 0.05, jitter: 0.02, seed: 3 });
   const clock = { now: 0 };
-  const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps, car: 'Kestrel', opponents, conditions }, NAMES);
+  const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps, car: 'Kestrel', opponents, conditions, wear: 'normal' }, NAMES);
   const guest = guestHandshake(line.b, 'Wren', TRACKS, NAMES);
   await pump(line, clock, 0.3);
   const [hs, gs] = await Promise.all([host, guest]);
@@ -36,6 +36,7 @@ async function pair(laps = 1, opponents = 0, conditions: Conditions = 'dry') {
   expect(gs.laps).toBe(laps);
   expect(gs.opponents).toBe(opponents);
   expect(gs.conditions).toBe(conditions);
+  expect(gs.wear).toBe('normal');
   const h = new OnlineRace(line.a, hs, track, KESTREL, WREN, { clock: () => clock.now + AHEAD, seed: 5, difficulty: 'hard' });
   // The guest takes a little longer to build its world.
   await pump(line, clock, 0.4);
@@ -226,12 +227,17 @@ describe('an online race', () => {
     expect(h.sim.conditions).toBe('wet');
     expect(g.sim.conditions).toBe('wet');
     expect(h.drivers.length).toBe(2);
+    // Tyres wear (the host chose normal) and every car carries the race's fuel.
+    for (const car of [...h.sim.cars, ...g.sim.cars]) {
+      expect(car.wearRate).toBe(1);
+      expect(car.fuel).toBeGreaterThan(0);
+    }
   });
 
   it('turns away a guest with another version', async () => {
     const line = loopback({ delay: 0.02 });
     const clock = { now: 0 };
-    const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps: 3, car: 'Kestrel', opponents: 0, conditions: 'dry' }, NAMES);
+    const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps: 3, car: 'Kestrel', opponents: 0, conditions: 'dry', wear: 'off' }, NAMES);
     const heard: (Message | null)[] = [];
     line.b.onMessage = (raw) => heard.push(parseMessage(raw));
     line.b.send({ type: 'hello', version: 0, car: 'Wren' });

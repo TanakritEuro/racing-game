@@ -7,7 +7,7 @@ describe('protocol', () => {
   it('passes every message type through a structured clone unchanged', () => {
     const all: Message[] = [
       { type: 'hello', version: PROTOCOL, car: 'Kestrel' },
-      { type: 'welcome', track: 'saltmarsh', laps: 3, car: 'Wren', opponents: 3, conditions: 'wet' },
+      { type: 'welcome', track: 'saltmarsh', laps: 3, car: 'Wren', opponents: 3, conditions: 'wet', wear: 'high' },
       { type: 'reject', reason: 'full' },
       { type: 'ready' },
       { type: 'ping', t: 1.5 },
@@ -32,7 +32,8 @@ describe('protocol', () => {
       { type: 'welcome', track: 'saltmarsh', laps: 2.5, car: 'Wren', opponents: 0, conditions: 'dry' },
       { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 8, conditions: 'dry' },
       { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0 },
-      { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0, conditions: 'snow' },
+      { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0, conditions: 'snow', wear: 'off' },
+      { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0, conditions: 'dry', wear: 'extreme' },
       { type: 'ping', t: Number.NaN },
       { type: 'lights', outAt: Infinity, wait: 1 },
       { type: 'lights', outAt: 3, wait: -1 },

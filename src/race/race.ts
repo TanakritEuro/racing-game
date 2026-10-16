@@ -15,8 +15,7 @@ import type { CarDef } from '../vehicle/carDef';
 import { KESTREL } from '../vehicle/cars';
 import type { Conditions } from '../track/weather';
 import type { WearRate } from '../vehicle/wear';
-import { shouldStop, stopCost } from '../ai/pitStrategy';
-import { pitLane } from '../track/pitLane';
+import { PitCalls } from './pitCalls';
 
 export interface RaceOptions {
   /** AI cars (0–7). */
@@ -109,6 +108,7 @@ export class Race {
     // The player in their slot; the AI in the others, in order (unless a championship says).
     const slots = options.slots?.slice(0, count) ?? [playerSlot, ...Array.from({ length: count }, (_, s) => s).filter((s) => s !== playerSlot)];
     this.sim = new Simulation(track, def, { cars: count, slots, defs: [playerDef], conditions: options.conditions, wear: options.wear });
+    this.pitWall = new PitCalls(count);
     this.refuel();
     this.rng = createRng(options.seed);
     const skills = fieldSkills(options.difficulty, count - 1, this.rng);
@@ -124,48 +124,16 @@ export class Race {
     return this.options.laps;
   }
 
-  /**
-   * Once a lap, at the decision point before the pit entry: each car's tyres against the laps
-   * left. A car that should stop gets the BOX call; an AI car acts on it.
-   */
-  private pitCalls(): void {
-    const { sim, track } = this;
-    const lane = pitLane(track);
-    if (!lane || !sim.pits || sim.car.wearRate === 0) return;
-    const A = TUNING.ai.pits;
-    const n = track.samples.length;
-    const spacing = track.length / n;
-    sim.cars.forEach((car, k) => {
-      const timer = sim.timers[k];
-      const rec = this.wearLog[k];
-      const toEntry = ((lane.first - timer.index + n) % n) * spacing;
-      // Past the entry: the call has been answered (or ignored).
-      if (toEntry > A.decide + 50) this.boxCalls[k] = false;
-      if (toEntry > A.decide || toEntry < A.decide - 40 || rec.lap === timer.laps || this.finishTimes[k] !== null) return;
-      rec.lap = timer.laps;
-      const wear = Math.max(...car.wheels.map((w) => w.wear));
-      // Wear since the last lap's decision (the first time, since the start: about a lap).
-      const perLap = Math.max(0, wear - rec.wear);
-      rec.wear = wear;
-      const lapTime = timer.lastLap ?? track.length / 45;
-      const stop = shouldStop({ wear, perLap, lapsLeft: this.options.laps - (timer.laps + 1), lapTime, stopCost: stopCost(lane, track.length / lapTime) });
-      this.boxCalls[k] = stop;
-      const d = this.drivers[k];
-      if (stop && d && !d.pit) d.pit = { lane, state: sim.pits!.state[k], leaving: false };
-    });
+  /** The pit wall's BOX calls (the AI acts on its own). */
+  readonly pitWall: PitCalls;
+  /** Each car should come in this lap. */
+  get boxCalls(): readonly boolean[] {
+    return this.pitWall.box;
   }
-
-  /** Each car's wear at its last pit decision, and the lap it was made on. */
-  private readonly wearLog: { wear: number; lap: number }[] = [];
-  /** Each car should come in this lap (the BOX call; the AI acts on it). */
-  readonly boxCalls: boolean[] = [];
 
   /** Every car fuelled for the race, on fresh tyres. */
   private refuel(): void {
-    this.sim.cars.forEach((_, k) => {
-      this.wearLog[k] = { wear: 0, lap: -1 };
-      this.boxCalls[k] = false;
-    });
+    this.pitWall.reset();
     for (const car of this.sim.cars) {
       car.setFuel(raceFuel(car.def, this.track, this.options.laps));
       car.changeTyres();
@@ -215,7 +183,7 @@ export class Race {
     });
     sim.step(all);
     this.controls = all;
-    if (this.phase === 'racing') this.pitCalls();
+    if (this.phase === 'racing') this.pitWall.update(sim, this.options.laps, (k) => this.finishTimes[k] !== null, this.drivers);
     this.drivers.forEach((d, k) => {
       if (d?.stuck) {
         this.recoveries++;
