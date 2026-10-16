@@ -1,6 +1,24 @@
 # Milestone 7 plan: championship
 
-## Status: approved as written, being built
+## Status: built, in playtesting
+
+Approved as proposed: a championship rather than online, four rounds at 5 / 3 / 3 / 3 laps,
+reverse championship order on the grid after round 1, points 10-8-6-5-4-3-2-1.
+
+Measured: a whole season with one lap a round runs headless in about 40 s.
+
+Where the build differs from the plan below:
+
+- **The season stores only the AI's skills**, not names and colours: entry k is car k in
+  every round, so its name and colour follow from the entry number as in a single race.
+- **A finished round can't be run again:** once the result is recorded (when every car is
+  classified), restart is refused. Restarting before then just reruns the round.
+- **The soak test found a real bug:** traffic advice asked for before a car had been placed
+  on the track read the racing line at index −1, giving the driver a NaN aim; one NaN
+  control made the car's state NaN for good (and the vehicle maths very slow). Traffic now
+  waits until it knows where a car is, the driver ignores a non-finite aim, and the car
+  model treats any non-finite control as zero (`car.test.ts`, "bad input"). Only the
+  autopilot and the tests could reach it; the AI cars were always placed first.
 
 The roadmap's last milestone is optional: a short championship against the AI, *or*
 two-player online racing. This plan proposes the **championship** (why, and how online

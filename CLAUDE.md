@@ -24,8 +24,8 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 ## Current state
 
 Milestones 1–6 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
-AI drivers, presentation) are done; **Milestone 7 (a championship) is planned**
-(`docs/milestone-7.md`).
+AI drivers, presentation) are done; **Milestone 7 (a championship) is built and in
+playtesting** (`docs/milestone-7.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -71,6 +71,12 @@ three nearest), tyre squeal, kerb rumble, wind, gearshift pops and knocks. A das
 rev counter and shift lights (`ui/dashboard.ts`). A start menu (mode, circuit, car, race
 options), Esc for pause and settings (`ui/menu.ts`); a link with `?track`, `?car` or `?mode`
 skips the menu.
+
+A championship (`race/championship.ts`): four rounds (Proving Ground 5 laps, Saltmarsh,
+Ridgeback and Harrowmere 3) against the same seven AI drivers, their skills drawn once per
+season; points 10-8-6-5-4-3-2-1; round 1's grid with you mid-field, then reverse championship
+order. Saved in localStorage (`storage/season.ts`); `?season` runs its next round; the
+standings follow each round (`ui/standings.ts`).
 
 Keyboard steering goes through an assist (`drivers/steeringAssist.ts`: speed-sensitive lock,
 counter-steer help, toggleable); gamepads steer the rack directly with analogue triggers
@@ -175,6 +181,8 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   backward passes), `driver.ts` (`AiDriver`: steering, speed, slides, mistakes, recovery),
   `skill.ts` (difficulty and skills), `traffic.ts` (track positions, following, passing).
 - `src/race/race.ts` — `Race`: grid, start lights, AI and traffic, positions, gaps, finish.
+- `src/race/championship.ts` — `Season`: rounds, the field's skills, points, standings and
+  tie-breaks, the grid, each round's race options, JSON; `storage/season.ts` keeps it.
 - `src/race/timing.ts` — lap timer, sectors, live delta, track limits and time formatting.
 - `src/race/recording.ts` — lap recordings (30 Hz frames of pose and readouts), sampling
   between frames, encode / decode; `session.ts` — `TimeTrial`: records laps, keeps the
@@ -188,7 +196,8 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   `terrainView.ts`, `scenery.ts`, `minimap.ts`.
 - `src/ui/timingHud.ts` — lap, delta, sector splits, last and best; `raceHud.ts` —
   position, lap, gaps, start lights, results; `dashboard.ts` — rev counter, speed, gear, aid
-  lights; `menu.ts` — start, pause and settings menus.
+  lights; `menu.ts` — start, pause and settings menus; `standings.ts` — championship
+  standings between rounds.
 - `src/render/carModels.ts` — loads, fits and paints the car models; `render/effects/` —
   `skidMarks.ts`, `smoke.ts`, `sparks.ts` and `index.ts` (`Effects`).
 - `src/audio/` — `sound.ts` (context, volume, knocks and pops), `carVoice.ts` (one car's

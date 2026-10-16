@@ -4,7 +4,8 @@ A 3D racing game for the browser with real car physics, built with Three.js, Rap
 Three invented circuits: fast Harrowmere, tight Saltmarsh and hilly Ridgeback. Time trial
 with sectors, a live delta, a ghost of your best lap (kept in the browser) and replays from
 trackside cameras. Race up to seven AI drivers who drive the same car you do. Three cars,
-synthesised engine and tyre sounds, skid marks, smoke and sparks.
+synthesised engine and tyre sounds, skid marks, smoke and sparks. A four-round championship
+against the same seven drivers, kept between visits.
 
 ```bash
 npm install
