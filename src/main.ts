@@ -44,6 +44,8 @@ import { cleanRoomCode, joinRoom, openRoom, type Link } from './online/link';
 import { guestHandshake, hostHandshake, OnlineError, OnlineRace, type OnlineSetup } from './online/session';
 import { OnlinePanel } from './ui/onlinePanel';
 import { WeatherView } from './render/weatherView';
+import { TyresHud } from './ui/tyresHud';
+import { WEAR_RATES } from './vehicle/wear';
 import { CONDITIONS, wetness, type Conditions } from './track/weather';
 import { Garage } from './ui/garage';
 import { SetupStore } from './storage/setups';
@@ -163,6 +165,7 @@ function raceOptions(p: URLSearchParams, opponents = DEFAULT_RACE.opponents): Ra
     // A different race each time, unless ?seed= asks for a particular one.
     seed: int('seed', 1, 2 ** 30, 1 + Math.floor(Math.random() * 2 ** 30)),
     conditions: linkConditions(p),
+    wear: WEAR_RATES.find((w) => w === p.get('wear')) ?? 'off',
   };
 }
 
@@ -244,6 +247,7 @@ let controls = NO_CONTROLS;
 const telemetry = new Telemetry(document.body);
 const timing = new TimingHud(document.querySelector<HTMLDivElement>('#timing')!);
 const minimap = new Minimap(document.querySelector<HTMLDivElement>('#hud')!, track);
+const tyresHud = new TyresHud(document.querySelector<HTMLDivElement>('#hud')!);
 telemetry.visible = params.has('telemetry');
 // ?line draws the AI's racing line, coloured by its target speed.
 if (params.has('line')) {
@@ -640,6 +644,8 @@ function updateHud(dt: number): void {
     dt,
   );
   timing.update(sim.timer, sim.time);
+  // BOX: a tyre past 70 % (until the AI's strategy says when).
+  tyresHud.update(sim.car, sim.pits?.state[0] ?? null, (race ?? online)?.phase === 'racing' && sim.car.wheels.some((w) => w.wear > 0.7));
   const racing = race ?? online;
   if (racing) raceHud?.update(racing);
   if (online) onlinePanel?.setStatus(onlineStatus(online));

@@ -103,6 +103,17 @@ export const TUNING = {
     boxSpacing: 12,
     /** The lane's road sits this far above the run-off under it (m). */
     lift: 0.01,
+    /** The speed limit (m/s, 60 km/h); the limiter cuts the throttle within `limiterBand` of it. Over by `tolerance` is a `penalty` (s). */
+    limit: 60 / 3.6,
+    limiterBand: 0.3,
+    tolerance: 1,
+    penalty: 5,
+    /** The limit lines: this far into each taper (share of its length). */
+    limitLine: 0.6,
+    /** A car slower than this (m/s) within its box (`boxLength` m along) is serviced, for `service` s. */
+    stopSpeed: 0.5,
+    boxLength: 6,
+    service: 4,
   },
   /** Fuel: the car's mass and centre of mass follow the fuel aboard once it changes by this much (kg). */
   fuel: { massStep: 0.25 },

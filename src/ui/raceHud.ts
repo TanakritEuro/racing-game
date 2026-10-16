@@ -97,9 +97,10 @@ function resultsTable(rows: Standing[], final: boolean, footer: string, name: (c
   const leader = rows[0];
   const line = (r: Standing) => {
     const time = !r.finished ? 'running' : r === leader ? formatLapTime(r.time) : r.lapsDown > 0 ? `+${r.lapsDown} lap${r.lapsDown > 1 ? 's' : ''}` : `+${r.gap.toFixed(3)}`;
-    return `<tr class="${r.car === 0 ? 'me' : ''}"><td>${r.position}</td><td>${name(r.car)}</td><td>${time}</td><td>${formatLapTime(r.bestLap)}</td></tr>`;
+    const penalty = r.penalty > 0 ? ` <small>(${r.penalty} s pen.)</small>` : '';
+    return `<tr class="${r.car === 0 ? 'me' : ''}"><td>${r.position}</td><td>${name(r.car)}</td><td>${time}${penalty}</td><td>${formatLapTime(r.bestLap)}</td><td>${r.stops}</td></tr>`;
   };
   return `<h2>${final ? 'RESULTS' : 'PROVISIONAL RESULTS'}</h2>
-    <table><thead><tr><th></th><th>Driver</th><th>Time</th><th>Best lap</th></tr></thead><tbody>${rows.map(line).join('')}</tbody></table>
+    <table><thead><tr><th></th><th>Driver</th><th>Time</th><th>Best lap</th><th>Stops</th></tr></thead><tbody>${rows.map(line).join('')}</tbody></table>
     <p>${footer}</p>`;
 }

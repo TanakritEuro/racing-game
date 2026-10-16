@@ -358,6 +358,8 @@ export class OnlineRace {
         bestLap: timer ? timer.bestLap : this.reportedBest[car],
         finished: time !== null,
         time,
+        stops: where.car === undefined ? 0 : (this.sim.pits?.state[where.car].stops ?? 0),
+        penalty: where.car === undefined ? 0 : (this.sim.pits?.state[where.car].penalty ?? 0),
       };
     });
     rows.sort((a, b) => {

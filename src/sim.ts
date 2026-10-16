@@ -11,6 +11,8 @@ import { LapTimer } from './race/timing';
 import { nearestSample, type Track, type TrackSample } from './track/track';
 import { wetness, type Conditions } from './track/weather';
 import { wearFactor, type WearRate } from './vehicle/wear';
+import { PitStops } from './race/pits';
+import { pitLane } from './track/pitLane';
 import { Car, poseOnTrack, type Controls, type Pose } from './vehicle/car';
 import { copyPose, createPose, type CarPose } from './vehicle/pose';
 import type { CarDef } from './vehicle/carDef';
@@ -82,6 +84,8 @@ export class Simulation {
   /** Simulation time (s). */
   time = 0;
   steps = 0;
+  /** Pit stops for every car (null on a circuit without a pit lane). */
+  readonly pits: PitStops | null;
   /** Other players' cars (online), in the order they were added. */
   readonly proxies: Proxy[] = [];
   /** This step's hard knocks (reused objects: copy what you keep). */
@@ -105,6 +109,9 @@ export class Simulation {
     const count = options.cars ?? 1;
     this.slots = options.slots ?? Array.from({ length: count }, (_, i) => i);
     this.lone = (options.field ?? count) === 1;
+    const lane = pitLane(track);
+    // Each car's box: its grid slot's.
+    this.pits = lane ? new PitStops(track, lane, Array.from({ length: count }, (_, i) => this.slots[i] ?? i)) : null;
     for (let i = 0; i < count; i++) {
       const pose = this.gridPose(i);
       this.cars.push(new Car(this.physics, pose, options.defs?.[i] ?? carDef));
@@ -153,6 +160,7 @@ export class Simulation {
   restart(): void {
     this.cars.forEach((car, i) => {
       const pose = this.gridPose(i);
+      this.pits?.reset(i, true);
       car.reset(pose);
       this.timers[i].restart(pose.position.x, pose.position.z);
       this.settlePose(i);
@@ -189,7 +197,8 @@ export class Simulation {
     const list = Array.isArray(controls) ? (controls as readonly Controls[]) : null;
     this.cars.forEach((car, i) => {
       copyPose(this.poses[i].current, this.poses[i].previous);
-      car.update(list ? list[i] : (controls as Controls), PHYSICS_STEP);
+      const wanted = list ? list[i] : (controls as Controls);
+      car.update(this.pits ? this.pits.control(i, car, wanted) : wanted, PHYSICS_STEP);
     });
     // Proxies glide to their targets over the step (kinematic: they push, nothing pushes them).
     for (const p of this.proxies) {
@@ -206,6 +215,7 @@ export class Simulation {
       car.capturePose(this.poses[i].current);
       const p = car.position;
       this.timers[i].update(p.x, p.z, this.time, this.isOffTrack(i));
+      this.pits?.after(i, car, PHYSICS_STEP);
     });
   }
 
@@ -229,6 +239,7 @@ export class Simulation {
     const p = this.cars[i].position;
     const k = nearestSample(this.track, p.x, p.z, this.timers[i].index);
     this.cars[i].reset(poseOnTrack(this.track.samples[k]));
+    this.pits?.reset(i);
     this.settlePose(i);
   }
 

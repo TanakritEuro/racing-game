@@ -848,3 +848,68 @@ body.standings-up .race-panel {
     display: none;
   }
 }
+
+/* Tyres, fuel and the pit limiter (races with wear or fuel). */
+.tyres-panel {
+  position: absolute;
+  right: 18px;
+  bottom: 236px;
+  width: 112px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(10, 14, 20, 0.7);
+  color: #fff;
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.tyres-panel.hidden {
+  display: none;
+}
+
+.tyres-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 22px;
+  padding: 2px 10px 6px;
+}
+
+.tyre {
+  height: 26px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tyres-fuel {
+  opacity: 0.85;
+}
+
+.tyres-limiter,
+.tyres-box {
+  display: none;
+  margin-top: 6px;
+  padding: 3px 0;
+  border-radius: 4px;
+}
+
+.tyres-limiter.on {
+  display: block;
+  background: #2f6fd8;
+}
+
+.tyres-box.on {
+  display: block;
+  background: #d8342c;
+  font-size: 14px;
+  animation: box-flash 0.8s steps(2) infinite;
+}
+
+@keyframes box-flash {
+  50% {
+    opacity: 0.35;
+  }
+}

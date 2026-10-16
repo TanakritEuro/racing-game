@@ -14,6 +14,7 @@ import { controls, type Controls } from '../vehicle/car';
 import type { CarDef } from '../vehicle/carDef';
 import { KESTREL } from '../vehicle/cars';
 import type { Conditions } from '../track/weather';
+import type { WearRate } from '../vehicle/wear';
 
 export interface RaceOptions {
   /** AI cars (0–7). */
@@ -28,6 +29,13 @@ export interface RaceOptions {
   skills?: readonly (Skill | null)[];
   /** The weather (default dry). */
   conditions?: Conditions;
+  /** How fast tyres wear (default off). */
+  wear?: WearRate;
+}
+
+/** Fuel for `laps` of `track` in `def` (kg), with its margin. */
+export function raceFuel(def: CarDef, track: Track, laps: number): number {
+  return ((laps + 1) * track.length * def.fuel.perKm) / 1000;
 }
 
 export const DEFAULT_RACE: Readonly<RaceOptions> = { opponents: 7, laps: 3, difficulty: 'medium', seed: 1 };
@@ -50,8 +58,11 @@ export interface Standing {
   lapsDown: number;
   bestLap: number | null;
   finished: boolean;
-  /** Race time at the flag (s). */
+  /** Race time at the flag (s), penalties included. */
   time: number | null;
+  /** Pit stops made, and penalty seconds. */
+  stops: number;
+  penalty: number;
 }
 
 /** An AI car on the grid. */
@@ -95,7 +106,8 @@ export class Race {
     const playerSlot = Math.min(count - 1, options.playerSlot ?? Math.floor(count / 2));
     // The player in their slot; the AI in the others, in order (unless a championship says).
     const slots = options.slots?.slice(0, count) ?? [playerSlot, ...Array.from({ length: count }, (_, s) => s).filter((s) => s !== playerSlot)];
-    this.sim = new Simulation(track, def, { cars: count, slots, defs: [playerDef], conditions: options.conditions });
+    this.sim = new Simulation(track, def, { cars: count, slots, defs: [playerDef], conditions: options.conditions, wear: options.wear });
+    this.refuel();
     this.rng = createRng(options.seed);
     const skills = fieldSkills(options.difficulty, count - 1, this.rng);
     this.skills = options.skills ? options.skills.slice(0, count).map((s, k) => (k === 0 ? null : s)) : [null, ...skills];
@@ -108,6 +120,14 @@ export class Race {
   /** Laps in the race. */
   get laps(): number {
     return this.options.laps;
+  }
+
+  /** Every car fuelled for the race, on fresh tyres. */
+  private refuel(): void {
+    for (const car of this.sim.cars) {
+      car.setFuel(raceFuel(car.def, this.track, this.options.laps));
+      car.changeTyres();
+    }
   }
 
   /** Lights lit (0–5) during the countdown; 0 once they are out. */
@@ -126,6 +146,7 @@ export class Race {
   restart(): void {
     this.sim.restart();
     for (const t of this.sim.timers) t.laps = 0;
+    this.refuel();
     this.gridTime = this.sim.time;
     this.drivers.forEach((d) => d?.reset());
     this.traffic.reset();
@@ -183,6 +204,8 @@ export class Race {
         bestLap: timer.bestLap,
         finished: this.finishTimes[k] !== null,
         time: this.finishTimes[k],
+        stops: sim.pits?.state[k].stops ?? 0,
+        penalty: sim.pits?.state[k].penalty ?? 0,
       };
     });
     rows.sort((a, b) => {
@@ -230,7 +253,8 @@ export class Race {
       const laps = sim.timers[k].laps;
       // The leader takes the flag after the race distance; everyone else on their next line crossing.
       if (laps >= options.laps || (this.leaderDone !== null && laps > this.lapsAtLeaderFinish[k])) {
-        this.finishTimes[k] = now - this.startTime!;
+        // Penalties are served at the flag.
+        this.finishTimes[k] = now - this.startTime! + (sim.pits?.state[k].penalty ?? 0);
         if (this.leaderDone === null) {
           this.leaderDone = now;
           this.lapsAtLeaderFinish = sim.timers.map((t) => t.laps);
