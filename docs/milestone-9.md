@@ -1,6 +1,10 @@
 # Milestone 9 plan: car setup (the garage)
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (the anti-roll bars' effect mid-corner, feeling
+the wings, a rearward brake bias into the hairpins, the lowest ride height over the crests,
+whether the garage explains itself) stay open.
 
 Approved as written: car setup next, saved per car and circuit, the eleven settings, no
 presets, one best lap per circuit and car whatever the setup.
