@@ -23,9 +23,9 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 ## Current state
 
-Milestones 1–9 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
-AI drivers, presentation, a championship, two-player online racing, car setup) are done;
-**Milestone 10 (weather) is built and in playtesting** (`docs/milestone-10.md`).
+Milestones 1–10 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
+AI drivers, presentation, a championship, two-player online racing, car setup, weather) are
+done; **Milestone 11 (tyre wear, fuel and pit stops) is planned** (`docs/milestone-11.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -331,3 +331,6 @@ structures, tests) and check it with me.
 10. **Weather.** Dry, damp or wet: less grip per surface, slippery kerbs, standing water in
     the dips (aquaplaning), the AI driving to the conditions, rain, spray and a wet road on
     screen, bests per condition.
+11. **Tyre wear, fuel and pit stops.** Tyres wearing with the work they do (and a cliff),
+    fuel burning so the car lightens, a pit lane on every circuit with a limiter and boxes,
+    automatic tyre changes, the AI choosing when to stop; a wear option for races.

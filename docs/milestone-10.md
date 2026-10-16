@@ -1,6 +1,9 @@
 # Milestone 10 plan: weather
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (how the wet feels, the kerbs, standing water
+at speed and where it lies, the AI in the wet, the rain's look and frame rate) stay open.
 
 Approved as written: weather next, conditions fixed per session, the same tyres in every
 weather, championship weather drawn per round.
