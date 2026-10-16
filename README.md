@@ -8,7 +8,8 @@ synthesised engine and tyre sounds, skid marks, smoke and sparks. A four-round c
 against the same seven drivers, kept between visits. Race a friend online: one hosts and
 gets a four-character room code, the other joins with it, with or without AI drivers. Set
 your car up in the garage (springs, anti-roll bars, dampers, ride height, wings, brake bias,
-differential, gearing) for each circuit.
+differential, gearing) for each circuit. Race in the dry, the damp or the wet: less grip,
+slippery kerbs, standing water that floats the car at speed, rain and spray.
 
 ```bash
 npm install

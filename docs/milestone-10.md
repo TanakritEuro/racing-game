@@ -1,6 +1,36 @@
 # Milestone 10 plan: weather
 
-## Status: planned, waiting for your approval
+## Status: built, in playtesting
+
+Approved as written: weather next, conditions fixed per session, the same tyres in every
+weather, championship weather drawn per round.
+
+Measured (Kestrel, headless): on the skidpad 0.71 g wet against 0.89 g dry in the same 60 s
+run (80 %); stopping from 100 km/h with ABS takes 1.47 times the dry distance; in standing
+water the tyre has 25 % of the wet road's grip at 180 km/h and 83 % at 54 km/h. The AI laps
+every circuit in the wet without getting stuck, 11–14 % slower than in the dry: Harrowmere
+117.9 s, Saltmarsh 104.8 s, Ridgeback 120.6 s, Proving Ground 59.4 s. Checked in the browser:
+the rain, the overcast sky, the darker road, spray behind the car through Harrowmere's first
+puddle, the damp sky without rain, the Weather row and a wet start from the menu.
+
+Where the build differs from the plan below:
+
+- **Water also stands on long flat roads.** Dips alone gave puddles only at Harrowmere (two):
+  Saltmarsh and the Proving Ground are flat, and Ridgeback's one deep dip is on the start
+  straight. A flat road drains badly, so long flat stretches get a seeded puddle every
+  800 m or so. Now Harrowmere and Saltmarsh have three each, the Proving Ground one, and
+  Ridgeback none (it drains: it's never flat for long).
+- **A dip's depth is measured over 150 m** either side (over 50 m none were deep enough).
+- **Aquaplaning** starts at 72 km/h and is full by 162 km/h, leaving 30 % of the grip; the
+  AI goes through standing water at 137 km/h at most.
+- **Damp has no rain falling and no puddles**: a road drying after rain. Skid marks are
+  only left on a dry road; wet tyres hardly smoke and they throw up spray instead.
+- **The puddles sit 4 mm above the road**, not 1 mm, so the tread rays find them first.
+- **The HUD shows the weather beside the circuit's name**, and the garage's "best lap's
+  setup" is the best in the weather picked.
+- **Not measured:** the frame cost of rain and spray. The in-app browser was drawing only a
+  few frames a second, so there was nothing to compare. The rain is one draw call of 10 000
+  vertices, and spray uses the pooled smoke shader; watch the frame rate in your playtest.
 
 The roadmap's planned milestones are done, so this one is a proposal (other candidates are
 in question 1). Rain is the biggest change you can make to how a car feels without touching

@@ -25,7 +25,7 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 Milestones 1–9 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing, car setup) are done;
-**Milestone 10 (weather) is planned** (`docs/milestone-10.md`).
+**Milestone 10 (weather) is built and in playtesting** (`docs/milestone-10.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -98,6 +98,16 @@ and brake bias. Saved per car and circuit (`storage/setups.ts`); the garage
 (`ui/garage.ts`) opens from the start and pause menus. Only the player's car has a setup:
 the simulation takes a `CarDef` per car (`SimOptions.defs`), and the AI drives the car as
 designed. A best lap keeps the setup it was set with. `?setup=default` ignores the setup.
+
+Weather (`track/weather.ts`): dry, damp or wet for a whole session; its wetness (0, 0.5,
+1) scales every surface's grip towards its wet value (asphalt 72 %, painted kerbs 50 %).
+When wet, water stands in the dips and along long flat stretches (`track/puddles.ts`, seeded
+per circuit): colliders tagged `water`, where the tyre aquaplanes with speed. The AI's
+envelope and speed profile follow the conditions (`circuitAi(track, def, conditions)`). On
+screen (`render/weatherView.ts`): overcast sky and fog, rain round the camera, a darker
+glossier road, puddles, spray (`effects`), rain and tyre-swish sounds (`audio/rainVoice.ts`).
+Bests are kept per circuit, car and weather. Chosen in the start menu or `?weather=`; a
+championship draws each round's; online the host's.
 
 Keyboard steering goes through an assist (`drivers/steeringAssist.ts`: speed-sensitive lock,
 counter-steer help, toggleable); gamepads steer the rack directly with analogue triggers
@@ -195,6 +205,8 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   ratios and shift timing; locking torque for open / locked / limited-slip.
 - `src/vehicle/drivetrain.ts` — automatic and manual shifting, automatic clutch, idle and
   limiter, and the substep solver coupling engine, clutch, diff, brakes and driven wheels.
+- `src/track/weather.ts` — conditions, wetness, `surfaceGrip` (wet grip, aquaplaning);
+  `puddles.ts` — where water stands, and its strips.
 - `src/track/` — `track.ts` (spline, samples and frames, side profiles, nearest sample,
   lateral offset), `geometry.ts` (strips and sweeps: road, kerbs, run-off, barriers),
   `terrain.ts` (heightfield), `cameras.ts` (replay TV camera posts and their stretches), `corners.ts` (corners from curvature, kerb and gravel
@@ -217,6 +229,7 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/render/` — `scene.ts` (renderer, sky, sun), `trackView.ts`, `carView.ts`
   (placeholder car), `cameras.ts` (chase, bumper, hood), `tvCameras.ts` (replay camera),
   `ghostView.ts` (translucent ghost car), `lineView.ts` (`?line`), `telemetry.ts` (`?telemetry` overlay),
+  `weatherView.ts` (sky, fog, rain),
   `terrainView.ts`, `scenery.ts`, `minimap.ts`.
 - `src/ui/timingHud.ts` — lap, delta, sector splits, last and best; `raceHud.ts` —
   position, lap, gaps, start lights, results; `dashboard.ts` — rev counter, speed, gear, aid
@@ -226,7 +239,7 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   `skidMarks.ts`, `smoke.ts`, `sparks.ts` and `index.ts` (`Effects`).
 - `src/audio/` — `sound.ts` (context, volume, knocks and pops), `carVoice.ts` (one car's
   engine, squeal, rumble and wind), `mix.ts` (pure: car state → voice parameters),
-  `index.ts` (`GameAudio`).
+  `index.ts` (`GameAudio`), `rainVoice.ts` (rain and tyre swish).
 - `scripts/prepare-cars.mjs` — copies the kit's models into `public/models/cars/`.
 - `src/online/` — `link.ts` (PeerJS rooms, from five-a-side), `loopback.ts` (two linked ends
   in one process, with delay and jitter, for tests), `protocol.ts` (the messages, each checked
@@ -239,7 +252,7 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/main.ts` — entry point and frame loop; `?track=<id>`, `?telemetry`, `?debug`
   (exposes `sim`, `race`, `online`, `session()`, `step(controls)`, `replay()`, `autopilot`,
   `effects`, `sound()` and `stage` in the console), `?line`, `?autopilot`, `?mode=race` and
-  its options, `?season`, `?online`, `?setup=default`.
+  its options, `?season`, `?online`, `?setup=default`, `?weather=dry|damp|wet`.
 - `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
   line-following test driver (offset, curvature speed profile); `tracks.ts` has test-only
   layouts (skidpads, long oval, hill, kerbed oval, grass and gravel pads).
