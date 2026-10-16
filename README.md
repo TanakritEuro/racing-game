@@ -5,7 +5,8 @@ Three invented circuits: fast Harrowmere, tight Saltmarsh and hilly Ridgeback. T
 with sectors, a live delta, a ghost of your best lap (kept in the browser) and replays from
 trackside cameras. Race up to seven AI drivers who drive the same car you do. Three cars,
 synthesised engine and tyre sounds, skid marks, smoke and sparks. A four-round championship
-against the same seven drivers, kept between visits.
+against the same seven drivers, kept between visits. Race a friend online: one hosts and
+gets a four-character room code, the other joins with it, with or without AI drivers.
 
 ```bash
 npm install
@@ -32,7 +33,8 @@ Open http://localhost:5173. The start menu picks the mode, circuit and car; Esc 
 | Tab | Switch between time trial and a race (or open with `?mode=race`; options `&difficulty=easy\|medium\|hard&opponents=0..7&laps=3`) |
 | P / Shift+P | Replay the last lap / the best lap. In a replay: Space pause, ← / → skip, 1–4 speed (¼× to 2×), Esc back to driving |
 | U | Sound on or off |
-| Esc | Pause menu (resume, restart, settings, quit to the menu) |
+| Esc | Pause menu (resume, restart, settings, quit to the menu). Online, the race goes on |
+| Enter | Ask for a rematch after an online race |
 | T | Telemetry overlay (or open with `?telemetry`) |
 
 Gamepads work too: left stick steers, RT/LT throttle and brake, A handbrake, RB/LB shift,

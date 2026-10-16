@@ -25,7 +25,7 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 Milestones 1–6 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation) and 7 (a championship) are done; **Milestone 8 (two-player online
-racing) is planned** (`docs/milestone-8.md`).
+racing) is built and in playtesting** (`docs/milestone-8.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -78,6 +78,18 @@ season; points 10-8-6-5-4-3-2-1; round 1's grid with you mid-field, then reverse
 order. Saved in localStorage (`storage/season.ts`); `?season` runs its next round; the
 standings follow each round (`ui/standings.ts`).
 
+Online (`online/`, the start menu's Online, or `?online=host&track=&laps=&car=&opponents=&difficulty=`
+and `?online=join&code=&car=`): two players over PeerJS (the link ported from five-a-side,
+four-character room codes, heartbeats). Each browser simulates only its own cars (the guest
+its car; the host its car and any AI opponents) and sends their states 30 times a second;
+the other side's cars are kinematic proxies (`sim.addProxy`), placed from those states by
+`RemoteCar` (interpolated, dead-reckoned, corrections eased; a ghost while stale). The guest
+learns the host's clock from pings (`ClockSync`); `OnlineRace` (`online/session.ts`) steps
+both simulations in time with it, puts the lights out on the same step, collects every
+car's finishing time so both screens agree, and does rematches and leaving. No pausing
+online; Enter asks for a rematch. Tests run two races over a loopback with latency and
+jitter (`online/loopback.ts`).
+
 Keyboard steering goes through an assist (`drivers/steeringAssist.ts`: speed-sensitive lock,
 counter-steer help, toggleable); gamepads steer the rack directly with analogue triggers
 (`input/`). Chase, bumper and hood cameras; the car is drawn interpolated between physics
@@ -89,7 +101,8 @@ reverse in automatic), A/D or arrows to steer, Space handbrake, E/Q to shift up/
 automatic/manual, Z ABS, X traction control, V steering assist, C camera, R to put the car
 back on the track, Backspace restart from the grid, N next circuit, G ghost on/off, P replay
 the last lap (Shift+P the best; in a replay Space pause, ←/→ skip 2 s, 1–4 speed, Esc back),
-Tab race / time trial, U sound, Esc pause, T telemetry. Gamepad: left stick, RT/LT, A handbrake, RB/LB shift, Y
+Tab race / time trial, U sound, Esc pause (online: the menu, the race goes on), Enter
+rematch (online), T telemetry. Gamepad: left stick, RT/LT, A handbrake, RB/LB shift, Y
 camera, View/Back reset.
 
 Measured (tests): 0–100 km/h in ~6.5 s (aids on), ~235 km/h top speed, ~0.98 g on a 40 m
@@ -158,8 +171,8 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/math.ts` — vectors, quaternion rotation, smoothing, seeded PRNG.
 - `src/physics.ts` — Rapier world: terrain heightfield, road / kerb / run-off trimeshes,
   barriers, surface tags, collision groups (wheels only see ground).
-- `src/sim.ts` — `Simulation`: world, car, lap timer, fixed `step(controls)`, `recover()`,
-  `setGearboxMode()`.
+- `src/sim.ts` — `Simulation`: world, cars, lap timers, fixed `step(controls)`, `recover()`,
+  `setGearboxMode()`, contacts, and proxies (other players' cars, moved to a given pose).
 - `src/vehicle/car.ts` — chassis body, raycast suspension, the wheel substep loop (tyre
   forces, wheel spin, slip relaxation), force application, `Controls`.
 - `src/vehicle/carDef.ts` — `CarDef`, every number about one car; `cars.ts` — the cars (`KESTREL`).
@@ -204,12 +217,18 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   engine, squeal, rumble and wind), `mix.ts` (pure: car state → voice parameters),
   `index.ts` (`GameAudio`).
 - `scripts/prepare-cars.mjs` — copies the kit's models into `public/models/cars/`.
+- `src/online/` — `link.ts` (PeerJS rooms, from five-a-side), `loopback.ts` (two linked ends
+  in one process, with delay and jitter, for tests), `protocol.ts` (the messages, each checked
+  on arrival; `PROTOCOL`), `clock.ts` (`ClockSync`), `state.ts` (a car's state packed for the
+  wire), `remoteCar.ts` (`RemoteCar`: states → pose now), `session.ts` (handshakes and
+  `OnlineRace`). All but `link.ts` are pure (the clock is passed in); `ui/onlinePanel.ts`
+  shows the connecting screens and the status line over the race.
 - `src/input/` — `keyboard.ts`, `gamepad.ts`, `index.ts` (`PlayerInput`: both devices → `Controls`).
 - `src/settings.ts` — player settings in localStorage.
 - `src/main.ts` — entry point and frame loop; `?track=<id>`, `?telemetry`, `?debug`
-  (exposes `sim`, `race`, `session()`, `step(controls)`, `replay()`, `autopilot`, `effects`,
-  `sound()` and `stage` in the
-  console), `?line`, `?autopilot`, `?mode=race` and its options.
+  (exposes `sim`, `race`, `online`, `session()`, `step(controls)`, `replay()`, `autopilot`,
+  `effects`, `sound()` and `stage` in the console), `?line`, `?autopilot`, `?mode=race` and
+  its options, `?season`, `?online`.
 - `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
   line-following test driver (offset, curvature speed profile); `tracks.ts` has test-only
   layouts (skidpads, long oval, hill, kerbed oval, grass and gravel pads).

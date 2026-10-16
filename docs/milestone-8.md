@@ -1,6 +1,44 @@
 # Milestone 8 plan: two-player online racing
 
-## Status: approved as written, being built
+## Status: built, in playtesting
+
+Approved as proposed, AI opponents included (commit 6): each player simulates their own car,
+each picks their own car, matchmaking through the public PeerJS server.
+
+Measured over the loopback (50 ± 20 ms each way, the clocks 3.7 s apart): the lights go out
+within 2 ms of each other; the other car is shown within 11 cm of where it really is, the
+host's AI on the guest's screen within 7 cm (median) and 11 cm (99th percentile); both sides
+agree on every car's time and place. Over the real PeerJS server (two instances in one tab of
+the in-app browser): connecting, the handshake, the clock sync (6 ms round trip), the shared
+lights, positions and names on both screens. That pane only drew about two frames a second,
+so how it feels in real time is for your playtest on two machines.
+
+Where the build differs from the plan below:
+
+- **States are float64**, not float32: the time on the shared clock needs the precision.
+- **More in some messages:** `lights` also carries the wait after the fifth light (both
+  screens draw the same countdown); `state` and `finish` carry a car number (the host's AI);
+  `welcome` carries the number of AI opponents. `PROTOCOL` is 2.
+- **The clock keeps syncing.** Twelve pings before the guest is ready, then one every
+  0.25 s for the rest of the race, refining the estimate. Twelve alone left the lights up to
+  10 ms apart on a jittery line.
+- **Both simulations step in time with the host's clock**, their steps falling at the same
+  moments and one exactly on the lights going out. A tab more than 0.25 s behind (hidden)
+  skips ahead rather than catching up.
+- **A stale remote car becomes a ghost.** No states for 0.5 s (a hidden tab, a stall) and the
+  proxy stops being solid, so it can't jump into your car when its states resume. It turns
+  solid again once fresh and 6 m clear of your car. A remote car that moves more than 4 m
+  at once (put back on the track, a rematch) is shown there at once instead of sliding.
+- **A lost link is the link's to notice** (its heartbeats, 6 s), not the race's: a player
+  whose tab is hidden sends no states but is still there. The loopback now notices a cut
+  line the same way.
+- **The players start mid-grid**, the host ahead of the guest, with the AI around them.
+- **Room codes are letters and digits** (five-a-side's alphabet), so the menu's code field
+  takes both.
+- **Fixed in passing:** a race restarted with Backspace counted laps from before the
+  restart (`Race.restart` now resets them); `?autopilot` drives online too (for checking).
+- **Not tested directly:** the AI's traffic avoiding the guest's car. Traffic sees it (it is
+  one of the cars traffic tracks), but no test sets up the encounter.
 
 Goal: race a friend on another computer. One player hosts (picks the circuit and laps, gets a
 four-letter room code), the other joins with the code; both see each other's car on track,
