@@ -3,6 +3,7 @@
 
 import type { CameraMode } from './render/cameras';
 import type { GearboxMode } from './vehicle/gearbox';
+import type { StartChoice } from './ui/menu';
 
 export interface Settings {
   abs: boolean;
@@ -14,6 +15,8 @@ export interface Settings {
   /** Sound: master volume (0–1) and mute. */
   volume: number;
   muted: boolean;
+  /** What was picked in the start menu last time. */
+  start: StartChoice;
 }
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
@@ -25,6 +28,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   ghost: true,
   volume: 0.8,
   muted: false,
+  start: { mode: 'trial', track: 'harrowmere', car: 'Kestrel', difficulty: 'medium', opponents: 7, laps: 3 },
 };
 
 const KEY = 'racing.settings.v1';
@@ -33,7 +37,9 @@ const KEY = 'racing.settings.v1';
 export function loadSettings(): Settings {
   try {
     const saved: unknown = JSON.parse(localStorage.getItem(KEY) ?? '{}');
-    return { ...DEFAULT_SETTINGS, ...(typeof saved === 'object' && saved !== null ? saved : {}) };
+    const s = { ...DEFAULT_SETTINGS, ...(typeof saved === 'object' && saved !== null ? saved : {}) } as Settings;
+    s.start = { ...DEFAULT_SETTINGS.start, ...s.start };
+    return s;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

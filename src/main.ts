@@ -23,6 +23,7 @@ import { Replay, REPLAY_SPEEDS } from './replay/replay';
 import { TvCameraView } from './render/tvCameras';
 import { Effects } from './render/effects';
 import { Dashboard } from './ui/dashboard';
+import { Menu } from './ui/menu';
 import { GameAudio, type Listener } from './audio';
 import { Sound } from './audio/sound';
 import { placeTvCameras } from './track/cameras';
@@ -34,7 +35,7 @@ import { CIRCUITS } from './track/circuits';
 import { DEFAULT_RACE, Race, type RaceOptions } from './race/race';
 import { DIFFICULTIES, type Difficulty } from './ai/skill';
 import { RaceHud } from './ui/raceHud';
-import { buildTrack } from './track/track';
+import { buildTrack, trackFingerprint } from './track/track';
 import { NO_CONTROLS, poseOnTrack, type Controls } from './vehicle/car';
 import { CARS, KESTREL } from './vehicle/cars';
 import { createPose, interpolatePose } from './vehicle/pose';
@@ -46,14 +47,19 @@ const dash = new Dashboard(document.querySelector<HTMLDivElement>('#dash')!);
 const gearLabel = (gear: number) => (gear === REVERSE ? 'R' : gear === NEUTRAL ? 'N' : String(gear));
 
 await initPhysics();
-// The circuit: ?track=<id>, the first by default. N moves on to the next (until the M6 menus).
-const circuit = CIRCUITS.find((c) => c.id === new URLSearchParams(location.search).get('track')) ?? CIRCUITS[0];
+// The circuit: ?track=<id> (N moves on to the next), or the start menu's choice.
+const params = new URLSearchParams(location.search);
+// Settings: remembered between visits, applied to the simulation through its setters.
+const settings = loadSettings();
+// A link that names the circuit, car or mode starts straight away; otherwise the start menu
+// opens over the last circuit and car picked there.
+const fromUrl = ['track', 'car', 'mode'].some((k) => params.has(k));
+const circuit = CIRCUITS.find((c) => c.id === (fromUrl ? params.get('track') : settings.start.track)) ?? CIRCUITS[0];
 const track = buildTrack(circuit);
 document.querySelector('#track-name')!.textContent = circuit.name.toUpperCase();
-const params = new URLSearchParams(location.search);
 // Race mode (?mode=race, Tab switches): ?difficulty=easy|medium|hard, ?opponents=0..7, ?laps=N.
 // The car: ?car=wren|kestrel|harrier (Kestrel by default). In a race everyone drives it.
-const carDef = CARS.find((c) => c.name.toLowerCase() === params.get('car')) ?? KESTREL;
+const carDef = CARS.find((c) => c.name.toLowerCase() === (fromUrl ? params.get('car') : settings.start.car.toLowerCase())) ?? KESTREL;
 const race = params.get('mode') === 'race' ? new Race(track, raceOptions(params), carDef) : null;
 const sim = race ? race.sim : new Simulation(track, carDef);
 
@@ -143,8 +149,6 @@ function keepBests(event: LapEvent): void {
   });
 }
 
-// Settings: remembered between visits, applied to the simulation through its setters.
-const settings = loadSettings();
 // Sound starts on the first key or click (browsers allow audio only after a gesture).
 const sound = new Sound(settings.volume, settings.muted);
 const audio = new GameAudio(sound);
@@ -155,12 +159,101 @@ function applySettings(): void {
   sim.setGearboxMode(settings.gearbox);
   steering.assist = settings.steeringAssist;
   if (cameras.mode !== settings.camera) cameras.setMode(settings.camera);
+  sound.setVolume(settings.volume);
+  sound.setMuted(settings.muted);
   saveSettings(settings);
 }
 applySettings();
 
+// The menus: start (when no link chose already), pause on Esc, settings.
+const BLURBS: Record<string, string> = {
+  harrowmere: 'fast and flowing',
+  saltmarsh: 'tight, gravel at the hairpins',
+  ridgeback: 'hilly, a banked carousel',
+  'proving-ground': 'the flat test track',
+};
+const CAR_BLURBS: Record<string, string> = {
+  Wren: 'Light roadster: forgiving, slower',
+  Kestrel: 'Balanced coupé',
+  Harrier: 'Heavy GT: fast, a handful',
+};
+const builtCircuits = CIRCUITS.map((c) => (c === circuit ? track : buildTrack(c)));
+const menu = new Menu(
+  document.body,
+  {
+    onStart(choice) {
+      settings.start = choice;
+      saveSettings(settings);
+      const p = new URLSearchParams();
+      p.set('track', choice.track);
+      p.set('car', choice.car.toLowerCase());
+      if (choice.mode === 'race') {
+        p.set('mode', 'race');
+        p.set('difficulty', choice.difficulty);
+        p.set('opponents', String(choice.opponents));
+        p.set('laps', String(choice.laps));
+      }
+      for (const k of ['debug', 'telemetry', 'line']) if (params.has(k)) p.set(k, '');
+      location.search = p.toString();
+    },
+    onResume() {
+      menu.hide();
+      input.reset();
+      sound.suspend(false);
+    },
+    onRestart() {
+      menu.hide();
+      sound.suspend(false);
+      restart();
+    },
+    onQuit() {
+      const p = new URLSearchParams();
+      for (const k of ['debug', 'telemetry', 'line']) if (params.has(k)) p.set(k, '');
+      location.search = p.toString();
+    },
+    onSettings: applySettings,
+  },
+  { ...settings.start },
+  CIRCUITS.map((c, i) => ({
+    id: c.id,
+    name: c.name,
+    length: builtCircuits[i].length / 1000,
+    blurb: BLURBS[c.id] ?? '',
+    outline: builtCircuits[i].samples.filter((_, k) => k % 8 === 0).map((s) => ({ x: s.x, z: s.z })),
+  })),
+  CARS.map((c) => ({
+    name: c.name,
+    blurb: CAR_BLURBS[c.name] ?? '',
+    power: Math.max(...c.engine.torqueCurve.map(([rpm, nm]) => (rpm * nm * Math.PI) / 30)) / 1000,
+    mass: c.mass,
+  })),
+  settings,
+);
+if (!fromUrl) menu.showStart();
+// Each circuit's best with each car, for the circuit cards.
+void Promise.all(
+  CIRCUITS.flatMap((c, i) =>
+    CARS.map(async (car) => {
+      const best = await store.load(bestKey(c.id, car.name), trackFingerprint(builtCircuits[i]));
+      return [`${c.id}/${car.name}`, best?.lap.lapTime ?? null] as const;
+    }),
+  ),
+).then((rows) => {
+  const bests = new Map(rows);
+  menu.setBests((t, car) => bests.get(`${t}/${car}`) ?? null);
+});
+
 window.addEventListener('keydown', (e) => {
   sound.unlock();
+  // A menu takes the keys: Esc goes back a level.
+  if (menu.open) {
+    if (e.code === 'Escape') menu.back();
+    return;
+  }
+  if (e.code === 'Escape' && !replay.active) {
+    pauseGame();
+    return;
+  }
   if (e.code === 'KeyU' && !e.repeat) {
     settings.muted = !settings.muted;
     sound.setMuted(settings.muted);
@@ -191,16 +284,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyG') settings.ghost = !settings.ghost;
   if (e.code === 'Backspace') {
     e.preventDefault();
-    if (race) {
-      race.restart();
-      effects.break();
-      session.forgetLap();
-    } else {
-      session.restart();
-      effects.break();
-    }
-    input.reset();
-    cameras.snap();
+    restart();
   }
   if (e.code === 'Tab') {
     e.preventDefault();
@@ -285,6 +369,22 @@ function drawReplay(t: number, dt: number): void {
   );
 }
 
+/** Back to the grid (time trial) or the start of the race. */
+function restart(): void {
+  if (race) {
+    race.restart();
+    session.forgetLap();
+  } else session.restart();
+  effects.break();
+  input.reset();
+  cameras.snap();
+}
+
+function pauseGame(): void {
+  menu.showPause();
+  sound.suspend(true);
+}
+
 function recover(): void {
   sim.recover();
   effects.break();
@@ -327,7 +427,9 @@ function frame(now: number): void {
     settings.camera = cameras.mode;
     saveSettings(settings);
   }
-  if (replay.active) {
+  // Paused, or the start menu: no steps (and no catching up afterwards); the scene is still drawn.
+  if (menu.open) accumulator = 0;
+  if (replay.active && !menu.open) {
     // Live driving waits: no steps, and no catching up afterwards.
     accumulator = 0;
     const t = replay.update(dt);
