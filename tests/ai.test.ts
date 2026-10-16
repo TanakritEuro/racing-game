@@ -17,7 +17,7 @@ const TARGETS: Record<string, [number, number]> = {
   harrowmere: [103, 110],
   saltmarsh: [90, 97],
   ridgeback: [102, 109],
-  'proving-ground': [51.5, 56],
+  'proving-ground': [50, 56],
 };
 
 describe.each(CIRCUITS.map((c) => [c.name, c] as const))('AI at %s', (_, def) => {

@@ -1,6 +1,6 @@
 # Milestone 6 plan: presentation
 
-## Status: proposed, waiting for your OK
+## Status: approved as written, being built
 
 Goal: make it look, sound and start like a game. The placeholder boxes become real car
 models; tyres leave skid marks and smoke, barriers throw sparks; the engine, tyres and wind

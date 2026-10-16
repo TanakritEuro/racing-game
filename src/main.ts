@@ -32,6 +32,7 @@ import { DIFFICULTIES, type Difficulty } from './ai/skill';
 import { RaceHud } from './ui/raceHud';
 import { buildTrack } from './track/track';
 import { NO_CONTROLS, poseOnTrack, type Controls } from './vehicle/car';
+import { CARS, KESTREL } from './vehicle/cars';
 import { createPose, interpolatePose } from './vehicle/pose';
 import { NEUTRAL, REVERSE } from './vehicle/gearbox';
 
@@ -54,8 +55,10 @@ const track = buildTrack(circuit);
 document.querySelector('#track-name')!.textContent = circuit.name.toUpperCase();
 const params = new URLSearchParams(location.search);
 // Race mode (?mode=race, Tab switches): ?difficulty=easy|medium|hard, ?opponents=0..7, ?laps=N.
-const race = params.get('mode') === 'race' ? new Race(track, raceOptions(params)) : null;
-const sim = race ? race.sim : new Simulation(track);
+// The car: ?car=wren|kestrel|harrier (Kestrel by default). In a race everyone drives it.
+const carDef = CARS.find((c) => c.name.toLowerCase() === params.get('car')) ?? KESTREL;
+const race = params.get('mode') === 'race' ? new Race(track, raceOptions(params), carDef) : null;
+const sim = race ? race.sim : new Simulation(track, carDef);
 
 function raceOptions(p: URLSearchParams): RaceOptions {
   const int = (name: string, lo: number, hi: number, fallback: number) => {

@@ -16,7 +16,7 @@ import { lateralOffset, nearestSample, type Track } from '../track/track';
 import { controls, type Car, type Controls } from '../vehicle/car';
 import { usableLock } from '../drivers/steeringAssist';
 import type { CarDef } from '../vehicle/carDef';
-import { carEnvelope, type CarEnvelope } from './envelope';
+import { carEnvelope, gripAt, type CarEnvelope } from './envelope';
 import { racingLine, type RacingLine } from './racingLine';
 import { speedProfile } from './speedProfile';
 import { brakeEarlier, gaussian, PERFECT, type Skill } from './skill';
@@ -124,6 +124,13 @@ export class AiDriver {
     if (accel >= 0) {
       const available = Math.max(0.5, this.env.driveAccel(v));
       throttle = clamp(D.cruiseThrottle + accel / available, 0, 1);
+      // Cornering, only as much power as the rear tyres have grip to spare: past it a powerful
+      // car slides its rear out before the wheels spin enough for traction control to notice.
+      const env = this.env;
+      const grip = gripAt(env, env.lateralMu, v);
+      const lateral = v * v * Math.abs(line.curvature[this.index]);
+      const spare = env.traction * Math.sqrt(Math.max(0, grip * grip - lateral * lateral));
+      throttle = Math.min(throttle, Math.max(D.cruiseThrottle, (spare + env.drag * v * v) / available));
     } else {
       // Drag and rolling resistance slow it a little without any brake.
       const coasting = this.env.drag * v * v + this.env.rolling * G;
