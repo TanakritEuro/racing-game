@@ -22,6 +22,8 @@ import { formatLapTime } from './race/timing';
 import { Replay, REPLAY_SPEEDS } from './replay/replay';
 import { TvCameraView } from './render/tvCameras';
 import { Effects } from './render/effects';
+import { GameAudio, type Listener } from './audio';
+import { Sound } from './audio/sound';
 import { placeTvCameras } from './track/cameras';
 import { circuitAi, createAiDriver } from './ai/driver';
 import { speedProfile } from './ai/speedProfile';
@@ -123,7 +125,7 @@ if (params.has('line')) {
 // ?autopilot hands your car to the AI (for watching it, and checking it).
 const autopilot = params.has('autopilot') ? createAiDriver(track, sim.car.def) : null;
 // ?debug exposes the simulation in the console, for poking at it while developing.
-if (params.has('debug')) Object.assign(window, { sim, race, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay, autopilot, effects });
+if (params.has('debug')) Object.assign(window, { sim, race, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay, autopilot, effects, sound: () => sound });
 
 // Bests from earlier visits: the ghost, the delta and the sector colours carry on from them.
 const store = await openBestStore();
@@ -149,6 +151,11 @@ function keepBests(event: LapEvent): void {
 
 // Settings: remembered between visits, applied to the simulation through its setters.
 const settings = loadSettings();
+// Sound starts on the first key or click (browsers allow audio only after a gesture).
+const sound = new Sound(settings.volume, settings.muted);
+const audio = new GameAudio(sound);
+const listener: Listener = { x: 0, y: 0, z: 0, rightX: 1, rightZ: 0 };
+window.addEventListener('pointerdown', () => sound.unlock());
 function applySettings(): void {
   sim.setAids({ abs: settings.abs, tc: settings.tc });
   sim.setGearboxMode(settings.gearbox);
@@ -159,6 +166,12 @@ function applySettings(): void {
 applySettings();
 
 window.addEventListener('keydown', (e) => {
+  sound.unlock();
+  if (e.code === 'KeyU' && !e.repeat) {
+    settings.muted = !settings.muted;
+    sound.setMuted(settings.muted);
+    saveSettings(settings);
+  }
   if (replay.active) {
     replayKey(e);
     return;
@@ -212,6 +225,7 @@ function step(c: Controls): void {
   if (race) race.step(c);
   else sim.step(c);
   effects.afterStep(sim);
+  audio.knocks(sim.contacts, listener);
   const event = session.afterStep(c);
   if (event) keepBests(event);
 }
@@ -259,6 +273,7 @@ function drawReplay(t: number, dt: number): void {
   replayHud.title.textContent = `REPLAY · ${replay.caption} ${formatLapTime(rec.lapTime)}${valid}`;
   const state = replay.paused ? 'PAUSED' : `${replay.speed}×`;
   replayHud.time.textContent = `${formatLapTime(t)} / ${formatLapTime(duration(rec))}  ·  ${state}`;
+  audio.replay(sim.car.def, replayState.rpm, replayState.throttle);
   hud.speed.textContent = String(Math.round(Math.abs(replayState.speed) * 3.6));
   hud.gear.textContent = gearLabel(Math.round(replayState.gear));
   hud.rpm.style.width = `${Math.min(100, (replayState.rpm / sim.car.def.engine.limiterRpm) * 100)}%`;
@@ -352,6 +367,17 @@ function frame(now: number): void {
     stage.renderer.domElement.height,
   );
   followSun(stage.sun, carView.root.position);
+  // The listener is the camera.
+  const cam = stage.camera;
+  cam.updateMatrixWorld();
+  const m = cam.matrixWorld.elements;
+  const rl = Math.hypot(m[0], m[2]) || 1;
+  listener.x = cam.position.x;
+  listener.y = cam.position.y;
+  listener.z = cam.position.z;
+  listener.rightX = m[0] / rl;
+  listener.rightZ = m[2] / rl;
+  audio.update(sim, race ? race.controls : [controls], listener);
   updateHud();
   telemetry.update({
     time: sim.time,

@@ -70,6 +70,7 @@ export const KESTREL: CarDef = {
     limiterRpm: 7500,
     inertia: 0.12,
     throttleMap: 2,
+    cylinders: 4,
   },
   clutch: {
     maxTorque: 400,
@@ -146,6 +147,7 @@ export const WREN: CarDef = {
     limiterRpm: 7600,
     inertia: 0.1,
     throttleMap: 2,
+    cylinders: 4,
   },
   clutch: { maxTorque: 300, engageRate: 6, launchRpm: 3500 },
   gearbox: {
@@ -214,6 +216,7 @@ export const HARRIER: CarDef = {
     limiterRpm: 7000,
     inertia: 0.16,
     throttleMap: 2,
+    cylinders: 6,
   },
   clutch: { maxTorque: 700, engageRate: 6, launchRpm: 3000 },
   gearbox: {

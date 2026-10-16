@@ -68,6 +68,8 @@ export class Race {
   /** When the leader finished (simulation time), or null. */
   private leaderDone: number | null = null;
   private lightsOutAt: number;
+  /** Every car's controls on the last step (for the sound of their engines). */
+  controls: readonly Controls[] = [];
   /** AI cars put back on the track so far (stuck, spun into a gravel trap). */
   recoveries = 0;
   /** Simulation time the countdown began. */
@@ -135,6 +137,7 @@ export class Race {
       return d.drive(sim.cars[k], PHYSICS_STEP);
     });
     sim.step(all);
+    this.controls = all;
     this.drivers.forEach((d, k) => {
       if (d?.stuck) {
         this.recoveries++;

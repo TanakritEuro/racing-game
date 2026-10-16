@@ -17,6 +17,8 @@ export interface EngineDef {
    * engine's airflow does.
    */
   throttleMap: number;
+  /** Cylinders (only the engine's sound uses it: firing pulses per turn = cylinders ÷ 2). */
+  cylinders: number;
 }
 
 /** rad/s → RPM. */

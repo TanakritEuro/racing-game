@@ -11,6 +11,9 @@ export interface Settings {
   gearbox: GearboxMode;
   camera: CameraMode;
   ghost: boolean;
+  /** Sound: master volume (0–1) and mute. */
+  volume: number;
+  muted: boolean;
 }
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
@@ -20,6 +23,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   gearbox: 'auto',
   camera: 'chase',
   ghost: true,
+  volume: 0.8,
+  muted: false,
 };
 
 const KEY = 'racing.settings.v1';
