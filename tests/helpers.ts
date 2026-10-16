@@ -8,18 +8,19 @@ import { buildTrack, lateralOffset, nearestSample, type Track, type TrackDef } f
 import { controls, type Controls } from '../src/vehicle/car';
 import type { CarDef } from '../src/vehicle/carDef';
 import { KESTREL } from '../src/vehicle/cars';
+import type { Conditions } from '../src/track/weather';
 
 /** Built tracks by definition: building is pure, so tests share them (and their terrain). */
 const tracks = new Map<TrackDef, Track>();
 
-export async function createSim(trackDef: TrackDef = TEST_CIRCUIT, carDef: CarDef = KESTREL): Promise<Simulation> {
+export async function createSim(trackDef: TrackDef = TEST_CIRCUIT, carDef: CarDef = KESTREL, conditions: Conditions = 'dry'): Promise<Simulation> {
   await initPhysics();
   let track = tracks.get(trackDef);
   if (!track) {
     track = buildTrack(trackDef);
     tracks.set(trackDef, track);
   }
-  return new Simulation(track, carDef);
+  return new Simulation(track, carDef, { conditions });
 }
 
 /** Fixed controls, or a driver asked for controls before every step. */
@@ -91,8 +92,8 @@ export function followLine(
  * best 1 s average of the horizontal lateral acceleration (g), the slip angles there, and
  * the front axle's share of the lateral load transfer at ~0.65 g.
  */
-export async function skidpadLimit(trackDef: TrackDef, carDef: CarDef = KESTREL, seconds = 75) {
-  const s = await createSim(trackDef, carDef);
+export async function skidpadLimit(trackDef: TrackDef, carDef: CarDef = KESTREL, seconds = 75, conditions: Conditions = 'dry') {
+  const s = await createSim(trackDef, carDef, conditions);
   let target = 15;
   const drive = () => followLine(s, target, { maxThrottle: 0.4 })();
   let index: number | undefined;

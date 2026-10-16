@@ -78,6 +78,41 @@ export const TUNING = {
     // Loose stones: little grip and a great deal of drag, so a car sinks in and stops.
     gravel: { grip: 0.5, drag: 0.3 },
   },
+  /** The weather (`track/weather.ts`, `track/puddles.ts`). */
+  weather: {
+    /** How wet each condition is (0–1): every wet effect scales with it. */
+    wetness: { dry: 0, damp: 0.5, wet: 1 },
+    /** Each surface's grip when fully wet, as a share of its dry grip: painted kerbs are slippery. */
+    wetGrip: { asphalt: 0.72, kerb: 0.5, grass: 0.75, gravel: 0.9 },
+    water: {
+      /** Standing water's grip as a share of the wet road's, slowly, and its extra rolling drag (fraction of load). */
+      grip: 0.85,
+      drag: 0.04,
+      /** Aquaplaning: from `from` to `to` (m/s) the grip falls to `grip` of its slow value. */
+      aquaplane: { from: 20, to: 45, grip: 0.3 },
+    },
+    puddles: {
+      /**
+       * A puddle sits at the lowest point for `around` (m) either side, at least `minDepth` (m)
+       * below the highest road within `reach` (m) either side.
+       */
+      around: 50,
+      reach: 150,
+      minDepth: 0.3,
+      /** A flat road drains badly: along stretches flatter than `grade` for `run` (m), one puddle per `every` (m), `spacing` (m) apart at least. */
+      flatRoad: { grade: 0.005, run: 200, every: 800, spacing: 120 },
+      /** Not within this far of the start line (m), either way. */
+      startClear: 150,
+      /** Length along the road (m), width in from the edge (m). */
+      length: [8, 18],
+      width: [2.5, 4.5],
+      /** Below this cross-slope the road counts as flat, and water may lie right across it (this often). */
+      flat: 0.02,
+      across: 0.3,
+      /** Height above the road (m): the tread rays find the water first. */
+      lift: 0.004,
+    },
+  },
   tyreIntegration: {
     /**
      * Wheel spin and slip are integrated this many times per physics step. A wheel's spin

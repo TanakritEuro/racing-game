@@ -2,11 +2,12 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { GRAVITY, PHYSICS_STEP } from './constants';
 import { uprightAlong } from './math';
 import { barriers, kerbs, road, runoff } from './track/geometry';
+import { puddleSweeps } from './track/puddles';
 import { buildTerrain, type Terrain } from './track/terrain';
 import type { Track } from './track/track';
 
 /** What a collider is: the wheels read the surface under them from this. */
-export type SurfaceTag = 'asphalt' | 'kerb' | 'grass' | 'gravel' | 'barrier' | 'car';
+export type SurfaceTag = 'asphalt' | 'kerb' | 'grass' | 'gravel' | 'water' | 'barrier' | 'car';
 
 export interface Physics {
   world: RAPIER.World;
@@ -66,7 +67,8 @@ function terrainFor(track: Track): Terrain {
   return terrain;
 }
 
-export function createPhysics(track: Track): Physics {
+/** The world for `track`; `water`: with puddles standing in the dips (a wet track). */
+export function createPhysics(track: Track, water = false): Physics {
   const world = new RAPIER.World({ x: 0, y: GRAVITY, z: 0 });
   world.timestep = PHYSICS_STEP;
   const tags = new Map<number, SurfaceTag>();
@@ -89,6 +91,7 @@ export function createPhysics(track: Track): Physics {
     add(tag, RAPIER.ColliderDesc.trimesh(r.positions, r.indices).setFriction(0.5));
   trimesh('asphalt', road(track));
   for (const k of kerbs(track)) trimesh('kerb', k);
+  if (water) for (const p of puddleSweeps(track)) trimesh('water', p);
   // Run-off from the kerbs (or road edges) to the barriers, grass or gravel.
   for (const surface of ['grass', 'gravel'] as const) for (const r of runoff(track, surface)) trimesh(surface, r);
 

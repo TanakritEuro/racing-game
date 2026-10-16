@@ -31,6 +31,7 @@ import { absStep, tcStep, type AidSettings } from './aids';
 import { spinFree, type SpinBody } from './spin';
 import { rackStep, wheelSteerAngle } from './steering';
 import { gripLimit, prepareTyre, tyreForces, type PreparedTyre, type TyreForce } from './tyre';
+import { surfaceGrip } from '../track/weather';
 
 /** One step's driver inputs. Keyboard, gamepad and AI drivers all produce these. */
 export interface Controls {
@@ -159,6 +160,10 @@ export class Car {
   private readonly mountPoint = vec();
   private readonly normal = vec();
   private readonly carRight = vec();
+  /** The surface under the wheel being worked on (reused). */
+  private readonly surface = { grip: 1, drag: 0 };
+  /** How wet the track is (0–1, set by the simulation): every surface's grip follows it. */
+  wetness = 0;
   private readonly carUp = vec();
   private readonly carForward = vec();
   private readonly heading = vec();
@@ -502,8 +507,7 @@ export class Car {
       this.force.y = up.y * load;
       this.force.z = up.z * load;
       body.addForceAtPoint(this.force, work.point, false);
-      const tag = wheel.surface;
-      const surface = TUNING.surfaces[tag === 'kerb' || tag === 'grass' || tag === 'gravel' ? tag : 'asphalt'];
+      const surface = surfaceGrip(wheel.surface, this.wetness, speed, this.surface);
       work.grip = surface.grip;
       work.rollingDrag = (wheel.tyre.rollingResistance + surface.drag) * load * wheel.tyre.radius;
       wheel.gripLimit = gripLimit(wheel.tyre, load, surface.grip);

@@ -9,6 +9,7 @@ import { addKinematicCar, createPhysics, type Physics } from './physics';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { LapTimer } from './race/timing';
 import { nearestSample, type Track, type TrackSample } from './track/track';
+import { wetness, type Conditions } from './track/weather';
 import { Car, poseOnTrack, type Controls, type Pose } from './vehicle/car';
 import { copyPose, createPose, type CarPose } from './vehicle/pose';
 import type { CarDef } from './vehicle/carDef';
@@ -36,6 +37,8 @@ export interface SimOptions {
   slots?: readonly number[];
   /** Cars on the grid, counting other players' (default: `cars`). A car alone starts on the centreline. */
   field?: number;
+  /** The weather (default dry). */
+  conditions?: Conditions;
 }
 
 /** A hard knock this step: for sparks and sounds. */
@@ -85,19 +88,24 @@ export class Simulation {
   private readonly carByCollider = new Map<number, number>();
   private readonly slots: readonly number[];
   private readonly lone: boolean;
+  /** The weather, for the whole session. */
+  readonly conditions: Conditions;
 
   constructor(
     readonly track: Track,
     carDef: CarDef = KESTREL,
     options: SimOptions = {},
   ) {
-    this.physics = createPhysics(track);
+    this.conditions = options.conditions ?? 'dry';
+    const wet = wetness(this.conditions);
+    this.physics = createPhysics(track, wet >= 1);
     const count = options.cars ?? 1;
     this.slots = options.slots ?? Array.from({ length: count }, (_, i) => i);
     this.lone = (options.field ?? count) === 1;
     for (let i = 0; i < count; i++) {
       const pose = this.gridPose(i);
       this.cars.push(new Car(this.physics, pose, options.defs?.[i] ?? carDef));
+      this.cars[i].wetness = wet;
       this.timers.push(new LapTimer(track, pose.position.x, pose.position.z));
       this.poses.push({ previous: createPose(), current: createPose() });
       this.carByCollider.set(this.cars[i].collider.handle, i);
