@@ -225,6 +225,8 @@ export const TUNING = {
     lights: { count: 5, first: 1, interval: 1, wait: [0.2, 3] },
     /** After the leader finishes, cars still running are classified where they are after this long (s). */
     classifyAfter: 90,
+    /** A championship round's chance of being wet, and of being damp. */
+    seasonWeather: { wet: 0.25, damp: 0.25 },
   },
   /** Car setup (`vehicle/setup.ts`): clicks either way from the car's own numbers, and what one click changes. */
   setup: {

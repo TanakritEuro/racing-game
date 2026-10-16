@@ -6,6 +6,7 @@ import type { Difficulty } from '../ai/skill';
 import { formatLapTime } from '../race/timing';
 import { ROUNDS } from '../race/championship';
 import type { Settings } from '../settings';
+import { CONDITIONS, type Conditions } from '../track/weather';
 
 export type Mode = 'trial' | 'race' | 'season' | 'online';
 
@@ -28,6 +29,8 @@ export interface StartChoice {
   difficulty: Difficulty;
   opponents: number;
   laps: number;
+  /** The weather (time trial, race, hosting online). */
+  weather: Conditions;
   /** Online: host a race or join one, and the room code to join. */
   online: 'host' | 'join';
   code: string;
@@ -61,7 +64,7 @@ export interface MenuEvents {
   /** A setting changed (already written into the settings object). */
   onSettings(): void;
   /** Open the garage: for the circuit and car picked in the start menu, or (null) the car being driven. */
-  onGarage(choice: { track: string; car: string } | null): void;
+  onGarage(choice: { track: string; car: string; weather: Conditions } | null): void;
 }
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
@@ -81,7 +84,7 @@ export class Menu {
   private readonly refresh: (() => void)[] = [];
   /** Where Back from settings goes. */
   private settingsFrom: HTMLElement;
-  private bestFor: (track: string, car: string) => number | null = () => null;
+  private bestFor: (track: string, car: string, weather: Conditions) => number | null = () => null;
   private season: SeasonInfo | null = null;
   private readonly restartButton: HTMLButtonElement;
   private readonly quitButton: HTMLButtonElement;
@@ -148,7 +151,7 @@ export class Menu {
       div(b, 'menu-card-sub', `${c.length.toFixed(1)} km · ${c.blurb}`);
       const best = div(b, 'menu-card-sub');
       this.refresh.push(() => {
-        const t = this.bestFor(c.id, choice.car);
+        const t = this.bestFor(c.id, choice.car, choice.weather);
         best.textContent = t === null ? 'No best yet' : `Best ${formatLapTime(t)}`;
       });
     }
@@ -167,6 +170,11 @@ export class Menu {
       div(b, 'menu-card-sub', car.blurb);
       div(b, 'menu-card-sub', `${Math.round(car.power)} kW · ${car.mass} kg`);
     }
+
+    // The weather: a championship draws its own each round; a guest online gets the host's.
+    const weatherRow = this.row(this.start, 'Weather');
+    for (const w of CONDITIONS) this.choiceButton(weatherRow, cap(w), () => choice.weather === w, () => (choice.weather = w));
+    this.refresh.push(() => weatherRow.parentElement!.classList.toggle('hidden', choice.mode === 'season' || (choice.mode === 'online' && choice.online === 'join')));
 
     const raceRows = div(this.start, 'menu-group');
     const diffRow = this.row(raceRows, 'Difficulty');
@@ -202,7 +210,7 @@ export class Menu {
       start.disabled = online && choice.online === 'join' && choice.code.length !== 4;
     });
     const setupButton = button(go, 'Car setup');
-    setupButton.addEventListener('click', () => events.onGarage({ track: choice.track, car: choice.car }));
+    setupButton.addEventListener('click', () => events.onGarage({ track: choice.track, car: choice.car, weather: choice.weather }));
     // A championship visits every circuit, and a guest online doesn't know the circuit yet: set up from the pause menu.
     this.refresh.push(() => setupButton.classList.toggle('hidden', choice.mode === 'season' || (choice.mode === 'online' && choice.online === 'join')));
     button(go, 'Settings').addEventListener('click', () => this.showSettings(this.start));
@@ -294,7 +302,7 @@ export class Menu {
   }
 
   /** The best lap for each circuit and car, shown on the circuit cards. */
-  setBests(bestFor: (track: string, car: string) => number | null): void {
+  setBests(bestFor: (track: string, car: string, weather: Conditions) => number | null): void {
     this.bestFor = bestFor;
     this.update();
   }

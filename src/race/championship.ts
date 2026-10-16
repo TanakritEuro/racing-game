@@ -4,7 +4,9 @@
 // Pure data and functions; saved as plain JSON.
 
 import { fieldSkills, type Difficulty, type Skill } from '../ai/skill';
+import { TUNING } from '../config';
 import { createRng } from '../math';
+import type { Conditions } from '../track/weather';
 import { AI_NAMES, type RaceOptions, type Standing } from './race';
 
 /** The rounds, shortest first. */
@@ -122,12 +124,20 @@ export function roundSeed(season: Season, r: number): number {
 }
 
 /** The next round's race: its circuit, and the options that build it from the season. */
+/** Round r's weather, drawn from the season's seed: some rounds wet, some damp. */
+export function roundConditions(season: Season, r: number): Conditions {
+  const W = TUNING.race.seasonWeather;
+  const x = createRng(roundSeed(season, r) * 7 + 3)();
+  return x < W.wet ? 'wet' : x < W.wet + W.damp ? 'damp' : 'dry';
+}
+
 export function roundRace(season: Season): { track: string; options: RaceOptions } {
   const r = Math.min(nextRound(season), season.rounds.length - 1);
   const round = season.rounds[r];
   return {
     track: round.track,
     options: {
+      conditions: roundConditions(season, r),
       opponents: ENTRIES - 1,
       laps: round.laps,
       difficulty: season.difficulty,

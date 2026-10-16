@@ -8,6 +8,8 @@ import {
   pointsFor,
   POINTS,
   recordRound,
+  roundConditions,
+  roundRace,
   ROUNDS,
   seasonOver,
   standings,
@@ -68,6 +70,22 @@ describe('championship', () => {
     expect(second[3]).toBe(ENTRIES - 1); // the leader starts last
     expect(second[7]).toBe(0); // the last-placed on pole
     expect(new Set(second).size).toBe(ENTRIES);
+  });
+
+  it('draws each round’s weather from the season: the same every time, some wet and some damp', () => {
+    const a = newSeason(42, 'hard', 'Kestrel');
+    expect(a.rounds.map((_, r) => roundConditions(a, r))).toEqual(newSeason(42, 'hard', 'Kestrel').rounds.map((_, r) => roundConditions(a, r)));
+    expect(roundRace(a).options.conditions).toBe(roundConditions(a, 0));
+    const counts = { dry: 0, damp: 0, wet: 0 };
+    for (let seed = 1; seed <= 400; seed++) {
+      const s = newSeason(seed, 'medium', 'Kestrel');
+      s.rounds.forEach((_, r) => counts[roundConditions(s, r)]++);
+    }
+    // One in four wet, one in four damp, give or take.
+    expect(counts.wet / 1600).toBeGreaterThan(0.2);
+    expect(counts.wet / 1600).toBeLessThan(0.3);
+    expect(counts.damp / 1600).toBeGreaterThan(0.2);
+    expect(counts.damp / 1600).toBeLessThan(0.3);
   });
 
   it('ends after four rounds and takes no more results', () => {

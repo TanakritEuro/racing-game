@@ -85,8 +85,8 @@ const carDef = CARS.find((c) => c.name.toLowerCase() === carId) ?? KESTREL;
 const setups = new SetupStore();
 const setup: Setup = params.get('setup') === 'default' ? {} : setups.load(circuit.id, carDef.name);
 const playerDef = applySetup(carDef, setup);
-// The weather: ?weather=dry|damp|wet.
-const conditions: Conditions = CONDITIONS.find((c) => c === params.get('weather')) ?? 'dry';
+// The weather: the host's online, the round's in a championship, else ?weather=dry|damp|wet.
+const conditions: Conditions = connected ? connected.setup.conditions : seasonRound ? (seasonRound.options.conditions ?? 'dry') : linkConditions(params);
 const wet = wetness(conditions);
 const race = connected
   ? null
@@ -132,9 +132,9 @@ async function connect(joining: boolean): Promise<{ link: Link; setup: OnlineSet
       });
       const link = await room.guest;
       panel.show('Online race', 'Connected: setting up the race…');
-      const { laps, opponents } = raceOptions(params, 0);
+      const { laps, opponents, conditions } = raceOptions(params, 0);
       const trackId = (CIRCUITS.find((c) => c.id === params.get('track')) ?? CIRCUITS[0]).id;
-      return { link, setup: await hostHandshake(link, { track: trackId, laps, car, opponents }, names) };
+      return { link, setup: await hostHandshake(link, { track: trackId, laps, car, opponents, conditions: conditions ?? 'dry' }, names) };
     }
     const code = cleanRoomCode(params.get('code') ?? '');
     if (!code) throw new OnlineError('That is not a room code: it is four letters and digits, as the host sees it.');
@@ -162,8 +162,13 @@ function raceOptions(p: URLSearchParams, opponents = DEFAULT_RACE.opponents): Ra
     difficulty: DIFFICULTIES.includes(difficulty as Difficulty) ? (difficulty as Difficulty) : DEFAULT_RACE.difficulty,
     // A different race each time, unless ?seed= asks for a particular one.
     seed: int('seed', 1, 2 ** 30, 1 + Math.floor(Math.random() * 2 ** 30)),
-    conditions,
+    conditions: linkConditions(p),
   };
+}
+
+/** The weather a link asks for (?weather=), dry if none. */
+function linkConditions(p: URLSearchParams): Conditions {
+  return CONDITIONS.find((c) => c === p.get('weather')) ?? 'dry';
 }
 
 const stage = createStage(canvas);
@@ -252,7 +257,9 @@ if (params.has('debug')) Object.assign(window, { sim, race, online, poseOnTrack,
 
 // Bests from earlier visits: the ghost, the delta and the sector colours carry on from them.
 const store = await openBestStore();
-const key = bestKey(circuit.id, sim.car.def.name);
+const key = bestKey(circuit.id, sim.car.def.name, conditions);
+// The weather beside the circuit's name.
+if (conditions !== 'dry') document.querySelector('#track-name')!.textContent = `${circuit.name.toUpperCase()} · ${conditions.toUpperCase()}`;
 const stored = await store.load(key, session.fingerprint);
 if (stored) session.loadBest(stored.lap, stored.timeAtSample, stored.bestSectors);
 const NOT_KEPT = 'Bests are not kept in this browser';
@@ -320,13 +327,14 @@ const menu = new Menu(
       if (choice.mode === 'online') {
         const car = choice.car.toLowerCase();
         if (choice.online === 'host')
-          goTo({ online: 'host', track: choice.track, laps: String(choice.laps), opponents: String(choice.opponents), difficulty: choice.difficulty, car });
+          goTo({ online: 'host', track: choice.track, laps: String(choice.laps), opponents: String(choice.opponents), difficulty: choice.difficulty, weather: choice.weather, car });
         else if (cleanRoomCode(choice.code)) goTo({ online: 'join', code: choice.code, car });
         return;
       }
       const p = new URLSearchParams();
       p.set('track', choice.track);
       p.set('car', choice.car.toLowerCase());
+      if (choice.weather !== 'dry') p.set('weather', choice.weather);
       if (choice.mode === 'race') {
         p.set('mode', 'race');
         p.set('difficulty', choice.difficulty);
@@ -394,26 +402,28 @@ if (online) {
 // Each circuit's best with each car, for the circuit cards.
 void Promise.all(
   CIRCUITS.flatMap((c, i) =>
-    CARS.map(async (car) => {
-      const best = await store.load(bestKey(c.id, car.name), trackFingerprint(builtCircuits[i]));
-      return [`${c.id}/${car.name}`, best?.lap.lapTime ?? null] as const;
-    }),
+    CARS.flatMap((car) =>
+      CONDITIONS.map(async (w) => {
+        const best = await store.load(bestKey(c.id, car.name, w), trackFingerprint(builtCircuits[i]));
+        return [`${c.id}/${car.name}/${w}`, best?.lap.lapTime ?? null] as const;
+      }),
+    ),
   ),
 ).then((rows) => {
   const bests = new Map(rows);
-  menu.setBests((t, car) => bests.get(`${t}/${car}`) ?? null);
+  menu.setBests((t, car, w) => bests.get(`${t}/${car}/${w}`) ?? null);
 });
 
 /**
  * The garage, from the start menu (`choice`: the car and circuit picked there) or the pause
  * menu (null: this car here; a changed setup restarts from the grid with it).
  */
-function openGarage(choice: { track: string; car: string } | null): void {
+function openGarage(choice: { track: string; car: string; weather: Conditions } | null): void {
   const def = choice ? (CARS.find((c) => c.name === choice.car) ?? KESTREL) : carDef;
   const index = choice ? Math.max(0, CIRCUITS.findIndex((c) => c.id === choice.track)) : CIRCUITS.indexOf(circuit);
   const where = CIRCUITS[index];
   const best = choice
-    ? store.load(bestKey(where.id, def.name), trackFingerprint(builtCircuits[index])).then((r) => (r ? (r.setup ?? {}) : null))
+    ? store.load(bestKey(where.id, def.name, choice.weather), trackFingerprint(builtCircuits[index])).then((r) => (r ? (r.setup ?? {}) : null))
     : Promise.resolve(bestSetup);
   const now = setups.load(where.id, def.name);
   garage.show({

@@ -37,6 +37,7 @@ import type { Link } from './link';
 import { parseMessage, PROTOCOL, type Message } from './protocol';
 import { RemoteCar } from './remoteCar';
 import { createState, packState, unpackState, type CarState } from './state';
+import type { Conditions } from '../track/weather';
 
 export type Role = 'host' | 'guest';
 
@@ -47,6 +48,8 @@ export interface OnlineSetup {
   track: string;
   laps: number;
   opponents: number;
+  /** The weather (the host's choice). */
+  conditions: Conditions;
   /** This player's car and the other's (car names). The AI drive the host's. */
   mine: string;
   theirs: string;
@@ -76,7 +79,7 @@ function buffered(link: Link, setup: Omit<OnlineSetup, 'inbox'>): OnlineSetup {
  */
 export function hostHandshake(
   link: Link,
-  race: { track: string; laps: number; car: string; opponents: number },
+  race: { track: string; laps: number; car: string; opponents: number; conditions: Conditions },
   cars: readonly string[],
 ): Promise<OnlineSetup> {
   return new Promise((resolve, reject) => {
@@ -97,8 +100,8 @@ export function hostHandshake(
         return;
       }
       const opponents = Math.max(0, Math.min(MAX_OPPONENTS, race.opponents));
-      link.send({ type: 'welcome', track: race.track, laps: race.laps, car: race.car, opponents });
-      resolve(buffered(link, { role: 'host', track: race.track, laps: race.laps, opponents, mine: race.car, theirs: m.car }));
+      link.send({ type: 'welcome', track: race.track, laps: race.laps, car: race.car, opponents, conditions: race.conditions });
+      resolve(buffered(link, { role: 'host', track: race.track, laps: race.laps, opponents, conditions: race.conditions, mine: race.car, theirs: m.car }));
     };
   });
 }
@@ -120,7 +123,7 @@ export function guestHandshake(link: Link, car: string, tracks: readonly string[
           reject(new OnlineError(reason));
           return;
         }
-        resolve(buffered(link, { role: 'guest', track: m.track, laps: m.laps, opponents: m.opponents, mine: car, theirs: m.car }));
+        resolve(buffered(link, { role: 'guest', track: m.track, laps: m.laps, opponents: m.opponents, conditions: m.conditions, mine: car, theirs: m.car }));
       }
     };
     link.send({ type: 'hello', version: PROTOCOL, car });
@@ -217,7 +220,7 @@ export class OnlineRace {
     const own = host ? [0, ...ai] : [1];
     const proxies = host ? [1] : [0, ...ai];
     const stock = options.stock ?? mine;
-    this.sim = new Simulation(track, stock, { cars: own.length, slots: own.map(slot), field: this.count, defs: [mine] });
+    this.sim = new Simulation(track, stock, { cars: own.length, slots: own.map(slot), field: this.count, defs: [mine], conditions: setup.conditions });
     for (const entry of proxies) {
       this.sim.addProxy(theirs, restingPose(theirs, this.sim.slotPose(slot(entry))));
       this.remotes.push(new RemoteCar());
@@ -225,7 +228,7 @@ export class OnlineRace {
     }
     this.rng = createRng(options.seed ?? 1);
     if (host && n > 0) {
-      fieldSkills(options.difficulty ?? 'medium', n, this.rng).forEach((skill, k) => this.drivers.push(createAiDriver(track, stock, skill, (options.seed ?? 1) * 100 + k)));
+      fieldSkills(options.difficulty ?? 'medium', n, this.rng).forEach((skill, k) => this.drivers.push(createAiDriver(track, stock, skill, (options.seed ?? 1) * 100 + k, setup.conditions)));
       const other = this.sim.proxies[0];
       const remote = this.remotes[0];
       this.movers = [

@@ -6,6 +6,7 @@
 import { decodeRecording, encodeRecording, type LapRecording } from '../race/recording';
 import type { Sectors } from '../race/timing';
 import { cleanSetup, type Setup } from '../vehicle/setup';
+import type { Conditions } from '../track/weather';
 
 export interface BestRecord {
   /** `${trackId}/${carName}` */
@@ -30,8 +31,9 @@ interface StoredBest {
   setup?: Setup;
 }
 
-export function bestKey(trackId: string, carName: string): string {
-  return `${trackId}/${carName}`;
+/** A best's key: per circuit, car and weather (dry bests keep the key they had before there was weather). */
+export function bestKey(trackId: string, carName: string, conditions: Conditions = 'dry'): string {
+  return conditions === 'dry' ? `${trackId}/${carName}` : `${trackId}/${carName}/${conditions}`;
 }
 
 export interface BestStore {

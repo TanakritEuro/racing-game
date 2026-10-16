@@ -10,6 +10,7 @@ import { buildTrack, type Track } from '../src/track/track';
 import { NO_CONTROLS, type Controls } from '../src/vehicle/car';
 import type { CarDef } from '../src/vehicle/carDef';
 import { CARS, KESTREL, WREN } from '../src/vehicle/cars';
+import type { Conditions } from '../src/track/weather';
 
 const NAMES = CARS.map((c) => c.name);
 const TRACKS = [TEST_CIRCUIT.id];
@@ -21,12 +22,12 @@ const FRAME = 0.002;
 let track: Track | null = null;
 
 /** A host and a guest over a loopback with 50 ± 20 ms each way, on a shared virtual clock. */
-async function pair(laps = 1, opponents = 0) {
+async function pair(laps = 1, opponents = 0, conditions: Conditions = 'dry') {
   await initPhysics();
   track ??= buildTrack(TEST_CIRCUIT);
   const line = loopback({ delay: 0.05, jitter: 0.02, seed: 3 });
   const clock = { now: 0 };
-  const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps, car: 'Kestrel', opponents }, NAMES);
+  const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps, car: 'Kestrel', opponents, conditions }, NAMES);
   const guest = guestHandshake(line.b, 'Wren', TRACKS, NAMES);
   await pump(line, clock, 0.3);
   const [hs, gs] = await Promise.all([host, guest]);
@@ -34,6 +35,7 @@ async function pair(laps = 1, opponents = 0) {
   expect(gs.track).toBe(TEST_CIRCUIT.id);
   expect(gs.laps).toBe(laps);
   expect(gs.opponents).toBe(opponents);
+  expect(gs.conditions).toBe(conditions);
   const h = new OnlineRace(line.a, hs, track, KESTREL, WREN, { clock: () => clock.now + AHEAD, seed: 5, difficulty: 'hard' });
   // The guest takes a little longer to build its world.
   await pump(line, clock, 0.4);
@@ -219,10 +221,17 @@ describe('an online race', () => {
     }
   }, 60_000);
 
+  it('races in the host’s weather on both sides', async () => {
+    const { h, g } = await pair(1, 2, 'wet');
+    expect(h.sim.conditions).toBe('wet');
+    expect(g.sim.conditions).toBe('wet');
+    expect(h.drivers.length).toBe(2);
+  });
+
   it('turns away a guest with another version', async () => {
     const line = loopback({ delay: 0.02 });
     const clock = { now: 0 };
-    const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps: 3, car: 'Kestrel', opponents: 0 }, NAMES);
+    const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps: 3, car: 'Kestrel', opponents: 0, conditions: 'dry' }, NAMES);
     const heard: (Message | null)[] = [];
     line.b.onMessage = (raw) => heard.push(parseMessage(raw));
     line.b.send({ type: 'hello', version: 0, car: 'Wren' });

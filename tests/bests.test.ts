@@ -18,6 +18,13 @@ describe('stored bests', () => {
     expect(await store.load(bestKey('harrowmere', 'Kestrel'), 'a')).toBeNull();
   });
 
+  it('are kept apart per weather, dry under the key it always had', async () => {
+    expect(bestKey('saltmarsh', 'Kestrel')).toBe('saltmarsh/Kestrel');
+    expect(bestKey('saltmarsh', 'Kestrel', 'dry')).toBe('saltmarsh/Kestrel');
+    const keys = new Set(['dry', 'damp', 'wet'].map((w) => bestKey('saltmarsh', 'Kestrel', w as 'dry' | 'damp' | 'wet')));
+    expect(keys.size).toBe(3);
+  });
+
   it('fall back to memory without IndexedDB', async () => {
     const store = await openBestStore();
     expect(store.persistent).toBe(false);
