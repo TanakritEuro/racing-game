@@ -21,6 +21,7 @@ import { createRecordedState, duration, sampleRecording, type LapRecording } fro
 import { formatLapTime } from './race/timing';
 import { Replay, REPLAY_SPEEDS } from './replay/replay';
 import { TvCameraView } from './render/tvCameras';
+import { Effects } from './render/effects';
 import { placeTvCameras } from './track/cameras';
 import { circuitAi, createAiDriver } from './ai/driver';
 import { speedProfile } from './ai/speedProfile';
@@ -101,6 +102,7 @@ const ghost = new GhostView(
 stage.scene.add(ghost.root);
 const replay = new Replay();
 const replayState = createRecordedState();
+const effects = new Effects(stage.scene);
 const tv = new TvCameraView(stage.camera, track, placeTvCameras(track, sim.physics.terrain));
 const replayHud = {
   title: document.querySelector<HTMLDivElement>('#replay .r-title')!,
@@ -121,7 +123,7 @@ if (params.has('line')) {
 // ?autopilot hands your car to the AI (for watching it, and checking it).
 const autopilot = params.has('autopilot') ? createAiDriver(track, sim.car.def) : null;
 // ?debug exposes the simulation in the console, for poking at it while developing.
-if (params.has('debug')) Object.assign(window, { sim, race, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay, autopilot });
+if (params.has('debug')) Object.assign(window, { sim, race, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay, autopilot, effects });
 
 // Bests from earlier visits: the ghost, the delta and the sector colours carry on from them.
 const store = await openBestStore();
@@ -184,8 +186,12 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (race) {
       race.restart();
+      effects.break();
       session.forgetLap();
-    } else session.restart();
+    } else {
+      session.restart();
+      effects.break();
+    }
     input.reset();
     cameras.snap();
   }
@@ -205,6 +211,7 @@ function step(c: Controls): void {
   controls = c;
   if (race) race.step(c);
   else sim.step(c);
+  effects.afterStep(sim);
   const event = session.afterStep(c);
   if (event) keepBests(event);
 }
@@ -259,6 +266,7 @@ function drawReplay(t: number, dt: number): void {
 
 function recover(): void {
   sim.recover();
+  effects.break();
   input.reset();
   cameras.snap();
 }
@@ -336,6 +344,13 @@ function frame(now: number): void {
     others.map((o) => ({ x: o.drawn.position.x, z: o.drawn.position.z, colour: o.colour })),
   );
   cameras.update(drawn, dt);
+  effects.update(
+    dt,
+    sim,
+    [drawn, ...others.map((o) => o.drawn)],
+    stage.camera,
+    stage.renderer.domElement.height,
+  );
   followSun(stage.sun, carView.root.position);
   updateHud();
   telemetry.update({

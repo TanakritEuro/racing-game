@@ -182,7 +182,14 @@ export class Car {
         .setCcdEnabled(true),
     );
     this.collider = this.world.createCollider(
-      RAPIER.ColliderDesc.cuboid(h.x, h.y, h.z).setDensity(0).setFriction(0.3).setRestitution(0.1).setCollisionGroups(CAR_GROUPS),
+      RAPIER.ColliderDesc.cuboid(h.x, h.y, h.z)
+        .setDensity(0)
+        .setFriction(0.3)
+        .setRestitution(0.1)
+        .setCollisionGroups(CAR_GROUPS)
+        // Hard knocks (barriers, other cars) are reported for sparks and sound.
+        .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
+        .setContactForceEventThreshold(TUNING.contacts.minForce),
       this.body,
     );
     this.tags.set(this.collider.handle, 'car');

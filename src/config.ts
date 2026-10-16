@@ -113,6 +113,41 @@ export const TUNING = {
     /** Replay TV cameras: width of the shot at the car (m), field of view limits (degrees), aim above the car's origin (m), turn smoothing, near plane (m). */
     tv: { framing: 14, minFov: 4, maxFov: 50, aimHeight: 0.5, follow: 10, near: 0.5 },
   },
+  /** Tyre and impact effects (`render/effects/`). */
+  effects: {
+    /** A tyre slides once its slip passes this multiple of its peak (angle or ratio). */
+    slideFrom: 1.15,
+    skid: {
+      /** Quads kept (the oldest are overwritten), metres between them, lift off the road (m), darkness. */
+      capacity: 4000,
+      step: 0.3,
+      /** Further than this between frames (m) and the mark breaks: the car jumped. */
+      maxStep: 4,
+      lift: 0.025,
+      opacity: 0.6,
+    },
+    smoke: {
+      capacity: 700,
+      /** Puffs per second per wheel at full slide, from this speed (m/s) up. */
+      rate: 45,
+      minSpeed: 4,
+      /** Seconds a puff lasts, its size growing from `size[0]` to `size[1]` (m), rising (m/s), how thick. */
+      life: 1.8,
+      size: [0.7, 3.2],
+      rise: 0.5,
+      opacity: 0.45,
+    },
+    sparks: {
+      capacity: 400,
+      /** Sparks per N·s of impulse, at most `max` per knock; how long they fly (s) and how fast (m/s). */
+      perImpulse: 0.04,
+      max: 30,
+      life: 0.5,
+      speed: [3, 13],
+    },
+  },
+  /** Contacts reported to the presentation (sparks, thumps): touches lighter than this force (N) are ignored. */
+  contacts: { minForce: 3000 },
   /** Races (`race/race.ts`). */
   race: {
     /** Start lights: the first comes on after `first` (s), one more each `interval` (s), all out after a random wait. */

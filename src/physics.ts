@@ -14,6 +14,8 @@ export interface Physics {
   tags: Map<number, SurfaceTag>;
   /** The ground around the track (also drawn by the view). */
   terrain: Terrain;
+  /** Contact force events from the cars' chassis, drained after every step. */
+  events: RAPIER.EventQueue;
 }
 
 /**
@@ -88,5 +90,5 @@ export function createPhysics(track: Track): Physics {
         .setFriction(0.3),
     );
   }
-  return { world, tags, terrain };
+  return { world, tags, terrain, events: new RAPIER.EventQueue(true) };
 }

@@ -33,6 +33,19 @@ export interface SimOptions {
   slots?: readonly number[];
 }
 
+/** A hard knock this step: for sparks and sounds. */
+export interface Contact {
+  /** Index into `cars`. */
+  car: number;
+  against: 'barrier' | 'car';
+  /** Where (the middle of the contact points). */
+  x: number;
+  y: number;
+  z: number;
+  /** How hard: the contact force's impulse over the step (N·s). */
+  impulse: number;
+}
+
 /** One car's poses before and after the last step, for drawing in between. */
 export interface CarPoses {
   previous: CarPose;
@@ -47,6 +60,11 @@ export class Simulation {
   /** Simulation time (s). */
   time = 0;
   steps = 0;
+  /** This step's hard knocks (reused objects: copy what you keep). */
+  readonly contacts: Contact[] = [];
+  private readonly contactPool: Contact[] = [];
+  /** Chassis collider handle → car index. */
+  private readonly carByCollider = new Map<number, number>();
   private readonly slots: readonly number[];
 
   constructor(
@@ -62,6 +80,7 @@ export class Simulation {
       this.cars.push(new Car(this.physics, pose, carDef));
       this.timers.push(new LapTimer(track, pose.position.x, pose.position.z));
       this.poses.push({ previous: createPose(), current: createPose() });
+      this.carByCollider.set(this.cars[i].collider.handle, i);
       this.settlePose(i);
     }
   }
@@ -110,7 +129,8 @@ export class Simulation {
       copyPose(this.poses[i].current, this.poses[i].previous);
       car.update(list ? list[i] : (controls as Controls), PHYSICS_STEP);
     });
-    this.physics.world.step();
+    this.physics.world.step(this.physics.events);
+    this.collectContacts();
     this.time += PHYSICS_STEP;
     this.steps++;
     this.cars.forEach((car, i) => {
@@ -141,6 +161,50 @@ export class Simulation {
     const k = nearestSample(this.track, p.x, p.z, this.timers[i].index);
     this.cars[i].reset(poseOnTrack(this.track.samples[k]));
     this.settlePose(i);
+  }
+
+  /** Turn this step's contact force events into `contacts`: one per car in each knock. */
+  private collectContacts(): void {
+    this.contacts.length = 0;
+    const { world, events, tags } = this.physics;
+    events.drainContactForceEvents((e) => {
+      const h1 = e.collider1();
+      const h2 = e.collider2();
+      const impulse = e.totalForceMagnitude() * PHYSICS_STEP;
+      // Where: the middle of the solver's contact points, if it has any.
+      let x = 0;
+      let y = 0;
+      let z = 0;
+      let n = 0;
+      world.contactPair(world.getCollider(h1), world.getCollider(h2), (m) => {
+        for (let k = 0; k < m.numSolverContacts(); k++) {
+          const p = m.solverContactPoint(k);
+          if (!p) continue;
+          x += p.x;
+          y += p.y;
+          z += p.z;
+          n++;
+        }
+      });
+      for (const [mine, other] of [
+        [h1, h2],
+        [h2, h1],
+      ]) {
+        const car = this.carByCollider.get(mine);
+        if (car === undefined) continue;
+        const otherTag = tags.get(other);
+        if (otherTag !== 'barrier' && otherTag !== 'car') continue;
+        const at = n > 0 ? { x: x / n, y: y / n, z: z / n } : this.cars[car].position;
+        const c = this.contactPool[this.contacts.length] ?? (this.contactPool[this.contacts.length] = { car: 0, against: 'barrier', x: 0, y: 0, z: 0, impulse: 0 });
+        c.car = car;
+        c.against = otherTag;
+        c.x = at.x;
+        c.y = at.y;
+        c.z = at.z;
+        c.impulse = impulse;
+        this.contacts.push(c);
+      }
+    });
   }
 
   /** Make both of car `i`'s poses its pose now, so a teleport isn't drawn as a slide. */
