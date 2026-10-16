@@ -2,21 +2,32 @@ import * as THREE from 'three';
 import type { Vec3 } from '../math';
 import type { CarPose } from '../vehicle/pose';
 import type { CarDef } from '../vehicle/carDef';
+import { loadCarModel, type CarModel } from './carModels';
+
+export interface CarViewOptions {
+  /** Paint colour. */
+  colour?: number;
+  /** Draw see-through (0–1 opacity) and shadowless, as the ghost. */
+  translucent?: number;
+}
 
 /**
- * Placeholder car: boxes for the body and cabin, cylinders for wheels. Reads the car's
- * state; never writes to it. Milestone 6 swaps in a real model.
+ * A car: its model (render/carModels.ts) once loaded, a placeholder of boxes and cylinders
+ * until then or if it can't load. Reads the car's state; never writes to it.
  */
 export class CarView {
   readonly root = new THREE.Group();
-  private readonly wheels: { pivot: THREE.Group; tyre: THREE.Mesh }[] = [];
+  private readonly placeholder = new THREE.Group();
+  /** Per wheel: the steering pivot at the hub, and the group that spins. */
+  private readonly wheels: { pivot: THREE.Group; spin: THREE.Group; tyre: THREE.Object3D }[] = [];
 
   /** `mounts`: each wheel's suspension mount in car space (`Car.wheels[i].mount`). */
   constructor(
     def: CarDef,
     private readonly mounts: readonly Vec3[],
-    colour = 0xe0b020,
+    private readonly options: CarViewOptions = {},
   ) {
+    const colour = options.colour ?? 0xe0b020;
     const h = def.halfExtents;
     const paint = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.35, metalness: 0.3 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x15181c, roughness: 0.4, metalness: 0.2 });
@@ -29,15 +40,16 @@ export class CarView {
     wing.position.set(0, h.y * 1.0, h.z * 0.92);
     for (const m of [body, cabin, wing]) {
       m.castShadow = true;
-      this.root.add(m);
+      this.placeholder.add(m);
     }
     // Headlights at the front (-Z).
     const lightMat = new THREE.MeshBasicMaterial({ color: 0xfff6d8 });
     for (const x of [-0.6, 0.6]) {
       const l = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.02), lightMat);
       l.position.set(x, 0, -h.z - 0.005);
-      this.root.add(l);
+      this.placeholder.add(l);
     }
+    this.root.add(this.placeholder);
 
     const r = def.tyres.front.radius;
     const tyreGeo = new THREE.CylinderGeometry(r, r, 0.26, 20);
@@ -48,13 +60,18 @@ export class CarView {
     const rim = new THREE.MeshStandardMaterial({ color: 0xb8bcc2, roughness: 0.3, metalness: 0.8 });
     for (let i = 0; i < 4; i++) {
       const pivot = new THREE.Group();
+      const spin = new THREE.Group();
       const tyre = new THREE.Mesh(tyreGeo, rubber);
       tyre.add(new THREE.Mesh(rimGeo, rim));
       tyre.castShadow = true;
-      pivot.add(tyre);
+      spin.add(tyre);
+      pivot.add(spin);
       this.root.add(pivot);
-      this.wheels.push({ pivot, tyre });
+      this.wheels.push({ pivot, spin, tyre });
     }
+    if (options.translucent !== undefined) this.makeTranslucent(this.root);
+
+    void loadCarModel(def, colour).then((model) => model && this.useModel(model));
   }
 
   update(pose: CarPose): void {
@@ -63,13 +80,41 @@ export class CarView {
     this.root.position.set(p.x, p.y, p.z);
     this.root.quaternion.set(q.x, q.y, q.z, q.w);
     pose.wheels.forEach((w, i) => {
-      const { pivot, tyre } = this.wheels[i];
+      const { pivot, spin } = this.wheels[i];
       const m = this.mounts[i];
       pivot.position.set(m.x, m.y - w.suspensionLength, m.z);
       // Positive steer is to the right: clockwise from above, a negative rotation about +Y.
       pivot.rotation.y = -w.steer;
       // Rolling forward (-Z) turns the top of the wheel forward: negative rotation about +X.
-      tyre.rotation.x = -w.spin;
+      spin.rotation.x = -w.spin;
+    });
+  }
+
+  /** Swap the placeholder for the real model. */
+  private useModel(model: CarModel): void {
+    if (this.options.translucent !== undefined) {
+      this.makeTranslucent(model.body);
+      for (const w of model.wheels) this.makeTranslucent(w);
+    }
+    this.root.remove(this.placeholder);
+    this.root.add(model.body);
+    this.wheels.forEach((w, i) => {
+      w.spin.remove(w.tyre);
+      w.tyre = model.wheels[i];
+      w.spin.add(w.tyre);
+    });
+  }
+
+  private makeTranslucent(o: THREE.Object3D): void {
+    const opacity = this.options.translucent ?? 1;
+    o.traverse((m) => {
+      if (!(m instanceof THREE.Mesh)) return;
+      m.castShadow = m.receiveShadow = false;
+      const material = (m.material as THREE.Material).clone();
+      material.transparent = true;
+      material.opacity = opacity;
+      material.depthWrite = false;
+      m.material = material;
     });
   }
 }

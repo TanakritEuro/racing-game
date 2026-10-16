@@ -11,17 +11,8 @@ export class GhostView {
   private readonly state = createRecordedState();
 
   constructor(def: CarDef, mounts: readonly Vec3[]) {
-    this.view = new CarView(def, mounts, 0x9fd4ff);
+    this.view = new CarView(def, mounts, { colour: 0x9fd4ff, translucent: 0.35 });
     this.root = this.view.root;
-    this.root.traverse((o) => {
-      if (!(o instanceof THREE.Mesh)) return;
-      o.castShadow = o.receiveShadow = false;
-      const m = (o.material as THREE.Material).clone();
-      m.transparent = true;
-      m.opacity = 0.35;
-      m.depthWrite = false;
-      o.material = m;
-    });
   }
 
   /** Show `rec` at `t` seconds into its lap, or hide the ghost (no recording, out lap, or past its end). */

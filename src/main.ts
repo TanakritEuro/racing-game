@@ -86,7 +86,7 @@ stage.scene.add(carView.root);
 // The other cars, each in its own colour.
 const AI_COLOURS = [0xd8342c, 0x2f6fd8, 0x2fa84f, 0xeeeeee, 0xf08a24, 0x8e44c8, 0x1fb5b0];
 const others = sim.cars.slice(1).map((car, k) => {
-  const view = new CarView(car.def, car.wheels.map((w) => w.mount), AI_COLOURS[k % AI_COLOURS.length]);
+  const view = new CarView(car.def, car.wheels.map((w) => w.mount), { colour: AI_COLOURS[k % AI_COLOURS.length] });
   stage.scene.add(view.root);
   return { view, drawn: createPose(), colour: `#${AI_COLOURS[k % AI_COLOURS.length].toString(16).padStart(6, '0')}` };
 });
