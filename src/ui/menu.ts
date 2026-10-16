@@ -60,6 +60,8 @@ export interface MenuEvents {
   onQuit(): void;
   /** A setting changed (already written into the settings object). */
   onSettings(): void;
+  /** Open the garage: for the circuit and car picked in the start menu, or (null) the car being driven. */
+  onGarage(choice: { track: string; car: string } | null): void;
 }
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
@@ -83,6 +85,7 @@ export class Menu {
   private season: SeasonInfo | null = null;
   private readonly restartButton: HTMLButtonElement;
   private readonly quitButton: HTMLButtonElement;
+  private readonly pauseSetup: HTMLButtonElement;
 
   constructor(
     parent: HTMLElement,
@@ -198,6 +201,10 @@ export class Menu {
       start.classList.toggle('menu-go', !continuing);
       start.disabled = online && choice.online === 'join' && choice.code.length !== 4;
     });
+    const setupButton = button(go, 'Car setup');
+    setupButton.addEventListener('click', () => events.onGarage({ track: choice.track, car: choice.car }));
+    // A championship visits every circuit, and a guest online doesn't know the circuit yet: set up from the pause menu.
+    this.refresh.push(() => setupButton.classList.toggle('hidden', choice.mode === 'season' || (choice.mode === 'online' && choice.online === 'join')));
     button(go, 'Settings').addEventListener('click', () => this.showSettings(this.start));
     div(this.start, 'menu-help', KEYS);
 
@@ -207,6 +214,8 @@ export class Menu {
     button(pauseRow, 'Resume', 'menu-go').addEventListener('click', () => events.onResume());
     this.restartButton = button(pauseRow, 'Restart');
     this.restartButton.addEventListener('click', () => events.onRestart());
+    this.pauseSetup = button(pauseRow, 'Car setup');
+    this.pauseSetup.addEventListener('click', () => events.onGarage(null));
     button(pauseRow, 'Settings').addEventListener('click', () => this.showSettings(this.pause));
     this.quitButton = button(pauseRow, 'Quit to menu');
     this.quitButton.addEventListener('click', () => events.onQuit());
@@ -269,7 +278,13 @@ export class Menu {
   /** An online race: the pause menu can't restart it, and quitting leaves it. */
   setOnline(): void {
     this.restartButton.classList.add('hidden');
+    this.pauseSetup.classList.add('hidden');
     this.quitButton.textContent = 'Leave race';
+  }
+
+  /** Whether the pause menu offers the garage (not once a championship round has counted). */
+  allowSetup(allowed: boolean): void {
+    this.pauseSetup.classList.toggle('hidden', !allowed);
   }
 
   /** The championship in progress, if any (for Continue). */

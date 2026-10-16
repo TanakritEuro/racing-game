@@ -43,6 +43,9 @@ import { NO_CONTROLS, poseOnTrack, wheelMounts, type Controls } from './vehicle/
 import { cleanRoomCode, joinRoom, openRoom, type Link } from './online/link';
 import { guestHandshake, hostHandshake, OnlineError, OnlineRace, type OnlineSetup } from './online/session';
 import { OnlinePanel } from './ui/onlinePanel';
+import { Garage } from './ui/garage';
+import { SetupStore } from './storage/setups';
+import { applySetup, cleanSetup, type Setup } from './vehicle/setup';
 import { CARS, KESTREL } from './vehicle/cars';
 import { createPose, interpolatePose } from './vehicle/pose';
 import { NEUTRAL, REVERSE } from './vehicle/gearbox';
@@ -73,26 +76,31 @@ const circuit =
 const track = buildTrack(circuit);
 document.querySelector('#track-name')!.textContent = circuit.name.toUpperCase();
 // Race mode (?mode=race, Tab switches): ?difficulty=easy|medium|hard, ?opponents=0..7, ?laps=N.
-// The car: ?car=wren|kestrel|harrier (Kestrel by default). In a race everyone drives it.
+// The car: ?car=wren|kestrel|harrier (Kestrel by default). In a race everyone drives it, the
+// player with their setup for this circuit (?setup=default: as designed), the AI as designed.
 const carId = connected ? connected.setup.mine.toLowerCase() : season ? season.car.toLowerCase() : fromUrl ? params.get('car') : settings.start.car.toLowerCase();
 const carDef = CARS.find((c) => c.name.toLowerCase() === carId) ?? KESTREL;
+const setups = new SetupStore();
+const setup: Setup = params.get('setup') === 'default' ? {} : setups.load(circuit.id, carDef.name);
+const playerDef = applySetup(carDef, setup);
 const race = connected
   ? null
   : seasonRound
-    ? new Race(track, seasonRound.options, carDef)
+    ? new Race(track, seasonRound.options, carDef, playerDef)
     : params.get('mode') === 'race'
-      ? new Race(track, raceOptions(params), carDef)
+      ? new Race(track, raceOptions(params), carDef, playerDef)
       : null;
 /** This championship round's result has been recorded (it can't be run again). */
 let recorded = false;
 const online = connected
-  ? new OnlineRace(connected.link, connected.setup, track, carDef, CARS.find((c) => c.name === connected.setup.theirs) ?? KESTREL, {
+  ? new OnlineRace(connected.link, connected.setup, track, playerDef, CARS.find((c) => c.name === connected.setup.theirs) ?? KESTREL, {
       clock: () => performance.now() / 1000,
       seed: 1 + Math.floor(Math.random() * 2 ** 30),
       difficulty: raceOptions(params).difficulty,
+      stock: carDef,
     })
   : null;
-const sim = online ? online.sim : race ? race.sim : new Simulation(track, carDef);
+const sim = online ? online.sim : race ? race.sim : new Simulation(track, playerDef);
 
 /** Open or join a room and agree the race; on failure, say why and offer the way back. */
 async function connect(joining: boolean): Promise<{ link: Link; setup: OnlineSetup }> {
@@ -243,6 +251,8 @@ if (stored) session.loadBest(stored.lap, stored.timeAtSample, stored.bestSectors
 const NOT_KEPT = 'Bests are not kept in this browser';
 if (!store.persistent) timing.note = NOT_KEPT;
 let savedSectors = JSON.stringify(sim.timer.bestSectors);
+/** The setup the best lap was set with (kept with it). */
+let bestSetup: Setup | null = stored ? (stored.setup ?? {}) : null;
 
 /** After a lap: keep a new best lap, or a new best sector. */
 function keepBests(event: LapEvent): void {
@@ -252,7 +262,8 @@ function keepBests(event: LapEvent): void {
   const sectors = JSON.stringify(sim.timer.bestSectors);
   if (!bests || (event !== 'best' && sectors === savedSectors)) return;
   savedSectors = sectors;
-  void store.save({ key, fingerprint: session.fingerprint, ...bests }).then((ok) => {
+  if (event === 'best') bestSetup = setup;
+  void store.save({ key, fingerprint: session.fingerprint, ...bests, setup: bestSetup ?? {} }).then((ok) => {
     if (!ok) timing.note = NOT_KEPT;
   });
 }
@@ -334,6 +345,7 @@ const menu = new Menu(
       goTo({});
     },
     onSettings: applySettings,
+    onGarage: openGarage,
   },
   { ...settings.start },
   CIRCUITS.map((c, i) => ({
@@ -352,6 +364,7 @@ const menu = new Menu(
   settings,
 );
 if (!fromUrl) menu.showStart();
+const garage = new Garage(document.body);
 if (online) {
   menu.setOnline();
   document.querySelector('#keys')!.innerHTML = 'Esc menu (the race goes on) &nbsp; R back on the track &nbsp; C camera &nbsp; Enter rematch';
@@ -384,8 +397,46 @@ void Promise.all(
   menu.setBests((t, car) => bests.get(`${t}/${car}`) ?? null);
 });
 
+/**
+ * The garage, from the start menu (`choice`: the car and circuit picked there) or the pause
+ * menu (null: this car here; a changed setup restarts from the grid with it).
+ */
+function openGarage(choice: { track: string; car: string } | null): void {
+  const def = choice ? (CARS.find((c) => c.name === choice.car) ?? KESTREL) : carDef;
+  const index = choice ? Math.max(0, CIRCUITS.findIndex((c) => c.id === choice.track)) : CIRCUITS.indexOf(circuit);
+  const where = CIRCUITS[index];
+  const best = choice
+    ? store.load(bestKey(where.id, def.name), trackFingerprint(builtCircuits[index])).then((r) => (r ? (r.setup ?? {}) : null))
+    : Promise.resolve(bestSetup);
+  const now = setups.load(where.id, def.name);
+  garage.show({
+    car: def,
+    circuitName: where.name,
+    setup: choice ? now : setup,
+    best,
+    note: choice
+      ? 'Kept for this car on this circuit; it is used whenever you drive it here.'
+      : `Kept for this car on this circuit. Done with a change restarts ${race ? 'the race' : 'from the grid'} with it.`,
+    onDone(next) {
+      setups.save(where.id, def.name, next);
+      if (choice) return;
+      if (JSON.stringify(cleanSetup(next)) === JSON.stringify(cleanSetup(setup)) && params.get('setup') !== 'default') return;
+      params.delete('setup');
+      const search = params.toString();
+      if (location.search.replace(/^\?/, '') === search) location.reload();
+      else location.search = search;
+    },
+    onCancel() {},
+  });
+}
+
 window.addEventListener('keydown', (e) => {
   sound.unlock();
+  // The garage takes the keys: Esc closes it without keeping the changes.
+  if (garage.open) {
+    if (e.code === 'Escape') garage.cancel();
+    return;
+  }
   // The standings take the keys (their buttons go on).
   if (standingsScreen.open) return;
   // A menu takes the keys: Esc goes back a level.
@@ -577,6 +628,8 @@ function updateHud(dt: number): void {
   // A championship round over: count it, save the season, and show the standings.
   if (season && race && race.phase === 'finished' && !recorded) {
     recorded = true;
+    // It can't be run again, so not set up again either.
+    menu.allowSetup(false);
     season = recordRound(season, finishingOrder(race.standings()));
     saveSeason(season);
     if (seasonOver(season)) menu.setSeason(null);

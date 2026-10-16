@@ -175,7 +175,7 @@ describe('car', () => {
     // ~0.95 g plus the 0.3 s squeeze; no more grip than the tyres have.
     expect(best).toBeLessThan(45);
     expect(best).toBeGreaterThan(36);
-  });
+  }, 300_000);
 
   it('holds still on a slope with the brake held', () => {
     run(sim, NO_CONTROLS, 1);

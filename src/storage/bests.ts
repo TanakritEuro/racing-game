@@ -5,6 +5,7 @@
 
 import { decodeRecording, encodeRecording, type LapRecording } from '../race/recording';
 import type { Sectors } from '../race/timing';
+import { cleanSetup, type Setup } from '../vehicle/setup';
 
 export interface BestRecord {
   /** `${trackId}/${carName}` */
@@ -15,6 +16,8 @@ export interface BestRecord {
   bestSectors: Sectors;
   /** The best lap's elapsed time at each track sample. */
   timeAtSample: Float32Array;
+  /** The setup the best lap was set with (none: the car as designed). */
+  setup?: Setup;
 }
 
 /** As stored: the recording as bytes, so its own version check applies when read back. */
@@ -24,6 +27,7 @@ interface StoredBest {
   lap: ArrayBuffer;
   bestSectors: Sectors;
   timeAtSample: Float32Array;
+  setup?: Setup;
 }
 
 export function bestKey(trackId: string, carName: string): string {
@@ -81,7 +85,7 @@ class IndexedDbStore implements BestStore {
         await request(this.db.transaction(STORE, 'readwrite').objectStore(STORE).delete(key));
         return null;
       }
-      return { key, fingerprint, lap, bestSectors: stored.bestSectors, timeAtSample: stored.timeAtSample };
+      return { key, fingerprint, lap, bestSectors: stored.bestSectors, timeAtSample: stored.timeAtSample, setup: cleanSetup(stored.setup) };
     } catch {
       return null;
     }
@@ -94,6 +98,7 @@ class IndexedDbStore implements BestStore {
       lap: encodeRecording(record.lap),
       bestSectors: [...record.bestSectors],
       timeAtSample: record.timeAtSample.slice(),
+      setup: cleanSetup(record.setup),
     };
     try {
       const tx = this.db.transaction(STORE, 'readwrite');
