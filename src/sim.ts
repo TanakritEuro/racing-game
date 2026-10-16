@@ -5,7 +5,8 @@
 // a one-car simulation (time trial, the vehicle tests) reads as it always has.
 
 import { PHYSICS_STEP } from './constants';
-import { createPhysics, type Physics } from './physics';
+import { addKinematicCar, createPhysics, type Physics } from './physics';
+import type RAPIER from '@dimforge/rapier3d-compat';
 import { LapTimer } from './race/timing';
 import { nearestSample, type Track, type TrackSample } from './track/track';
 import { Car, poseOnTrack, type Controls, type Pose } from './vehicle/car';
@@ -46,6 +47,17 @@ export interface Contact {
   impulse: number;
 }
 
+/** Another player's car: moved to where it is reported to be, drawn like any car. */
+export interface Proxy {
+  readonly def: CarDef;
+  readonly body: RAPIER.RigidBody;
+  readonly collider: RAPIER.Collider;
+  /** Where it goes on the next step, and where it was before and after the last (for drawing). */
+  readonly target: CarPose;
+  readonly previous: CarPose;
+  readonly current: CarPose;
+}
+
 /** One car's poses before and after the last step, for drawing in between. */
 export interface CarPoses {
   previous: CarPose;
@@ -60,6 +72,8 @@ export class Simulation {
   /** Simulation time (s). */
   time = 0;
   steps = 0;
+  /** Other players' cars (online), in the order they were added. */
+  readonly proxies: Proxy[] = [];
   /** This step's hard knocks (reused objects: copy what you keep). */
   readonly contacts: Contact[] = [];
   private readonly contactPool: Contact[] = [];
@@ -122,6 +136,25 @@ export class Simulation {
     });
   }
 
+  /** Add another player's car, at `pose`; returns its index in `proxies`. */
+  addProxy(def: CarDef, pose: Pose): number {
+    const { body, collider } = addKinematicCar(this.physics, def.halfExtents);
+    const proxy: Proxy = { def, body, collider, target: createPose(), previous: createPose(), current: createPose() };
+    for (const p of [proxy.target, proxy.previous, proxy.current]) {
+      Object.assign(p.position, pose.position);
+      Object.assign(p.rotation, pose.rotation);
+    }
+    body.setTranslation(pose.position, true);
+    body.setRotation(pose.rotation, true);
+    this.proxies.push(proxy);
+    return this.proxies.length - 1;
+  }
+
+  /** Where proxy `i` should be after the next step. */
+  setProxyPose(i: number, pose: CarPose): void {
+    copyPose(pose, this.proxies[i].target);
+  }
+
   /** One fixed step: `controls` for the player alone, or one per car. */
   step(controls: Controls | readonly Controls[]): void {
     const list = Array.isArray(controls) ? (controls as readonly Controls[]) : null;
@@ -129,6 +162,13 @@ export class Simulation {
       copyPose(this.poses[i].current, this.poses[i].previous);
       car.update(list ? list[i] : (controls as Controls), PHYSICS_STEP);
     });
+    // Proxies glide to their targets over the step (kinematic: they push, nothing pushes them).
+    for (const p of this.proxies) {
+      copyPose(p.current, p.previous);
+      p.body.setNextKinematicTranslation(p.target.position);
+      p.body.setNextKinematicRotation(p.target.rotation);
+      copyPose(p.target, p.current);
+    }
     this.physics.world.step(this.physics.events);
     this.collectContacts();
     this.time += PHYSICS_STEP;

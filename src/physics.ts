@@ -36,6 +36,20 @@ export const WHEEL_QUERY_GROUPS = groups(ALL, GROUND);
 export const BARRIER_HEIGHT = 1.0;
 export const BARRIER_THICKNESS = 0.6;
 
+/**
+ * A kinematic car body (the other player's car, moved to where it is reported to be): it
+ * pushes the cars it meets and isn't pushed back. Tagged as a car for contacts.
+ */
+export function addKinematicCar(physics: Physics, half: { x: number; y: number; z: number }): { body: RAPIER.RigidBody; collider: RAPIER.Collider } {
+  const body = physics.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
+  const collider = physics.world.createCollider(
+    RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setFriction(0.3).setRestitution(0.1).setCollisionGroups(CAR_GROUPS),
+    body,
+  );
+  physics.tags.set(collider.handle, 'car');
+  return { body, collider };
+}
+
 /** Call once before creating any world (loads Rapier's WASM). */
 export async function initPhysics(): Promise<void> {
   await RAPIER.init();
