@@ -7,6 +7,7 @@
 
 import { TUNING } from '../config';
 import { GRAVITY } from '../constants';
+import { surfaceGrip } from '../track/weather';
 import { gripAt, type CarEnvelope } from './envelope';
 import type { RacingLine } from './racingLine';
 
@@ -17,16 +18,31 @@ export interface ProfileOptions {
   pace?: number;
   /** Top speed allowed anywhere (m/s). */
   maxSpeed?: number;
+  /** Samples where the line runs through standing water (1), on a wet track. */
+  water?: Uint8Array | null;
+}
+
+/** The share of the wet road's grip left in standing water at speed s. */
+function waterShare(s: number): number {
+  return surfaceGrip('water', 1, s).grip / surfaceGrip('asphalt', 1, s).grip;
 }
 
 /** Speed (m/s) at each sample of `line` for a car with envelope `env`. */
-export function speedProfile(line: RacingLine, env: CarEnvelope, { pace = 1, maxSpeed = TUNING.ai.maxSpeed }: ProfileOptions = {}): Float32Array {
+export function speedProfile(line: RacingLine, env: CarEnvelope, { pace = 1, maxSpeed = TUNING.ai.maxSpeed, water = null }: ProfileOptions = {}): Float32Array {
   const n = line.curvature.length;
   const lateralMu = env.lateralMu * pace;
   const brakingMu = env.brakingMu * pace;
   const v = new Float32Array(n);
+  // Grip at sample i and speed s: less in standing water, the less the faster.
+  const muAt = (i: number, s: number, mu: number) => (water?.[i] ? mu * waterShare(s) : mu);
 
-  for (let i = 0; i < n; i++) v[i] = corneringLimit(line, env, i, lateralMu, maxSpeed);
+  for (let i = 0; i < n; i++) {
+    v[i] = corneringLimit(line, env, i, lateralMu, maxSpeed);
+    if (!water?.[i]) continue;
+    // In water the grip depends on the speed: settle on a speed the water's grip can hold, and lift.
+    for (let k = 0; k < 4; k++) v[i] = corneringLimit(line, env, i, muAt(i, v[i], lateralMu), maxSpeed);
+    v[i] = Math.min(v[i], TUNING.ai.waterSpeed);
+  }
 
   const step = (i: number) => {
     const j = (i + 1) % n;
@@ -36,7 +52,7 @@ export function speedProfile(line: RacingLine, env: CarEnvelope, { pace = 1, max
   // Grip left for accelerating or braking at speed s at sample i, with the cornering it's
   // doing; `taper` gives up more of it the harder the car corners.
   const spare = (i: number, s: number, mu: number, taper = 0) => {
-    const grip = gripAt(env, mu, s, G + s * s * line.vertical[i]);
+    const grip = gripAt(env, muAt(i, s, mu), s, G + s * s * line.vertical[i]);
     const load = Math.min(1, (s * s * Math.abs(line.curvature[i])) / Math.max(grip, 1e-6));
     return grip * Math.sqrt(1 - load * load) * (1 - taper * load);
   };

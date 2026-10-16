@@ -7,6 +7,7 @@ import { AIR_DENSITY, GRAVITY } from '../constants';
 import type { CarDef } from '../vehicle/carDef';
 import { fullThrottleTorque } from '../vehicle/engine';
 import { frictionCoefficient } from '../vehicle/tyre';
+import { surfaceGrip } from '../track/weather';
 
 export interface CarEnvelope {
   mass: number;
@@ -32,14 +33,15 @@ export interface CarEnvelope {
 
 const G = -GRAVITY;
 
-export function carEnvelope(def: CarDef): CarEnvelope {
+/** `wet`: how wet the road is (0–1): the grip the car reaches falls with the road's. */
+export function carEnvelope(def: CarDef, wet = 0): CarEnvelope {
   const E = TUNING.ai.envelope;
   // Static loads: the centre of mass sits `centreOfMass.z` behind the middle of the wheelbase.
   const frontShare = 0.5 - def.centreOfMass.z / (2 * def.wheelbaseHalf);
   const weight = def.mass * G;
   const frontMu = frictionCoefficient(def.tyres.front, (weight * frontShare) / 2);
   const rearMu = frictionCoefficient(def.tyres.rear, (weight * (1 - frontShare)) / 2);
-  const mu = frontMu * frontShare + rearMu * (1 - frontShare);
+  const mu = (frontMu * frontShare + rearMu * (1 - frontShare)) * surfaceGrip('asphalt', wet, 0).grip;
   const lift = -(def.aero.lift.front + def.aero.lift.rear);
   const { engine, gearbox, clutch } = def;
   const radius = def.tyres.rear.radius;

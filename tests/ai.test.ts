@@ -20,6 +20,30 @@ const TARGETS: Record<string, [number, number]> = {
   'proving-ground': [50, 56],
 };
 
+describe.each(CIRCUITS.map((c) => [c.name, c] as const))('AI in the wet at %s', (_, def) => {
+  it('laps twice without getting stuck, 10–25 % slower than in the dry', async () => {
+    await initPhysics();
+    const track = buildTrack(def);
+    const sim = new Simulation(track, KESTREL, { conditions: 'wet' });
+    const ai = createAiDriver(track, KESTREL, undefined, 1, 'wet');
+    let recoveries = 0;
+    for (let k = 0; k < 600 * 120 && sim.timer.laps < 2; k++) {
+      sim.step(ai.drive(sim.car, PHYSICS_STEP));
+      if (ai.stuck) {
+        recoveries++;
+        sim.recover();
+        ai.recovered();
+      }
+    }
+    expect(sim.timer.laps).toBe(2);
+    expect(recoveries).toBe(0);
+    const [lo, hi] = TARGETS[def.id];
+    const slower = sim.timer.lastLap! / ((lo + hi) / 2);
+    expect(slower).toBeGreaterThan(1.1);
+    expect(slower).toBeLessThan(1.25);
+  }, 300_000);
+});
+
 describe.each(CIRCUITS.map((c) => [c.name, c] as const))('AI at %s', (_, def) => {
   it('laps three times cleanly within its target time', async () => {
     await initPhysics();

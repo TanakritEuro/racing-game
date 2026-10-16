@@ -13,6 +13,8 @@ import { TUNING } from '../config';
 import { GRAVITY } from '../constants';
 import { clamp, createRng, type Rng } from '../math';
 import { lateralOffset, nearestSample, type Track } from '../track/track';
+import { puddles, puddleSpan } from '../track/puddles';
+import { wetness, type Conditions } from '../track/weather';
 import { controls, type Car, type Controls } from '../vehicle/car';
 import { usableLock } from '../drivers/steeringAssist';
 import type { CarDef } from '../vehicle/carDef';
@@ -231,26 +233,51 @@ export class AiDriver {
   }
 }
 
-/** What every AI driver of one car on one circuit shares: the line and the car's envelope. */
+/**
+ * What every AI driver of one car on one circuit in one weather shares: the line (the same in
+ * any weather), the car's envelope, and where the line runs through standing water (wet only).
+ */
 export interface CircuitAi {
   line: RacingLine;
   env: CarEnvelope;
+  water: Uint8Array | null;
 }
 
-const prepared = new WeakMap<Track, Map<CarDef, CircuitAi>>();
+const prepared = new WeakMap<Track, Map<CarDef, Map<Conditions, CircuitAi>>>();
 
-/** The racing line and envelope for `def` on `track`, computed once and kept. */
-export function circuitAi(track: Track, def: CarDef): CircuitAi {
+/** The racing line and envelope for `def` on `track` in `conditions`, computed once and kept. */
+export function circuitAi(track: Track, def: CarDef, conditions: Conditions = 'dry'): CircuitAi {
   let byCar = prepared.get(track);
   if (!byCar) prepared.set(track, (byCar = new Map()));
-  let ai = byCar.get(def);
-  if (!ai) byCar.set(def, (ai = { line: racingLine(track, def.halfExtents.x), env: carEnvelope(def) }));
+  let byWeather = byCar.get(def);
+  if (!byWeather) byCar.set(def, (byWeather = new Map()));
+  let ai = byWeather.get(conditions);
+  if (!ai) {
+    const line = byWeather.values().next().value?.line ?? racingLine(track, def.halfExtents.x);
+    const wet = wetness(conditions);
+    ai = { line, env: carEnvelope(def, wet), water: wet >= 1 ? waterOnLine(track, line, def.halfExtents.x) : null };
+    byWeather.set(conditions, ai);
+  }
   return ai;
 }
 
-/** A driver for `def` on `track` with `skill`, its mistakes drawn from `seed`. */
-export function createAiDriver(track: Track, def: CarDef, skill: Skill = PERFECT, seed = 1): AiDriver {
-  const { line, env } = circuitAi(track, def);
-  const profile = brakeEarlier(speedProfile(line, env, { pace: skill.pace }), skill.braking, track.length / track.samples.length);
+/** Samples where a car on `line` (half as wide as `halfWidth`) would be in standing water. */
+function waterOnLine(track: Track, line: RacingLine, halfWidth: number): Uint8Array {
+  const n = track.samples.length;
+  const out = new Uint8Array(n);
+  for (const p of puddles(track)) {
+    for (let i = p.first; i !== p.last; i = (i + 1) % n) {
+      const [a, b] = puddleSpan(p, track.samples[i]);
+      const at = line.offset[i];
+      if (at + halfWidth > a && at - halfWidth < b) out[i] = 1;
+    }
+  }
+  return out;
+}
+
+/** A driver for `def` on `track` in `conditions` with `skill`, its mistakes drawn from `seed`. */
+export function createAiDriver(track: Track, def: CarDef, skill: Skill = PERFECT, seed = 1, conditions: Conditions = 'dry'): AiDriver {
+  const { line, env, water } = circuitAi(track, def, conditions);
+  const profile = brakeEarlier(speedProfile(line, env, { pace: skill.pace, water }), skill.braking, track.length / track.samples.length);
   return new AiDriver(track, line, profile, env, skill, createRng(seed));
 }

@@ -274,6 +274,8 @@ export const TUNING = {
     },
     /** Top of the speed profile on a straight (m/s), past the car's real top speed. */
     maxSpeed: 90,
+    /** Through standing water the AI holds at most this (m/s), however straight the road: it lifts. */
+    waterSpeed: 38,
     /**
      * Difficulty (`ai/skill.ts`): the range each skill is spread over across a field. pace:
      * share of the car's grip used; braking: extra metres before each braking point;
