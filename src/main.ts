@@ -22,6 +22,7 @@ import { formatLapTime } from './race/timing';
 import { Replay, REPLAY_SPEEDS } from './replay/replay';
 import { TvCameraView } from './render/tvCameras';
 import { Effects } from './render/effects';
+import { Dashboard } from './ui/dashboard';
 import { GameAudio, type Listener } from './audio';
 import { Sound } from './audio/sound';
 import { placeTvCameras } from './track/cameras';
@@ -40,14 +41,7 @@ import { createPose, interpolatePose } from './vehicle/pose';
 import { NEUTRAL, REVERSE } from './vehicle/gearbox';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
-const hud = {
-  speed: document.querySelector<HTMLDivElement>('#speed')!,
-  gear: document.querySelector<HTMLDivElement>('#gear')!,
-  rpm: document.querySelector<HTMLDivElement>('#rpm-fill')!,
-  abs: document.querySelector<HTMLSpanElement>('#abs-light')!,
-  tc: document.querySelector<HTMLSpanElement>('#tc-light')!,
-  assist: document.querySelector<HTMLSpanElement>('#assist-light')!,
-};
+const dash = new Dashboard(document.querySelector<HTMLDivElement>('#dash')!);
 
 const gearLabel = (gear: number) => (gear === REVERSE ? 'R' : gear === NEUTRAL ? 'N' : String(gear));
 
@@ -274,9 +268,21 @@ function drawReplay(t: number, dt: number): void {
   const state = replay.paused ? 'PAUSED' : `${replay.speed}×`;
   replayHud.time.textContent = `${formatLapTime(t)} / ${formatLapTime(duration(rec))}  ·  ${state}`;
   audio.replay(sim.car.def, replayState.rpm, replayState.throttle);
-  hud.speed.textContent = String(Math.round(Math.abs(replayState.speed) * 3.6));
-  hud.gear.textContent = gearLabel(Math.round(replayState.gear));
-  hud.rpm.style.width = `${Math.min(100, (replayState.rpm / sim.car.def.engine.limiterRpm) * 100)}%`;
+  const def = sim.car.def;
+  dash.update(
+    {
+      rpm: replayState.rpm,
+      speed: Math.abs(replayState.speed) * 3.6,
+      gear: gearLabel(Math.round(replayState.gear)),
+      mode: 'REPLAY',
+      limiter: def.engine.limiterRpm,
+      upshift: def.gearbox.upshiftRpm.full,
+      abs: [false, false],
+      tc: [false, false],
+      assist: false,
+    },
+    dt,
+  );
 }
 
 function recover(): void {
@@ -286,20 +292,24 @@ function recover(): void {
   cameras.snap();
 }
 
-function updateHud(): void {
-  hud.speed.textContent = String(Math.round(Math.abs(sim.car.speed) * 3.6));
-  const drivetrain = sim.car.drivetrain;
-  hud.gear.textContent = `${gearLabel(drivetrain.gearbox.nextGear)} ${drivetrain.gearbox.mode === 'auto' ? 'AUTO' : 'MANUAL'}`;
-  hud.rpm.style.width = `${Math.min(100, (drivetrain.rpm / sim.car.def.engine.limiterRpm) * 100)}%`;
-  hud.rpm.classList.toggle('limit', drivetrain.rpm > sim.car.def.gearbox.upshiftRpm.full);
+function updateHud(dt: number): void {
+  const car = sim.car;
+  const drivetrain = car.drivetrain;
   // Dashboard lights: dim when off, lit when on, bright while working.
-  const light = (el: HTMLElement, on: boolean, active: boolean) => {
-    el.classList.toggle('on', on);
-    el.classList.toggle('active', on && active);
-  };
-  light(hud.abs, sim.car.aids.abs, sim.car.absActive);
-  light(hud.tc, sim.car.aids.tc, sim.car.tcActive);
-  light(hud.assist, steering.assist, false);
+  dash.update(
+    {
+      rpm: drivetrain.rpm,
+      speed: Math.abs(car.speed) * 3.6,
+      gear: gearLabel(drivetrain.gearbox.nextGear),
+      mode: drivetrain.gearbox.mode === 'auto' ? 'AUTO' : 'MANUAL',
+      limiter: car.def.engine.limiterRpm,
+      upshift: car.def.gearbox.upshiftRpm.full,
+      abs: [car.aids.abs, car.absActive],
+      tc: [car.aids.tc, car.tcActive],
+      assist: steering.assist,
+    },
+    dt,
+  );
   timing.update(sim.timer, sim.time);
   if (race) raceHud?.update(race);
 }
@@ -378,7 +388,7 @@ function frame(now: number): void {
   listener.rightX = m[0] / rl;
   listener.rightZ = m[2] / rl;
   audio.update(sim, race ? race.controls : [controls], listener);
-  updateHud();
+  updateHud(dt);
   telemetry.update({
     time: sim.time,
     speed: sim.car.speed,
