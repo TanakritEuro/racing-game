@@ -87,9 +87,7 @@ export class Menu {
     for (const c of circuits) {
       const b = this.choiceButton(circuitRow, '', () => choice.track === c.id, () => (choice.track = c.id));
       b.classList.add('menu-card');
-      const thumb = document.createElement('canvas');
-      drawOutline(thumb, c.outline);
-      b.appendChild(thumb);
+      b.appendChild(outline(c.outline));
       div(b, 'menu-card-name', c.name);
       div(b, 'menu-card-sub', `${c.length.toFixed(1)} km · ${c.blurb}`);
       const best = div(b, 'menu-card-sub');
@@ -253,13 +251,13 @@ export class Menu {
   }
 }
 
-/** A circuit's outline, scaled to fit a small canvas. */
-function drawOutline(canvas: HTMLCanvasElement, points: readonly { x: number; z: number }[]): void {
+/**
+ * A circuit's outline as a small SVG: vector, so it stays crisp at any pixel ratio. (Drawn on
+ * a small canvas, the dense centreline came out broken and scribbled in Chrome.)
+ */
+function outline(points: readonly { x: number; z: number }[]): SVGSVGElement {
   const size = 96;
-  const ratio = Math.min(2, window.devicePixelRatio || 1);
-  canvas.width = canvas.height = size * ratio;
-  canvas.style.width = canvas.style.height = `${size}px`;
-  const ctx = canvas.getContext('2d')!;
+  const pad = 7;
   let minX = Infinity;
   let maxX = -Infinity;
   let minZ = Infinity;
@@ -270,21 +268,20 @@ function drawOutline(canvas: HTMLCanvasElement, points: readonly { x: number; z:
     minZ = Math.min(minZ, p.z);
     maxZ = Math.max(maxZ, p.z);
   }
-  const scale = ((size - 14) * ratio) / Math.max(maxX - minX, maxZ - minZ);
-  const ox = (size * ratio - (maxX - minX) * scale) / 2;
-  const oz = (size * ratio - (maxZ - minZ) * scale) / 2;
-  ctx.beginPath();
-  points.forEach((p, i) => {
-    const u = ox + (p.x - minX) * scale;
-    const v = oz + (p.z - minZ) * scale;
-    if (i === 0) ctx.moveTo(u, v);
-    else ctx.lineTo(u, v);
-  });
-  ctx.closePath();
-  ctx.lineJoin = 'round';
-  ctx.lineWidth = 3 * ratio;
-  ctx.strokeStyle = '#f2f4f7';
-  ctx.stroke();
+  const scale = (size - 2 * pad) / Math.max(maxX - minX, maxZ - minZ);
+  const ox = (size - (maxX - minX) * scale) / 2;
+  const oz = (size - (maxZ - minZ) * scale) / 2;
+  const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${(ox + (p.x - minX) * scale).toFixed(1)} ${(oz + (p.z - minZ) * scale).toFixed(1)}`).join(' ') + ' Z';
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.classList.add('menu-outline');
+  const path = document.createElementNS(ns, 'path');
+  path.setAttribute('d', d);
+  svg.appendChild(path);
+  return svg;
 }
 
 export function div(parent: HTMLElement, className: string, text = ''): HTMLElement {

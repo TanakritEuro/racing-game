@@ -545,13 +545,20 @@ body.replaying #keys {
   text-align: center;
 }
 
-.menu-card canvas {
+.menu-outline {
   display: block;
   margin-bottom: 2px;
 }
 
-.menu button.selected canvas {
-  filter: invert(1);
+.menu-outline path {
+  fill: none;
+  stroke: #f2f4f7;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+.menu button.selected .menu-outline path {
+  stroke: #111;
 }
 
 .menu-card-name {
