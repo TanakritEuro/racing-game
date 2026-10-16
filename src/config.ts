@@ -353,6 +353,20 @@ export const TUNING = {
     maxSpeed: 90,
     /** Through standing water the AI holds at most this (m/s), however straight the road: it lifts. */
     waterSpeed: 38,
+    /** Pit stops: deciding, and driving the lane. */
+    pits: {
+      /** Stop if the tyres would reach the cliff within this many laps' wear. */
+      cliffMargin: 1.6,
+      /** Seconds slowing into the lane and getting back up to speed, on top of the lane and service (measured: a stop costs ~33 s at Saltmarsh). */
+      inAndOut: 16,
+      /** Where it decides, before the lane's entry (m); moving to the road edge over the last `approach` (m). */
+      decide: 400,
+      approach: 80,
+      /** Braking to the limit line and into its box (m/s²); the last `boxRun` (m) swinging over to the box. */
+      brake: 5,
+      boxBrake: 3,
+      boxRun: 40,
+    },
     /**
      * Difficulty (`ai/skill.ts`): the range each skill is spread over across a field. pace:
      * share of the car's grip used; braking: extra metres before each braking point;
@@ -436,7 +450,8 @@ export const TUNING = {
        * Stuck: slower than this (m/s) for this long (s), or more than `offRoad` (m) beyond the
        * road's edge for `offRoadTime` (s), and it asks to be put back on the track.
        */
-      stuck: { speed: 1.5, time: 5, offRoad: 3, offRoadTime: 8 },
+      /** Stuck: below `speed` (m/s) for `time` (s), `inLane` times as long in the pit lane; off the road by `offRoad` (m) for `offRoadTime` (s). */
+      stuck: { speed: 1.5, time: 5, offRoad: 3, offRoadTime: 8, inLane: 3 },
     },
   },
 };

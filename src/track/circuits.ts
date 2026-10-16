@@ -122,7 +122,8 @@ export const SALTMARSH: TrackDef = withHairpinGravel(
       width: 10,
       runoff: { width: 10, surface: 'grass' },
       terrain: { hills: 1.5, seed: 11 },
-      pitLane: { side: 'left', entry: 90, exit: 320, taper: 90 },
+      // In after the last corner's exit.
+      pitLane: { side: 'left', entry: 70, exit: 320, taper: 80 },
       scenery: {
         seed: 11,
         trees: 350,

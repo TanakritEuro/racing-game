@@ -8,6 +8,8 @@ import { TEST_CIRCUIT } from '../src/track/circuits';
 import { buildTrack } from '../src/track/track';
 import { controls } from '../src/vehicle/car';
 import { KESTREL } from '../src/vehicle/cars';
+import { SALTMARSH } from '../src/track/circuits';
+import { pitLane } from '../src/track/pitLane';
 
 const track = buildTrack(TEST_CIRCUIT);
 
@@ -81,4 +83,35 @@ describe('race', () => {
     expect(rows[0].time!).toBeLessThan(125);
     expect(race.recoveries).toBe(0);
   }, 180_000);
+
+  it('runs a long race on high wear: every car stops for tyres and finishes, nobody stuck in the lane', async () => {
+    await initPhysics();
+    const salt = buildTrack(SALTMARSH);
+    const race = new Race(salt, { opponents: 3, laps: 10, difficulty: 'medium', seed: 9, wear: 'high' });
+    const me = createAiDriver(salt, KESTREL, { pace: 0.94, braking: 1, precision: 0.1, mistakes: 0, aggression: 0.6 }, 78);
+    const laps: number[][] = race.sim.cars.map(() => []);
+    for (let k = 0; k < 1200 * 120 && race.phase !== 'finished'; k++) {
+      // The "player" answers the BOX call as the AI does.
+      if (race.boxCalls[0] && !me.pit) me.pit = { lane: pitLane(salt)!, state: race.sim.pits!.state[0], leaving: false };
+      race.traffic.advise(0, me, PHYSICS_STEP, race.sim.timer.laps < 1);
+      race.step(race.phase === 'lights' ? controls({}) : me.drive(race.sim.car, PHYSICS_STEP));
+      race.sim.timers.forEach((t, c) => {
+        if (t.laps > laps[c].length) laps[c].push(t.lastLap!);
+      });
+    }
+    expect(race.phase).toBe('finished');
+    expect(race.finishTimes.every((t) => t !== null)).toBe(true);
+    const rows = race.standings();
+    for (const r of rows) expect(r.stops).toBeGreaterThanOrEqual(1);
+    expect(race.recoveries).toBe(0);
+    // What a stop costs: the lane crosses the line, so it is spread over two laps (in on one,
+    // out on the next); against the car's typical lap. (The first lap is from the grid.)
+    for (const times of laps.slice(1)) {
+      const sorted = [...times.slice(1)].sort((a, b) => a - b);
+      const typical = sorted[Math.floor(sorted.length / 2)];
+      const cost = sorted[sorted.length - 1] + sorted[sorted.length - 2] - 2 * typical;
+      expect(cost).toBeGreaterThan(25);
+      expect(cost).toBeLessThan(42);
+    }
+  }, 600_000);
 });

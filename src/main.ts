@@ -644,8 +644,8 @@ function updateHud(dt: number): void {
     dt,
   );
   timing.update(sim.timer, sim.time);
-  // BOX: a tyre past 70 % (until the AI's strategy says when).
-  tyresHud.update(sim.car, sim.pits?.state[0] ?? null, (race ?? online)?.phase === 'racing' && sim.car.wheels.some((w) => w.wear > 0.7));
+  // BOX: the same call the AI acts on.
+  tyresHud.update(sim.car, sim.pits?.state[0] ?? null, race?.boxCalls[0] ?? false);
   const racing = race ?? online;
   if (racing) raceHud?.update(racing);
   if (online) onlinePanel?.setStatus(onlineStatus(online));

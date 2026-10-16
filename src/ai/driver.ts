@@ -14,6 +14,9 @@ import { GRAVITY } from '../constants';
 import { clamp, createRng, type Rng } from '../math';
 import { lateralOffset, nearestSample, type Track } from '../track/track';
 import { puddles, puddleSpan } from '../track/puddles';
+import { boxOffset, fastLaneOffset, laneAlong, laneOpen, type PitLane } from '../track/pitLane';
+import type { PitState } from '../race/pits';
+import { wearGrip } from '../vehicle/wear';
 import { wetness, type Conditions } from '../track/weather';
 import { controls, type Car, type Controls } from '../vehicle/car';
 import { usableLock } from '../drivers/steeringAssist';
@@ -37,6 +40,8 @@ export class AiDriver {
   speedCap = Infinity;
   /** Mistakes made so far. */
   mistakesMade = 0;
+  /** Heading for the pits (set by the race's strategy): the lane, this car's pit state, and whether it has been served and is leaving. */
+  pit: { lane: PitLane; state: PitState; leaving: boolean } | null = null;
   /** How far it has wandered off the line (m, left). */
   private wander = 0;
   /** A mistake in progress: until which sample, how much faster than it should, and how far wide. */
@@ -71,11 +76,16 @@ export class AiDriver {
 
     // Skill: wandering off the line, and now and then a mistake at a corner.
     this.judge(dt, spacing);
-    const mistake = this.mistake;
     if (!Number.isFinite(this.aim)) this.aim = 0;
+    // Pitting: the pit line instead of the racing line, no wander or mistakes.
+    const pit = this.pit ? this.pitTarget(this.index) : null;
+    const mistake = pit ? null : this.mistake;
     const offLine = clamp(this.aim + this.wander, line.right[this.index] - line.offset[this.index], line.left[this.index] - line.offset[this.index]);
-    const aim = offLine + (mistake?.wide ?? 0);
-    const faster = mistake?.speed ?? 1;
+    let aim = offLine + (mistake?.wide ?? 0);
+    // On worn tyres it drives to the grip they have left (corner speed goes as √μ).
+    let worn = 1;
+    for (const w of car.wheels) worn = Math.min(worn, wearGrip(w.wear));
+    const faster = (mistake?.speed ?? 1) * Math.sqrt(worn);
 
     // Steering, Stanley style, at the front axle: the line's own curvature (a moment ahead,
     // for the rack's lag), plus the heading error, plus the cross-track error, less any yaw
@@ -85,6 +95,7 @@ export class AiDriver {
     const az = p.z + fz * car.def.wheelbaseHalf;
     const i = nearestSample(track, ax, az, this.index);
     const s = track.samples[i];
+    if (pit) aim = ((this.pit ? this.pitTarget(i) : null)?.offset ?? pit.offset) - line.offset[i];
     const lx = line.x[i] + s.nx * aim;
     const lz = line.z[i] + s.nz * aim;
     const tx = line.x[(i + 1) % n] - line.x[(i - 1 + n) % n];
@@ -118,7 +129,7 @@ export class AiDriver {
     // Speed: where the profile wants it a moment ahead, and what it takes to get there.
     const lead = Math.max(4, D.speedLead * v);
     const ahead = (this.index + Math.max(1, Math.round(lead / spacing))) % n;
-    const offLineSpeed = this.offLineLimit(aim, faster, v, spacing);
+    const offLineSpeed = pit ? pit.cap : this.offLineLimit(aim, faster, v, spacing);
     const here = Math.min(this.profile[this.index] * faster, this.speedCap, offLineSpeed);
     const target = Math.min(this.profile[ahead] * faster, this.speedCap, offLineSpeed);
     const accel = (target * target - v * v) / (2 * lead) + D.speedGain * (here - v);
@@ -148,8 +159,10 @@ export class AiDriver {
     }
 
     // Stuck: barely moving, or off the road (in a gravel trap, beyond the run-off), for a while.
-    const offRoad = Math.abs(lateralOffset(track, this.index, p.x, p.z)) > track.samples[this.index].halfWidth + D.stuck.offRoad;
-    if (Math.abs(speed) < D.stuck.speed) this.stuckFor += dt;
+    const offRoad = !pit && Math.abs(lateralOffset(track, this.index, p.x, p.z)) > track.samples[this.index].halfWidth + D.stuck.offRoad;
+    // Standing in its box isn't being stuck, and queueing in the lane takes a while.
+    if (this.pit?.state.servicing !== null && this.pit?.state.servicing !== undefined) this.stuckFor = 0;
+    else if (Math.abs(speed) < D.stuck.speed) this.stuckFor += this.pit?.state.inLane ? dt / D.stuck.inLane : dt;
     else if (offRoad) this.stuckFor += dt * (D.stuck.time / D.stuck.offRoadTime);
     else this.stuckFor = 0;
     this.stuck = this.stuckFor > D.stuck.time;
@@ -180,17 +193,70 @@ export class AiDriver {
     return limit;
   }
 
+  /**
+   * Where the pit line is at sample `i` (m left of the centreline) and how fast it may go there:
+   * over to the road edge before the lane, along the lane's through lane at the limit, over
+   * to its box and stopped there, and out again once served. Null when it isn't pitting here.
+   */
+  private pitTarget(i: number): { offset: number; cap: number } | null {
+    const plan = this.pit!;
+    const { lane, state } = plan;
+    const A = TUNING.ai.pits;
+    const P = TUNING.pits;
+    const { track, line } = this;
+    const n = track.samples.length;
+    const spacing = track.length / n;
+    const hw = track.samples[i].halfWidth;
+    const u = laneAlong(track, lane, i);
+    const limitAt = lane.taper * P.limitLine;
+    const toLimit = (d: number) => Math.sqrt(P.limit * P.limit + 2 * A.brake * Math.max(0, d));
+    if (u < 0) {
+      if (plan.leaving) {
+        // Out of the lane and back on the road: the stop is done.
+        this.pit = null;
+        return null;
+      }
+      const toEntry = ((lane.first - i + n) % n) * spacing;
+      if (toEntry > A.approach) return null;
+      // Over to the road edge on the lane's side, slowing to the limit by the entry (it swerves into the lane).
+      const edge = lane.sign * (hw - 1.2);
+      const f = 1 - toEntry / A.approach;
+      return { offset: line.offset[i] + (edge - line.offset[i]) * f, cap: toLimit(toEntry) };
+    }
+    if (state.served) plan.leaving = true;
+    // Not in the lane by the end of its entry (put back on the road beside it, say): not this time.
+    if (!plan.leaving && !state.inLane && u > lane.taper * 0.9) {
+      this.pit = null;
+      return null;
+    }
+    const fast = fastLaneOffset();
+    let across = Math.max(0.6, fast * laneOpen(lane, u));
+    let cap = u <= lane.length - limitAt ? P.limit - 0.6 : Infinity;
+    if (!plan.leaving) {
+      const toBox = laneAlong(track, lane, lane.boxes[state.box]) - u;
+      // Missed the box: carry on out.
+      if (toBox < -P.boxLength) plan.leaving = true;
+      else {
+        across = fast + (boxOffset() - fast) * clamp(1 - toBox / A.boxRun, 0, 1);
+        cap = Math.min(cap, Math.sqrt(2 * A.boxBrake * Math.max(0, toBox - 0.4)));
+      }
+    }
+    return { offset: lane.sign * (hw + across), cap };
+  }
+
   /** Back to the grid: forget where it was, traffic, mistakes and wander. */
   reset(): void {
     this.index = -1;
+    this.pit = null;
     this.aim = 0;
     this.speedCap = Infinity;
     this.armed = true;
     this.recovered();
   }
 
-  /** After the car was put back on the track: forget the stuck timer and any mistake. */
+  /** After the car was put back on the track: forget the stuck timer, any mistake and any pit stop it was making. */
   recovered(): void {
+    this.pit = null;
     this.stuckFor = 0;
     this.stuck = false;
     this.mistake = null;
