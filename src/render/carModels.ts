@@ -29,7 +29,15 @@ export interface CarModel {
   body: THREE.Object3D;
   /** Each wheel centred on its own origin, axle along X, sized to the car's tyres. */
   wheels: THREE.Object3D[];
+  /** Where the bumper and hood cameras go on this model (car space): ahead of its nose, and just above its bonnet. */
+  cameras: { bumper: THREE.Vector3; hood: THREE.Vector3 };
 }
+
+/** The hood camera sits this far above the bonnet (m), this far back from the front axle (share of half the wheelbase). */
+const HOOD_LIFT = 0.22;
+const HOOD_BACK = 0.45;
+/** The bumper camera sits this far ahead of the nose (m). */
+const BUMPER_AHEAD = 0.1;
 
 const loader = new GLTFLoader();
 const files = new Map<string, Promise<GLTF>>();
@@ -104,12 +112,22 @@ function fit(scene: THREE.Object3D, def: CarDef, colour: number): CarModel {
   });
 
   paint(body, colour);
+
+  // Cameras: above the bonnet (a ray down onto the body), and just ahead of the nose.
+  body.updateMatrixWorld(true);
+  const shellBox = new THREE.Box3().setFromObject(body);
+  const hoodZ = -def.wheelbaseHalf * (1 - HOOD_BACK);
+  const ray = new THREE.Raycaster(new THREE.Vector3(0, shellBox.max.y + 1, hoodZ), new THREE.Vector3(0, -1, 0));
+  const hit = ray.intersectObject(body, true)[0];
+  const hood = new THREE.Vector3(0, (hit ? hit.point.y : shellBox.max.y) + HOOD_LIFT, hoodZ);
+  const bumper = new THREE.Vector3(0, def.cameras.bumper.y, shellBox.min.z - BUMPER_AHEAD);
+
   for (const o of [body, ...wheels]) {
     o.traverse((m) => {
       if (m instanceof THREE.Mesh) m.castShadow = true;
     });
   }
-  return { body, wheels };
+  return { body, wheels, cameras: { bumper, hood } };
 }
 
 const painted = new Map<string, THREE.Texture>();

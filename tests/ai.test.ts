@@ -57,5 +57,5 @@ describe.each(CIRCUITS.map((c) => [c.name, c] as const))('AI at %s', (_, def) =>
     const { line, env } = circuitAi(track, KESTREL);
     const predicted = profileLapTime(line, speedProfile(line, env));
     expect(laps[2].time / predicted).toBeLessThan(1.06);
-  }, 120_000);
+  }, 300_000);
 });

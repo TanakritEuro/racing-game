@@ -95,6 +95,8 @@ const others = sim.cars.slice(1).map((car, k) => {
 });
 const raceHud = race ? new RaceHud(document.querySelector<HTMLDivElement>('#hud')!) : null;
 const cameras = new CameraRig(stage.camera, sim.car.def);
+// The bumper and hood cameras go where the car's model says (outside its bodywork).
+void carView.ready.then((model) => model && cameras.setMounts(model.cameras));
 const drawn = createPose();
 const session = new TimeTrial(sim);
 const ghost = new GhostView(
@@ -340,6 +342,7 @@ function drawReplay(t: number, dt: number): void {
   const rec = replay.recording!;
   sampleRecording(rec, t, replayState);
   carView.update(replayState.pose);
+  carView.root.visible = true;
   // Only your car is recorded: the others stay out of the replay.
   for (const o of others) o.view.root.visible = false;
   ghost.update(session.ghost, t, settings.ghost && !race && session.ghost !== rec);
@@ -471,6 +474,8 @@ function frame(now: number): void {
     others.map((o) => ({ x: o.drawn.position.x, z: o.drawn.position.z, colour: o.colour })),
   );
   cameras.update(drawn, dt);
+  // From the bumper you see the road, not the inside of your own car.
+  carView.root.visible = cameras.mode !== 'bumper';
   effects.update(
     dt,
     sim,

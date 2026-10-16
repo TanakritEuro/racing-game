@@ -18,6 +18,8 @@ export interface CarViewOptions {
 export class CarView {
   readonly root = new THREE.Group();
   private readonly placeholder = new THREE.Group();
+  /** The real model once it has loaded (null if it couldn't, and the placeholder stays). */
+  readonly ready: Promise<CarModel | null>;
   /** Per wheel: the steering pivot at the hub, and the group that spins. */
   private readonly wheels: { pivot: THREE.Group; spin: THREE.Group; tyre: THREE.Object3D }[] = [];
 
@@ -71,7 +73,10 @@ export class CarView {
     }
     if (options.translucent !== undefined) this.makeTranslucent(this.root);
 
-    void loadCarModel(def, colour).then((model) => model && this.useModel(model));
+    this.ready = loadCarModel(def, colour).then((model) => {
+      if (model) this.useModel(model);
+      return model;
+    });
   }
 
   update(pose: CarPose): void {

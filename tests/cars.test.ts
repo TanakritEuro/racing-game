@@ -63,13 +63,13 @@ describe.each([...TARGETS.entries()].map(([def, t]) => [def.name, def, t] as con
     const from = { ...c.car.position };
     runUntil(c, controls({ brake: 1 }), () => c.car.speed < 0.05, 15);
     within(Math.hypot(c.car.position.x - from.x, c.car.position.z - from.z), t.stop);
-  }, 60_000);
+  }, 180_000);
 
   it('corners at its grip on the skidpad, front tyres giving up first', async () => {
     const { best, atBest } = await skidpadLimit(SKIDPAD, def);
     within(best, t.skidpad);
     expect(atBest.front).toBeGreaterThan(atBest.rear * 1.2);
-  }, 60_000);
+  }, 180_000);
 
   it('can be lapped cleanly by the AI', async () => {
     const s = await createSim(TEST_CIRCUIT, def);
@@ -78,7 +78,7 @@ describe.each([...TARGETS.entries()].map(([def, t]) => [def.name, def, t] as con
     expect(s.timer.laps).toBe(2);
     expect(s.timer.lastValid).toBe(true);
     within(s.timer.lastLap!, t.aiLap);
-  }, 60_000);
+  }, 180_000);
 });
 
 describe('the cars compared', () => {

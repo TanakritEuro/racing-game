@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { TUNING } from '../config';
-import { damp } from '../math';
+import { damp, type Vec3 } from '../math';
 import type { CarPose } from '../vehicle/pose';
 import type { CarDef } from '../vehicle/carDef';
 
@@ -19,12 +19,21 @@ export class CameraRig {
   private readonly along = new THREE.Vector3();
   private readonly quaternion = new THREE.Quaternion();
   private initialised = false;
+  /** Where the bumper and hood cameras sit (car space): the car's own, until a model says better. */
+  private readonly mounts: Record<'bumper' | 'hood', Vec3>;
 
   constructor(
     private readonly camera: THREE.PerspectiveCamera,
-    private readonly def: CarDef,
+    def: CarDef,
   ) {
+    this.mounts = { bumper: { ...def.cameras.bumper }, hood: { ...def.cameras.hood } };
     this.setMode('chase');
+  }
+
+  /** Move the bumper and hood cameras (to suit the car's model). */
+  setMounts(mounts: { bumper: Vec3; hood: Vec3 }): void {
+    this.mounts.bumper = { x: mounts.bumper.x, y: mounts.bumper.y, z: mounts.bumper.z };
+    this.mounts.hood = { x: mounts.hood.x, y: mounts.hood.y, z: mounts.hood.z };
   }
 
   setMode(mode: CameraMode): void {
@@ -50,7 +59,7 @@ export class CameraRig {
     const q = this.quaternion.set(pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w);
     if (this.mode !== 'chase') {
       // Fixed to the body: it pitches and rolls with the car.
-      const mount = this.def.cameras[this.mode];
+      const mount = this.mounts[this.mode];
       this.camera.position.set(mount.x, mount.y, mount.z).applyQuaternion(q).add(this.target.set(p.x, p.y, p.z));
       this.camera.quaternion.copy(q);
       return;
