@@ -23,9 +23,9 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 ## Current state
 
-Milestones 1–6 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
-AI drivers, presentation) and 7 (a championship) are done; **Milestone 8 (two-player online
-racing) is built and in playtesting** (`docs/milestone-8.md`).
+Milestones 1–8 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
+AI drivers, presentation, a championship, two-player online racing) are done; **Milestone 9
+(car setup) is planned** (`docs/milestone-9.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -301,3 +301,6 @@ structures, tests) and check it with me.
    points, or two-player online racing ported from the earlier games' PeerJS code.
 8. **Online.** Two-player racing over PeerJS: each player simulates their own car, the
    other appears as a proxy car; shared clock for the start; results agreed on both sides.
+9. **Car setup.** A garage: springs, anti-roll bars, dampers, ride height, wings, brake
+   bias, differential and gearing in clicks around each car's own values, saved per car
+   and circuit; the AI keeps the stock car.

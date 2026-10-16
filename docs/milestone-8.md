@@ -1,6 +1,10 @@
 # Milestone 8 plan: two-player online racing
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (connecting, the lights together, the other
+car's smoothness, side-by-side contact, both screens agreeing, the AI racing the guest) stay
+open for a session on two machines.
 
 Approved as proposed, AI opponents included (commit 6): each player simulates their own car,
 each picks their own car, matchmaking through the public PeerJS server.
