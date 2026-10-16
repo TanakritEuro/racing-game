@@ -4,6 +4,8 @@ import type { CarDef, TyreDef } from './carDef';
 
 /** A road-going performance tyre: peaks at about 10 % slip and 8°, slides at ~80 % of peak. */
 const SPORT_TYRE: TyreDef = {
+  // Calibrated: at the normal rate a set lasts ~12 laps of Harrowmere on the AI's line.
+  life: 9.7e6,
   radius: 0.33,
   width: 0.225,
   inertia: 0.9,
@@ -92,6 +94,8 @@ export const KESTREL: CarDef = {
     frontBias: 0.62, // the front axle's share of the load at ~1 g: the fronts still lock first
     handbrakeTorque: 1500,
   },
+  // A rich racing mixture: ~0.35 kg per kWh (~0.21 kg/km on Harrowmere); the tank ahead of the rear axle.
+  fuel: { burn: 0.35, tankZ: 1, perKm: 0.25 },
   aids: {
     abs: { slip: 1, release: 12, apply: 5, minSpeed: 2 },
     tc: { slip: 1.2, minSlipSpeed: 0.5, cut: 10, restore: 6 },
@@ -162,6 +166,7 @@ export const WREN: CarDef = {
   differential: { type: 'lsd', preload: 40, ramp: 0.3 },
   brakes: { maxTorque: 3800, frontBias: 0.62, handbrakeTorque: 1200 },
   aids: KESTREL.aids,
+  fuel: KESTREL.fuel,
   aero: {
     // An open roadster: more drag, next to no downforce.
     dragArea: 0.7,
@@ -231,6 +236,7 @@ export const HARRIER: CarDef = {
   differential: { type: 'lsd', preload: 60, ramp: 0.28 },
   brakes: { maxTorque: 7500, frontBias: 0.62, handbrakeTorque: 1800 },
   aids: KESTREL.aids,
+  fuel: KESTREL.fuel,
   aero: {
     dragArea: 0.7,
     // ~1500 N of downforce at 200 km/h, 40 % of it at the front.

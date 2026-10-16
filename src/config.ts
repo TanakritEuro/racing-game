@@ -78,6 +78,17 @@ export const TUNING = {
     // Loose stones: little grip and a great deal of drag, so a car sinks in and stops.
     gravel: { grip: 0.5, drag: 0.3 },
   },
+  /** Tyre wear (`vehicle/wear.ts`): rates, and grip against wear. */
+  wear: {
+    /** Times the normal rate. */
+    rates: { off: 0, normal: 1, high: 3 },
+    /** Grip lost by the cliff (as a share), where the cliff is (wear), and grip lost per unit of wear beyond it. */
+    drop: 0.08,
+    cliff: 0.8,
+    beyond: 1.6,
+  },
+  /** Fuel: the car's mass and centre of mass follow the fuel aboard once it changes by this much (kg). */
+  fuel: { massStep: 0.25 },
   /** The weather (`track/weather.ts`, `track/puddles.ts`). */
   weather: {
     /** How wet each condition is (0–1): every wet effect scales with it. */

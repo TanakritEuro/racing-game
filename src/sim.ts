@@ -10,6 +10,7 @@ import type RAPIER from '@dimforge/rapier3d-compat';
 import { LapTimer } from './race/timing';
 import { nearestSample, type Track, type TrackSample } from './track/track';
 import { wetness, type Conditions } from './track/weather';
+import { wearFactor, type WearRate } from './vehicle/wear';
 import { Car, poseOnTrack, type Controls, type Pose } from './vehicle/car';
 import { copyPose, createPose, type CarPose } from './vehicle/pose';
 import type { CarDef } from './vehicle/carDef';
@@ -39,6 +40,8 @@ export interface SimOptions {
   field?: number;
   /** The weather (default dry). */
   conditions?: Conditions;
+  /** How fast tyres wear (default off). */
+  wear?: WearRate;
 }
 
 /** A hard knock this step: for sparks and sounds. */
@@ -106,6 +109,7 @@ export class Simulation {
       const pose = this.gridPose(i);
       this.cars.push(new Car(this.physics, pose, options.defs?.[i] ?? carDef));
       this.cars[i].wetness = wet;
+      this.cars[i].wearRate = wearFactor(options.wear ?? 'off');
       this.timers.push(new LapTimer(track, pose.position.x, pose.position.z));
       this.poses.push({ previous: createPose(), current: createPose() });
       this.carByCollider.set(this.cars[i].collider.handle, i);

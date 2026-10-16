@@ -32,6 +32,8 @@ import { spinFree, type SpinBody } from './spin';
 import { rackStep, wheelSteerAngle } from './steering';
 import { gripLimit, prepareTyre, tyreForces, type PreparedTyre, type TyreForce } from './tyre';
 import { surfaceGrip } from '../track/weather';
+import { fuelBurned, patchPower, wearGrip } from './wear';
+import { engineTorque } from './engine';
 
 /** One step's driver inputs. Keyboard, gamepad and AI drivers all produce these. */
 export interface Controls {
@@ -96,6 +98,8 @@ export interface Wheel {
   absFactor: number;
   /** Brakes are holding the wheel still while the car moves. */
   locked: boolean;
+  /** How worn the tyre is: 0 new, 1 worn out. */
+  wear: number;
   /** Accumulated rolling angle, for drawing (rad). */
   spin: number;
 }
@@ -164,6 +168,13 @@ export class Car {
   private readonly surface = { grip: 1, drag: 0 };
   /** How wet the track is (0–1, set by the simulation): every surface's grip follows it. */
   wetness = 0;
+  /** Tyre wear rate (times the normal; 0 for none). */
+  wearRate = 0;
+  /** Fuel aboard (kg): none unless a race fuels the car. */
+  fuel = 0;
+  /** The fuel the body's mass was last set for (kg). */
+  private massFuel = 0;
+  private readonly boxInertia: Vec3;
   private readonly carUp = vec();
   private readonly carForward = vec();
   private readonly heading = vec();
@@ -186,6 +197,7 @@ export class Car {
     const ht = 2 * h.y;
     const l = 2 * h.z;
     const inertia = { x: (m / 12) * (ht * ht + l * l), y: (m / 12) * (w * w + l * l), z: (m / 12) * (w * w + ht * ht) };
+    this.boxInertia = inertia;
 
     this.body = this.world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
@@ -236,6 +248,7 @@ export class Car {
           absFactor: 1,
           locked: false,
           spin: 0,
+          wear: 0,
         });
         this.work.push({
           spin: { omega: 0, inertia: tyre.inertia, torque: 0, friction: 0 },
@@ -260,6 +273,29 @@ export class Car {
   }
 
   /** Put the car at `pose`, at rest, with the wheels just touching the ground. */
+  /** Fill the car with `kg` of fuel (its mass and balance follow). */
+  setFuel(kg: number): void {
+    this.fuel = Math.max(0, kg);
+    this.applyMass();
+  }
+
+  /** Fresh tyres all round (a pit stop). */
+  changeTyres(): void {
+    for (const w of this.wheels) w.wear = 0;
+  }
+
+  /** The body's mass, centre of mass and inertia with the fuel aboard. */
+  private applyMass(): void {
+    const { def } = this;
+    const m = def.mass + this.fuel;
+    const c = def.centreOfMass;
+    const com = { x: c.x, y: c.y, z: (def.mass * c.z + this.fuel * def.fuel.tankZ) / m };
+    const k = m / def.mass;
+    const i = this.boxInertia;
+    this.body.setAdditionalMassProperties(m, com, { x: i.x * k, y: i.y * k, z: i.z * k }, { x: 0, y: 0, z: 0, w: 1 }, true);
+    this.massFuel = this.fuel;
+  }
+
   reset(pose: Pose): void {
     const body = restingPose(this.def, pose);
     this.body.setTranslation(body.position, true);
@@ -362,6 +398,12 @@ export class Car {
     const drivetrain = this.drivetrain;
     drivetrain.tractionControl = this.aids.tc;
     drivetrain.update(controls, (this.work[2].spin.omega + this.work[3].spin.omega) / 2, speed, dt);
+    // Fuel: burned with the engine's output; the car lightens as it goes.
+    if (this.fuel > 0) {
+      const output = Math.max(0, engineTorque(this.def.engine, drivetrain.rpm, drivetrain.throttle)) * drivetrain.engineOmega * dt;
+      this.fuel = Math.max(0, this.fuel - fuelBurned(output, this.def.fuel.burn));
+      if (Math.abs(this.fuel - this.massFuel) >= TUNING.fuel.massStep || this.fuel === 0) this.applyMass();
+    }
     const pedalBrake = drivetrain.brakePedal;
 
     // 1. Suspension, contact frames and contact patch velocities.
@@ -508,6 +550,8 @@ export class Car {
       this.force.z = up.z * load;
       body.addForceAtPoint(this.force, work.point, false);
       const surface = surfaceGrip(wheel.surface, this.wetness, speed, this.surface);
+      // A worn tyre has less grip, whatever it's on.
+      surface.grip *= wearGrip(wheel.wear);
       work.grip = surface.grip;
       work.rollingDrag = (wheel.tyre.rollingResistance + surface.drag) * load * wheel.tyre.radius;
       wheel.gripLimit = gripLimit(wheel.tyre, load, surface.grip);
@@ -635,6 +679,11 @@ export class Car {
       // Locked: braked and turning at under LOCKED_SLIP of the road speed under it.
       wheel.locked = wheel.contact && wheel.brakeTorque > 0 && Math.abs(work.vLong) > 0.5 && Math.abs(wheel.omega * wheel.tyre.radius) < LOCKED_SLIP * Math.abs(work.vLong);
       if (!wheel.contact) continue;
+      // Wear: the energy the contact patch dissipated this step.
+      if (this.wearRate > 0) {
+        const power = patchPower(wheel.longForce, wheel.latForce, wheel.omega * wheel.tyre.radius - work.vLong, work.vLat);
+        wheel.wear = Math.min(1, wheel.wear + (this.wearRate * power * dt) / wheel.tyre.life);
+      }
       const f = this.force;
       f.x = work.fwd.x * wheel.longForce + work.right.x * wheel.latForce;
       f.y = work.fwd.y * wheel.longForce + work.right.y * wheel.latForce;

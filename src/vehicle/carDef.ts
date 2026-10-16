@@ -40,6 +40,8 @@ export interface TyreDef extends TyreModel {
   relaxationLat: number;
   /** Rolling resistance coefficient (fraction of load). */
   rollingResistance: number;
+  /** Energy the tyre dissipates (J) before it is worn out, at the normal wear rate. */
+  life: number;
 }
 
 export interface BrakesDef {
@@ -71,6 +73,14 @@ export interface CarDef {
   differential: DifferentialDef;
   brakes: BrakesDef;
   aids: AidsDef;
+  fuel: {
+    /** kg of fuel per kWh out of the engine. */
+    burn: number;
+    /** Where the tank sits (m behind the middle of the wheelbase, car local +z). */
+    tankZ: number;
+    /** A race's fuel per km (kg), with some to spare: what a race starts with. */
+    perKm: number;
+  };
   aero: {
     /** Drag coefficient × frontal area, C_d·A (m²). */
     dragArea: number;
