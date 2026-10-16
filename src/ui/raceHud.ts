@@ -21,7 +21,11 @@ export class RaceHud {
   private readonly results: HTMLDivElement;
   private shownResults = '';
 
-  constructor(root: HTMLElement) {
+  /** `footer`: the keys line under the results (a championship round has its own way on). */
+  constructor(
+    root: HTMLElement,
+    private readonly footer = '⌫ race again &nbsp; Tab time trial &nbsp; N next circuit',
+  ) {
     const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent: HTMLElement) => {
       const e = document.createElement(tag);
       e.className = cls;
@@ -62,7 +66,7 @@ export class RaceHud {
     const show = me.finished;
     this.results.style.display = show ? 'block' : 'none';
     if (show) {
-      const html = resultsTable(rows, race.phase === 'finished');
+      const html = resultsTable(rows, race.phase === 'finished', this.footer);
       if (html !== this.shownResults) {
         this.results.innerHTML = html;
         this.shownResults = html;
@@ -78,7 +82,7 @@ function gapText(back: Standing, front: Standing): string {
   return `+${Math.max(0, back.gap - front.gap).toFixed(1)}`;
 }
 
-function resultsTable(rows: Standing[], final: boolean): string {
+function resultsTable(rows: Standing[], final: boolean, footer: string): string {
   const leader = rows[0];
   const line = (r: Standing) => {
     const time = !r.finished ? 'running' : r === leader ? formatLapTime(r.time) : r.lapsDown > 0 ? `+${r.lapsDown} lap${r.lapsDown > 1 ? 's' : ''}` : `+${r.gap.toFixed(3)}`;
@@ -86,5 +90,5 @@ function resultsTable(rows: Standing[], final: boolean): string {
   };
   return `<h2>${final ? 'RESULTS' : 'PROVISIONAL RESULTS'}</h2>
     <table><thead><tr><th></th><th>Driver</th><th>Time</th><th>Best lap</th></tr></thead><tbody>${rows.map(line).join('')}</tbody></table>
-    <p>⌫ race again &nbsp; Tab time trial &nbsp; N next circuit</p>`;
+    <p>${footer}</p>`;
 }

@@ -4,9 +4,22 @@
 
 import type { Difficulty } from '../ai/skill';
 import { formatLapTime } from '../race/timing';
+import { ROUNDS } from '../race/championship';
 import type { Settings } from '../settings';
 
-export type Mode = 'trial' | 'race';
+export type Mode = 'trial' | 'race' | 'season';
+
+/** A championship in progress, for the start menu. */
+export interface SeasonInfo {
+  /** The round to run next (1-based) and how many there are. */
+  round: number;
+  rounds: number;
+  /** Your place and points so far. */
+  position: number;
+  points: number;
+  difficulty: string;
+  car: string;
+}
 
 export interface StartChoice {
   mode: Mode;
@@ -37,6 +50,8 @@ export interface CarInfo {
 
 export interface MenuEvents {
   onStart(choice: StartChoice): void;
+  /** Carry on with the saved championship. */
+  onContinueSeason(): void;
   onResume(): void;
   onRestart(): void;
   onQuit(): void;
@@ -61,6 +76,7 @@ export class Menu {
   /** Where Back from settings goes. */
   private settingsFrom: HTMLElement;
   private bestFor: (track: string, car: string) => number | null = () => null;
+  private season: SeasonInfo | null = null;
 
   constructor(
     parent: HTMLElement,
@@ -81,6 +97,7 @@ export class Menu {
     const modeRow = this.row(this.start, 'Mode');
     this.choiceButton(modeRow, 'Time trial', () => choice.mode === 'trial', () => (choice.mode = 'trial'));
     this.choiceButton(modeRow, 'Race', () => choice.mode === 'race', () => (choice.mode = 'race'));
+    this.choiceButton(modeRow, 'Championship', () => choice.mode === 'season', () => (choice.mode = 'season'));
 
     const circuitRow = this.row(this.start, 'Circuit');
     circuitRow.classList.add('menu-cards');
@@ -96,6 +113,11 @@ export class Menu {
         best.textContent = t === null ? 'No best yet' : `Best ${formatLapTime(t)}`;
       });
     }
+    // A championship visits every circuit: no picking one.
+    this.refresh.push(() => circuitRow.parentElement!.classList.toggle('hidden', choice.mode === 'season'));
+    const seasonInfo = div(this.start, 'menu-help');
+    seasonInfo.textContent = `Four rounds against the same seven drivers: ${seasonRounds(circuits)}. Points for the top eight: 10, 8, 6, 5, 4, 3, 2, 1.`;
+    this.refresh.push(() => seasonInfo.classList.toggle('hidden', choice.mode !== 'season'));
 
     const carRow = this.row(this.start, 'Car');
     carRow.classList.add('menu-cards');
@@ -114,10 +136,26 @@ export class Menu {
     for (const n of OPPONENTS) this.choiceButton(oppRow, String(n), () => choice.opponents === n, () => (choice.opponents = n));
     const lapRow = this.row(raceRows, 'Laps');
     for (const n of LAPS) this.choiceButton(lapRow, String(n), () => choice.laps === n, () => (choice.laps = n));
-    this.refresh.push(() => raceRows.classList.toggle('hidden', choice.mode !== 'race'));
+    this.refresh.push(() => {
+      raceRows.classList.toggle('hidden', choice.mode === 'trial');
+      // A championship sets its own field and laps.
+      oppRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race');
+      lapRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race');
+    });
 
     const go = div(this.start, 'menu-row');
-    button(go, 'Start', 'menu-go').addEventListener('click', () => events.onStart({ ...choice }));
+    const cont = button(go, '', 'menu-go');
+    cont.addEventListener('click', () => events.onContinueSeason());
+    const start = button(go, 'Start', 'menu-go');
+    start.addEventListener('click', () => events.onStart({ ...choice }));
+    this.refresh.push(() => {
+      const s = this.season;
+      const continuing = choice.mode === 'season' && s !== null;
+      cont.classList.toggle('hidden', !continuing);
+      if (s) cont.textContent = `Continue: round ${s.round} of ${s.rounds} · P${s.position}, ${s.points} pts`;
+      start.textContent = continuing ? 'New championship' : 'Start';
+      start.classList.toggle('menu-go', !continuing);
+    });
     button(go, 'Settings').addEventListener('click', () => this.showSettings(this.start));
     div(this.start, 'menu-help', KEYS);
 
@@ -182,6 +220,12 @@ export class Menu {
   get panel(): 'start' | 'pause' | 'settings' | null {
     if (!this.open) return null;
     return !this.start.classList.contains('hidden') ? 'start' : !this.pause.classList.contains('hidden') ? 'pause' : 'settings';
+  }
+
+  /** The championship in progress, if any (for Continue). */
+  setSeason(info: SeasonInfo | null): void {
+    this.season = info;
+    this.update();
   }
 
   /** The best lap for each circuit and car, shown on the circuit cards. */
@@ -298,6 +342,12 @@ export function button(parent: HTMLElement, text: string, className = ''): HTMLB
   b.textContent = text;
   parent.appendChild(b);
   return b;
+}
+
+/** "Proving Ground (5 laps), Saltmarsh (3), …" */
+function seasonRounds(circuits: readonly CircuitInfo[]): string {
+  const name = (id: string) => circuits.find((c) => c.id === id)?.name ?? id;
+  return ROUNDS.map((r, i) => `${name(r.track)} (${r.laps}${i === 0 ? ' laps' : ''})`).join(', ');
 }
 
 function cap(s: string): string {

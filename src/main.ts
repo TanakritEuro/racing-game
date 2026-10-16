@@ -24,6 +24,9 @@ import { TvCameraView } from './render/tvCameras';
 import { Effects } from './render/effects';
 import { Dashboard } from './ui/dashboard';
 import { Menu } from './ui/menu';
+import { StandingsScreen } from './ui/standings';
+import { finishingOrder, newSeason, nextRound, recordRound, roundRace, seasonOver, standings } from './race/championship';
+import { loadSeason, saveSeason } from './storage/season';
 import { GameAudio, type Listener } from './audio';
 import { Sound } from './audio/sound';
 import { placeTvCameras } from './track/cameras';
@@ -34,7 +37,7 @@ import { bestKey, openBestStore } from './storage/bests';
 import { CIRCUITS } from './track/circuits';
 import { DEFAULT_RACE, Race, type RaceOptions } from './race/race';
 import { DIFFICULTIES, type Difficulty } from './ai/skill';
-import { RaceHud } from './ui/raceHud';
+import { carName, RaceHud } from './ui/raceHud';
 import { buildTrack, trackFingerprint } from './track/track';
 import { NO_CONTROLS, poseOnTrack, type Controls } from './vehicle/car';
 import { CARS, KESTREL } from './vehicle/cars';
@@ -53,14 +56,26 @@ const params = new URLSearchParams(location.search);
 const settings = loadSettings();
 // A link that names the circuit, car or mode starts straight away; otherwise the start menu
 // opens over the last circuit and car picked there.
-const fromUrl = ['track', 'car', 'mode'].some((k) => params.has(k));
-const circuit = CIRCUITS.find((c) => c.id === (fromUrl ? params.get('track') : settings.start.track)) ?? CIRCUITS[0];
+// A championship round (?season): the saved season's next round, on its circuit, in its car.
+let season = loadSeason();
+const seasonRound = params.has('season') && season && !seasonOver(season) ? roundRace(season) : null;
+if (!seasonRound) season = null;
+const fromUrl = seasonRound !== null || ['track', 'car', 'mode'].some((k) => params.has(k));
+const circuit =
+  CIRCUITS.find((c) => c.id === (seasonRound ? seasonRound.track : fromUrl ? params.get('track') : settings.start.track)) ?? CIRCUITS[0];
 const track = buildTrack(circuit);
 document.querySelector('#track-name')!.textContent = circuit.name.toUpperCase();
 // Race mode (?mode=race, Tab switches): ?difficulty=easy|medium|hard, ?opponents=0..7, ?laps=N.
 // The car: ?car=wren|kestrel|harrier (Kestrel by default). In a race everyone drives it.
-const carDef = CARS.find((c) => c.name.toLowerCase() === (fromUrl ? params.get('car') : settings.start.car.toLowerCase())) ?? KESTREL;
-const race = params.get('mode') === 'race' ? new Race(track, raceOptions(params), carDef) : null;
+const carId = season ? season.car.toLowerCase() : fromUrl ? params.get('car') : settings.start.car.toLowerCase();
+const carDef = CARS.find((c) => c.name.toLowerCase() === carId) ?? KESTREL;
+const race = seasonRound
+  ? new Race(track, seasonRound.options, carDef)
+  : params.get('mode') === 'race'
+    ? new Race(track, raceOptions(params), carDef)
+    : null;
+/** This championship round's result has been recorded (it can't be run again). */
+let recorded = false;
 const sim = race ? race.sim : new Simulation(track, carDef);
 
 function raceOptions(p: URLSearchParams): RaceOptions {
@@ -93,7 +108,25 @@ const others = sim.cars.slice(1).map((car, k) => {
   stage.scene.add(view.root);
   return { view, drawn: createPose(), colour: `#${AI_COLOURS[k % AI_COLOURS.length].toString(16).padStart(6, '0')}` };
 });
-const raceHud = race ? new RaceHud(document.querySelector<HTMLDivElement>('#hud')!) : null;
+const raceHud = race ? new RaceHud(document.querySelector<HTMLDivElement>('#hud')!, season ? 'The championship standings follow when everyone has finished.' : undefined) : null;
+const colourOf = (entry: number) => `#${(entry === 0 ? 0xe0b020 : AI_COLOURS[(entry - 1) % AI_COLOURS.length]).toString(16).padStart(6, '0')}`;
+const standingsScreen = new StandingsScreen(
+  document.body,
+  {
+    onNext: () => goTo({ season: '' }),
+    onMenu: () => goTo({}),
+  },
+  carName,
+  colourOf,
+  (id) => CIRCUITS.find((c) => c.id === id)?.name ?? id,
+);
+
+/** Reload with these options (keeping the developer flags). */
+function goTo(options: Record<string, string>): void {
+  const p = new URLSearchParams(options);
+  for (const k of ['debug', 'telemetry', 'line']) if (params.has(k)) p.set(k, '');
+  location.search = p.toString();
+}
 const cameras = new CameraRig(stage.camera, sim.car.def);
 // The bumper and hood cameras go where the car's model says (outside its bodywork).
 void carView.ready.then((model) => model && cameras.setMounts(model.cameras));
@@ -186,6 +219,13 @@ const menu = new Menu(
     onStart(choice) {
       settings.start = choice;
       saveSettings(settings);
+      if (choice.mode === 'season') {
+        const current = loadSeason();
+        if (current && !seasonOver(current) && !window.confirm(`Start a new championship? The one in progress (round ${nextRound(current) + 1} of ${current.rounds.length}) will be lost.`)) return;
+        saveSeason(newSeason(1 + Math.floor(Math.random() * 2 ** 30), choice.difficulty, choice.car));
+        goTo({ season: '' });
+        return;
+      }
       const p = new URLSearchParams();
       p.set('track', choice.track);
       p.set('car', choice.car.toLowerCase());
@@ -208,11 +248,8 @@ const menu = new Menu(
       sound.suspend(false);
       restart();
     },
-    onQuit() {
-      const p = new URLSearchParams();
-      for (const k of ['debug', 'telemetry', 'line']) if (params.has(k)) p.set(k, '');
-      location.search = p.toString();
-    },
+    onContinueSeason: () => goTo({ season: '' }),
+    onQuit: () => goTo({}),
     onSettings: applySettings,
   },
   { ...settings.start },
@@ -232,6 +269,21 @@ const menu = new Menu(
   settings,
 );
 if (!fromUrl) menu.showStart();
+// The championship in progress, for Continue.
+{
+  const saved = loadSeason();
+  if (saved && !seasonOver(saved)) {
+    const mine = standings(saved).findIndex((r) => r.entry === 0);
+    menu.setSeason({
+      round: nextRound(saved) + 1,
+      rounds: saved.rounds.length,
+      position: mine + 1,
+      points: standings(saved)[mine].points,
+      difficulty: saved.difficulty,
+      car: saved.car,
+    });
+  }
+}
 // Each circuit's best with each car, for the circuit cards.
 void Promise.all(
   CIRCUITS.flatMap((c, i) =>
@@ -247,6 +299,8 @@ void Promise.all(
 
 window.addEventListener('keydown', (e) => {
   sound.unlock();
+  // The standings take the keys (their buttons go on).
+  if (standingsScreen.open) return;
   // A menu takes the keys: Esc goes back a level.
   if (menu.open) {
     if (e.code === 'Escape') menu.back();
@@ -374,6 +428,8 @@ function drawReplay(t: number, dt: number): void {
 
 /** Back to the grid (time trial) or the start of the race. */
 function restart(): void {
+  // A championship round that has counted can't be run again.
+  if (season && recorded) return;
   if (race) {
     race.restart();
     session.forgetLap();
@@ -415,6 +471,15 @@ function updateHud(dt: number): void {
   );
   timing.update(sim.timer, sim.time);
   if (race) raceHud?.update(race);
+  // A championship round over: count it, save the season, and show the standings.
+  if (season && race && race.phase === 'finished' && !recorded) {
+    recorded = true;
+    season = recordRound(season, finishingOrder(race.standings()));
+    saveSeason(season);
+    if (seasonOver(season)) menu.setSeason(null);
+    document.body.classList.add('standings-up');
+    standingsScreen.show(season);
+  }
 }
 
 let last = performance.now();

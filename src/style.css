@@ -584,3 +584,66 @@ body.replaying #keys {
   text-align: center;
   line-height: 1.5;
 }
+
+.menu-row.hidden,
+.menu-help.hidden,
+.menu button.hidden {
+  display: none;
+}
+
+/* Championship standings. */
+.standings-champion {
+  text-align: center;
+  font-size: 20px;
+  font-weight: 800;
+  color: #f0c419;
+}
+
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.standings-table th {
+  font-size: 11px;
+  text-align: left;
+  opacity: 0.7;
+  padding: 0 8px 4px 0;
+}
+
+.standings-table td {
+  padding: 3px 8px 3px 0;
+}
+
+.standings-table tr.me td {
+  color: #ffd54a;
+}
+
+.standings-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.standings-points {
+  font-weight: 800;
+}
+
+.standings-gain {
+  color: #5fe07a;
+  font-size: 12px;
+}
+
+.standings-gain.behind {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+body.standings-up .results,
+body.standings-up .race-panel {
+  display: none !important;
+}
