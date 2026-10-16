@@ -1,6 +1,45 @@
 # Milestone 11 plan: tyre wear, fuel and pit stops
 
-## Status: planned, waiting for your approval
+## Status: built, in playtesting
+
+Approved as written: fuel burns without refuelling, stops are free choice, the championship
+keeps its lengths with normal wear.
+
+Measured (Kestrel, headless): the busiest tyre dissipates ~650 kJ a lap of Harrowmere, so a
+9.7 MJ tyre life reaches the cliff in ~12 laps at the normal rate and 3–5 at high; a car on
+95 %-worn tyres laps over 2 % slower; a slide wears tyres more than 20 times faster per metre
+than rolling. Fuel: ~0.21 kg/km (about 1 kg a lap of Harrowmere). The pit limiter holds the
+car under 61 km/h; a stop changes the tyres in 4 s; crossing the limit line too fast costs
+5 s. A 10-lap race on Saltmarsh at high wear: every car stops once, nobody is put back on the
+track, everyone finishes; a stop costs ~33 s there, spread over the lap in and the lap out.
+Checked in the browser: the lane, wall, boxes and building; the tyre and fuel panel in a
+race; the Tyre wear row and a race started from it.
+
+Where the build differs from the plan below:
+
+- **Every pit lane runs along the start straight**, in just before the line and out before the
+  first corner, crossing the line in the lane: each circuit's last corner ends too close to the
+  line for an entry earlier (Harrowmere's 50 m before it).
+- **Bests are kept.** The run-off on the pit side was widened (Saltmarsh, Ridgeback and the
+  Proving Ground), but the road didn't move, so the layouts' fingerprints are unchanged.
+- **Less fuel than guessed:** ~10 kg over a 10-lap race, not 40, so the car lightens by a
+  tenth or two a lap at most. A race starts with (laps + 1) × 0.25 kg per km. The test checks
+  the burn and the mass following it, not the lap time.
+- **The AI drives to its tyres' remaining grip** (its speeds scaled by √grip): without it, AI
+  cars on worn tyres spun off where they used to be fine.
+- **The strategy picks the best lap to stop on** (stopping now, on a later lap or not at all,
+  whichever is quickest) rather than stopping as soon as a stop would pay, and stops with
+  1.6 laps' wear in hand before the cliff. Stopping as soon as it paid sent cars in on lap 1.
+- **The AI slows to the limit by the lane's entry**, not the limit line: swerving into the
+  taper at speed on worn tyres spun cars into the barrier.
+- **Stuck in the lane:** waiting counts at a third of the usual rate (it may be queueing). A
+  car put back on the track forgets its stop, and one not in the lane by the end of the entry
+  gives up this visit.
+- **A stop costs ~33 s at Saltmarsh**, not 18–28: its lane is 390 m at 60 km/h. The strategy's
+  estimate is calibrated to it.
+- **The soak test runs four cars**, not a full field, to keep it under a minute.
+- **The limiter works in every mode** (it's part of the circuit); time trial has no wear or
+  fuel, so there's never a reason to stop there.
 
 Races so far are sprints: every lap is driven on the same fresh tyres and the same fuel load,
 so the only question is pace. This milestone makes a longer race a matter of strategy too.

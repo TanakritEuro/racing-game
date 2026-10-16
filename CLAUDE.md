@@ -25,7 +25,8 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 Milestones 1–10 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing, car setup, weather) are
-done; **Milestone 11 (tyre wear, fuel and pit stops) is planned** (`docs/milestone-11.md`).
+done; **Milestone 11 (tyre wear, fuel and pit stops) is built and in playtesting**
+(`docs/milestone-11.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -108,6 +109,16 @@ screen (`render/weatherView.ts`): overcast sky and fog, rain round the camera, a
 glossier road, puddles, spray (`effects`), rain and tyre-swish sounds (`audio/rainVoice.ts`).
 Bests are kept per circuit, car and weather. Chosen in the start menu or `?weather=`; a
 championship draws each round's; online the host's.
+
+Tyre wear, fuel and pit stops: each tyre wears with the energy its contact patch dissipates
+(`vehicle/wear.ts`; grip falls gently, then over a cliff at 80 %), at a race's rate (off,
+normal, high; `?wear=`). Fuel burns with the engine's output and the car's mass follows; a
+race fills the car for its distance. Every circuit has a pit lane along its start straight
+(`track/pitLane.ts`: `TrackDef.pitLane`, the lane, wall and boxes as strips), a 60 km/h
+limiter and a 5 s penalty, and a 4 s tyre change for a car that stops in its box
+(`race/pits.ts`, in the simulation for every car). Once a lap the pit wall weighs each car's
+tyres against the laps left (`ai/pitStrategy.ts`, `race/pitCalls.ts`): the AI stops on it,
+and the player sees BOX on the tyre panel (`ui/tyresHud.ts`).
 
 Keyboard steering goes through an assist (`drivers/steeringAssist.ts`: speed-sensitive lock,
 counter-steer help, toggleable); gamepads steer the rack directly with analogue triggers
@@ -196,6 +207,7 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   forces, wheel spin, slip relaxation), force application, `Controls`.
 - `src/vehicle/carDef.ts` — `CarDef`, every number about one car; `cars.ts` — the cars (`KESTREL`);
   `setup.ts` — setups: the settings, `applySetup`, `cleanSetup`, `setupReadout`.
+- `src/vehicle/wear.ts` — tyre wear from dissipated energy, grip against wear, fuel burned.
 - `src/vehicle/tyre.ts` — Magic Formula, load sensitivity, combined slip (pure functions).
 - `src/vehicle/spin.ts` — wheel spin integration with friction torques that never reverse a wheel.
 - `src/vehicle/steering.ts` — steering rack rate and Ackermann geometry.
@@ -205,6 +217,7 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   ratios and shift timing; locking torque for open / locked / limited-slip.
 - `src/vehicle/drivetrain.ts` — automatic and manual shifting, automatic clutch, idle and
   limiter, and the substep solver coupling engine, clutch, diff, brakes and driven wheels.
+- `src/track/pitLane.ts` — the pit lane: where it is, its edges, the lane strip, wall and boxes.
 - `src/track/weather.ts` — conditions, wetness, `surfaceGrip` (wet grip, aquaplaning);
   `puddles.ts` — where water stands, and its strips.
 - `src/track/` — `track.ts` (spline, samples and frames, side profiles, nearest sample,
@@ -215,7 +228,9 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   `racingLine.ts` (minimum-curvature line), `speedProfile.ts` (cornering limits, forward and
   backward passes), `driver.ts` (`AiDriver`: steering, speed, slides, mistakes, recovery),
   `skill.ts` (difficulty and skills), `traffic.ts` (track positions, following, passing).
-- `src/race/race.ts` — `Race`: grid, start lights, AI and traffic, positions, gaps, finish.
+- `src/race/race.ts` — `Race`: grid, start lights, AI and traffic, positions, gaps, finish;
+  `pits.ts` — the limiter, penalties and stops; `pitCalls.ts` — the pit wall's BOX calls.
+- `src/ai/pitStrategy.ts` — when to stop: the time worn tyres lose against a stop's cost.
 - `src/race/championship.ts` — `Season`: rounds, the field's skills, points, standings and
   tie-breaks, the grid, each round's race options, JSON; `storage/season.ts` keeps it.
 - `src/race/timing.ts` — lap timer, sectors, live delta, track limits and time formatting.
@@ -234,7 +249,8 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/ui/timingHud.ts` — lap, delta, sector splits, last and best; `raceHud.ts` —
   position, lap, gaps, start lights, results; `dashboard.ts` — rev counter, speed, gear, aid
   lights; `menu.ts` — start, pause and settings menus; `standings.ts` — championship
-  standings between rounds; `garage.ts` — the setup screen.
+  standings between rounds; `garage.ts` — the setup screen; `tyresHud.ts` — tyres, fuel,
+  the limiter light and BOX.
 - `src/render/carModels.ts` — loads, fits and paints the car models; `render/effects/` —
   `skidMarks.ts`, `smoke.ts`, `sparks.ts` and `index.ts` (`Effects`).
 - `src/audio/` — `sound.ts` (context, volume, knocks and pops), `carVoice.ts` (one car's
@@ -252,7 +268,7 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/main.ts` — entry point and frame loop; `?track=<id>`, `?telemetry`, `?debug`
   (exposes `sim`, `race`, `online`, `session()`, `step(controls)`, `replay()`, `autopilot`,
   `effects`, `sound()` and `stage` in the console), `?line`, `?autopilot`, `?mode=race` and
-  its options, `?season`, `?online`, `?setup=default`, `?weather=dry|damp|wet`.
+  its options, `?season`, `?online`, `?setup=default`, `?weather=dry|damp|wet`, `?wear=off|normal|high`.
 - `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
   line-following test driver (offset, curvature speed profile); `tracks.ts` has test-only
   layouts (skidpads, long oval, hill, kerbed oval, grass and gravel pads).

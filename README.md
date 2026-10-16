@@ -9,7 +9,8 @@ against the same seven drivers, kept between visits. Race a friend online: one h
 gets a four-character room code, the other joins with it, with or without AI drivers. Set
 your car up in the garage (springs, anti-roll bars, dampers, ride height, wings, brake bias,
 differential, gearing) for each circuit. Race in the dry, the damp or the wet: less grip,
-slippery kerbs, standing water that floats the car at speed, rain and spray.
+slippery kerbs, standing water that floats the car at speed, rain and spray. In longer races
+tyres wear and fuel burns: every circuit has a pit lane, and the AI chooses when to stop.
 
 ```bash
 npm install
