@@ -1,6 +1,6 @@
 # Milestone 8 plan: two-player online racing
 
-## Status: proposed, waiting for your OK
+## Status: approved as written, being built
 
 Goal: race a friend on another computer. One player hosts (picks the circuit and laps, gets a
 four-letter room code), the other joins with the code; both see each other's car on track,
