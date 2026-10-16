@@ -87,6 +87,23 @@ export const TUNING = {
     cliff: 0.8,
     beyond: 1.6,
   },
+  /** Pit lanes and stops (`track/pitLane.ts`, `race/pits.ts`). */
+  pits: {
+    /** Across, from the road edge (m): the pit wall's middle, the lane's inner edge, the lane's width (boxes on its outer side, `boxDepth` deep), and room to the barrier. */
+    wall: 1.4,
+    inner: 2.4,
+    width: 9,
+    boxDepth: 4.5,
+    clearance: 3,
+    /** The entry and exit tapers (m) and how far the run-off widening blends in beyond them (m). */
+    taper: 120,
+    blend: 30,
+    /** Boxes, and their spacing along the lane (m). */
+    boxes: 9,
+    boxSpacing: 12,
+    /** The lane's road sits this far above the run-off under it (m). */
+    lift: 0.01,
+  },
   /** Fuel: the car's mass and centre of mass follow the fuel aboard once it changes by this much (kg). */
   fuel: { massStep: 0.25 },
   /** The weather (`track/weather.ts`, `track/puddles.ts`). */

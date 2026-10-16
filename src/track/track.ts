@@ -8,6 +8,8 @@
 // Everything you drive on is a strip across that frame (track/geometry.ts).
 
 import type { SceneryDef } from './scenery';
+import type { PitLaneDef } from './pitLane';
+import { TUNING } from '../config';
 import type { TerrainDef } from './terrain';
 
 export interface ControlPoint {
@@ -51,6 +53,8 @@ export interface TrackDef {
   sectors?: readonly [number, number];
   /** Trees, grandstands and pits. Default: none. */
   scenery?: SceneryDef;
+  /** The pit lane beside the start straight. Default: none. */
+  pitLane?: PitLaneDef;
 }
 
 /** One sample along the centreline. */
@@ -225,6 +229,14 @@ function sideProfile(def: TrackDef, side: Side, s: number, length: number): Side
     runoffSurface = 'gravel';
     const width = span.width ?? def.runoff.width;
     runoff = def.runoff.width + (width - def.runoff.width) * Math.min(1, d / GRAVEL_TAPER);
+  }
+  // Room for the pit lane on its side, blending in and out around it.
+  const pit = def.pitLane;
+  if (pit && pit.side === side) {
+    const P = TUNING.pits;
+    const span: Span = { from: (length - pit.entry - P.blend + length) % length, to: (pit.exit + P.blend) % length, side };
+    const d = insideSpan(span, s, length);
+    if (d >= 0) runoff = Math.max(runoff, runoff + (P.inner + P.width + P.clearance - runoff) * Math.min(1, d / P.blend));
   }
   return { kerb, runoff, runoffSurface };
 }

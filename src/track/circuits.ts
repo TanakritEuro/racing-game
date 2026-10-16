@@ -11,6 +11,8 @@ export const TEST_CIRCUIT: TrackDef = {
   width: 12,
   runoff: { width: 8, surface: 'grass' },
   scenery: { seed: 3, trees: 500, pits: { from: 40, to: 200, side: 'left' } },
+  // A short straight: short tapers.
+  pitLane: { side: 'left', entry: 40, exit: 190, taper: 60 },
   // Inside each corner, and on the outside of its exit.
   kerbs: [
     { from: 288, to: 328, side: 'left' },
@@ -67,6 +69,8 @@ export const HARROWMERE: TrackDef = withCornerKerbs(
     width: 13,
     runoff: { width: 15, surface: 'grass' },
     terrain: { hills: 12, seed: 7 },
+    // The last corner ends just before the line: in after it, out before the first.
+    pitLane: { side: 'left', entry: 40, exit: 680 },
     scenery: {
       seed: 7,
       trees: 1600,
@@ -118,6 +122,7 @@ export const SALTMARSH: TrackDef = withHairpinGravel(
       width: 10,
       runoff: { width: 10, surface: 'grass' },
       terrain: { hills: 1.5, seed: 11 },
+      pitLane: { side: 'left', entry: 90, exit: 320, taper: 90 },
       scenery: {
         seed: 11,
         trees: 350,
@@ -192,6 +197,7 @@ export const RIDGEBACK: TrackDef = withHairpinGravel(
       width: 12,
       runoff: { width: 12, surface: 'grass' },
       terrain: { hills: 25, seed: 23 },
+      pitLane: { side: 'left', entry: 45, exit: 520 },
       scenery: {
         seed: 23,
         trees: 2600,

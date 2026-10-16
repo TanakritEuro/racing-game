@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { uprightAlong } from '../math';
 import { BARRIER_HEIGHT, BARRIER_THICKNESS } from '../physics';
-import { barriers, crossSection, KERB_STRIPE, kerbs, road, runoff, strip, type Offset, type Ribbon, type Sweep } from '../track/geometry';
+import { barriers, crossSection, KERB_STRIPE, kerbs, road, runoff, strip, sweep, type Offset, type Ribbon, type Sweep } from '../track/geometry';
 import type { Terrain } from '../track/terrain';
 import type { Track, TrackSample } from '../track/track';
 import { puddleSweeps } from '../track/puddles';
+import { boxOffset, laneSweep, pitLane, pitWall } from '../track/pitLane';
 import { TUNING } from '../config';
 import { createTerrainView } from './terrainView';
 
@@ -30,6 +31,39 @@ export function createTrackView(track: Track, terrain: Terrain, wet = 0): THREE.
   const surface = mesh(road(track), wetLook(new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92 })), 6);
   surface.receiveShadow = true;
   group.add(surface);
+  const lane = pitLane(track);
+  if (lane) {
+    const pits = sweepMesh(laneSweep(track, lane), wetLook(new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92 })), 6);
+    pits.receiveShadow = true;
+    group.add(pits);
+    // Each box painted on the lane.
+    const P = TUNING.pits;
+    const boxMat = new THREE.MeshBasicMaterial({ color: 0xf0c419, transparent: true, opacity: 0.55, ...decal });
+    const n = track.samples.length;
+    const half = Math.max(1, Math.round(2.5 / (track.length / n)));
+    for (const b of lane.boxes) {
+      const mid = boxOffset();
+      group.add(
+        sweepMesh(
+          sweep(track, (b - half + n) % n, (b + half) % n, 1, (p) => {
+            const a = p.halfWidth + mid - P.boxDepth / 2 + 0.3;
+            const c = p.halfWidth + mid + P.boxDepth / 2 - 0.3;
+            return lane.sign > 0
+              ? [
+                  [a, P.lift + 0.005],
+                  [c, P.lift + 0.005],
+                ]
+              : [
+                  [-c, P.lift + 0.005],
+                  [-a, P.lift + 0.005],
+                ];
+          }),
+          boxMat,
+          4,
+        ),
+      );
+    }
+  }
   if (wet >= 1) {
     const P = W.puddle;
     const water = new THREE.MeshStandardMaterial({ color: P.colour, roughness: P.roughness, metalness: P.metalness, transparent: true, opacity: P.opacity, ...decal });
@@ -199,7 +233,8 @@ function createStartLine(track: Track): THREE.Mesh {
 
 /** Tyre-wall style barriers, instanced, alternating red and white, following the ground. */
 function createBarriers(track: Track): THREE.InstancedMesh {
-  const segs = barriers(track);
+  const lane = pitLane(track);
+  const segs = [...barriers(track), ...(lane ? pitWall(track, lane) : [])];
   const geo = new THREE.BoxGeometry(BARRIER_THICKNESS, BARRIER_HEIGHT, 1);
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.7 });
   const inst = new THREE.InstancedMesh(geo, mat, segs.length);

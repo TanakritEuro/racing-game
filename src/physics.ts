@@ -3,6 +3,7 @@ import { GRAVITY, PHYSICS_STEP } from './constants';
 import { uprightAlong } from './math';
 import { barriers, kerbs, road, runoff } from './track/geometry';
 import { puddleSweeps } from './track/puddles';
+import { laneSweep, pitLane, pitWall } from './track/pitLane';
 import { buildTerrain, type Terrain } from './track/terrain';
 import type { Track } from './track/track';
 
@@ -92,10 +93,12 @@ export function createPhysics(track: Track, water = false): Physics {
   trimesh('asphalt', road(track));
   for (const k of kerbs(track)) trimesh('kerb', k);
   if (water) for (const p of puddleSweeps(track)) trimesh('water', p);
+  const lane = pitLane(track);
+  if (lane) trimesh('asphalt', laneSweep(track, lane));
   // Run-off from the kerbs (or road edges) to the barriers, grass or gravel.
   for (const surface of ['grass', 'gravel'] as const) for (const r of runoff(track, surface)) trimesh(surface, r);
 
-  for (const b of barriers(track)) {
+  for (const b of [...barriers(track), ...(lane ? pitWall(track, lane) : [])]) {
     // Upright boxes along the segment, their bottom edge on the run-off.
     const q = uprightAlong(b.dir);
     add(
