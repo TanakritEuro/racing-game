@@ -6,14 +6,17 @@ with sectors, a live delta, a ghost of your best lap (kept in the browser) and r
 trackside cameras. Race up to seven AI drivers who drive the same car you do. Three cars,
 synthesised engine and tyre sounds, skid marks, smoke and sparks. A four-round championship
 against the same seven drivers, kept between visits. Race a friend online: one hosts and
-gets a four-character room code, the other joins with it, with or without AI drivers.
+gets a four-character room code, the other joins with it, with or without AI drivers. Set
+your car up in the garage (springs, anti-roll bars, dampers, ride height, wings, brake bias,
+differential, gearing) for each circuit.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The start menu picks the mode, circuit and car; Esc pauses.
+Open http://localhost:5173. The start menu picks the mode, circuit and car (Car setup opens
+the garage); Esc pauses.
 
 | Key | Action |
 | --- | --- |

@@ -25,7 +25,7 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 Milestones 1–8 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing) are done; **Milestone 9
-(car setup) is planned** (`docs/milestone-9.md`).
+(car setup) is built and in playtesting** (`docs/milestone-9.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -89,6 +89,15 @@ both simulations in time with it, puts the lights out on the same step, collects
 car's finishing time so both screens agree, and does rematches and leaving. No pausing
 online; Enter asks for a rematch. Tests run two races over a loopback with latency and
 jitter (`online/loopback.ts`).
+
+Car setup (`vehicle/setup.ts`): eleven settings (springs and anti-roll bars at each end,
+dampers, ride height, front and rear wing, brake bias, differential, gearing), each in clicks
+(−5..5) around the car's own numbers; `applySetup` returns an adjusted `CarDef`, and
+`setupReadout` the balance (front share of roll stiffness), downforce at 200 km/h, top speed
+and brake bias. Saved per car and circuit (`storage/setups.ts`); the garage
+(`ui/garage.ts`) opens from the start and pause menus. Only the player's car has a setup:
+the simulation takes a `CarDef` per car (`SimOptions.defs`), and the AI drives the car as
+designed. A best lap keeps the setup it was set with. `?setup=default` ignores the setup.
 
 Keyboard steering goes through an assist (`drivers/steeringAssist.ts`: speed-sensitive lock,
 counter-steer help, toggleable); gamepads steer the rack directly with analogue triggers
@@ -175,7 +184,8 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   `setGearboxMode()`, contacts, and proxies (other players' cars, moved to a given pose).
 - `src/vehicle/car.ts` — chassis body, raycast suspension, the wheel substep loop (tyre
   forces, wheel spin, slip relaxation), force application, `Controls`.
-- `src/vehicle/carDef.ts` — `CarDef`, every number about one car; `cars.ts` — the cars (`KESTREL`).
+- `src/vehicle/carDef.ts` — `CarDef`, every number about one car; `cars.ts` — the cars (`KESTREL`);
+  `setup.ts` — setups: the settings, `applySetup`, `cleanSetup`, `setupReadout`.
 - `src/vehicle/tyre.ts` — Magic Formula, load sensitivity, combined slip (pure functions).
 - `src/vehicle/spin.ts` — wheel spin integration with friction torques that never reverse a wheel.
 - `src/vehicle/steering.ts` — steering rack rate and Ackermann geometry.
@@ -200,7 +210,8 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/race/recording.ts` — lap recordings (30 Hz frames of pose and readouts), sampling
   between frames, encode / decode; `session.ts` — `TimeTrial`: records laps, keeps the
   best as the ghost, restarts, loads stored bests.
-- `src/storage/bests.ts` — each circuit and car's best lap in IndexedDB (memory fallback).
+- `src/storage/bests.ts` — each circuit and car's best lap in IndexedDB (memory fallback), with
+  the setup it was set with; `setups.ts` — each car's setup per circuit in localStorage.
 - `src/replay/replay.ts` — the replay player (speed, pause, skip, hand back to live).
 - `src/vehicle/pose.ts` — `CarPose` and interpolation between physics steps.
 - `src/render/` — `scene.ts` (renderer, sky, sun), `trackView.ts`, `carView.ts`
@@ -210,7 +221,7 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/ui/timingHud.ts` — lap, delta, sector splits, last and best; `raceHud.ts` —
   position, lap, gaps, start lights, results; `dashboard.ts` — rev counter, speed, gear, aid
   lights; `menu.ts` — start, pause and settings menus; `standings.ts` — championship
-  standings between rounds.
+  standings between rounds; `garage.ts` — the setup screen.
 - `src/render/carModels.ts` — loads, fits and paints the car models; `render/effects/` —
   `skidMarks.ts`, `smoke.ts`, `sparks.ts` and `index.ts` (`Effects`).
 - `src/audio/` — `sound.ts` (context, volume, knocks and pops), `carVoice.ts` (one car's
@@ -228,7 +239,7 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/main.ts` — entry point and frame loop; `?track=<id>`, `?telemetry`, `?debug`
   (exposes `sim`, `race`, `online`, `session()`, `step(controls)`, `replay()`, `autopilot`,
   `effects`, `sound()` and `stage` in the console), `?line`, `?autopilot`, `?mode=race` and
-  its options, `?season`, `?online`.
+  its options, `?season`, `?online`, `?setup=default`.
 - `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
   line-following test driver (offset, curvature speed profile); `tracks.ts` has test-only
   layouts (skidpads, long oval, hill, kerbed oval, grass and gravel pads).

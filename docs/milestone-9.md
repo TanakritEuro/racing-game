@@ -1,6 +1,34 @@
 # Milestone 9 plan: car setup (the garage)
 
-## Status: planned, waiting for your approval
+## Status: built, in playtesting
+
+Approved as written: car setup next, saved per car and circuit, the eleven settings, no
+presets, one best lap per circuit and car whatever the setup.
+
+Measured (Kestrel, headless): shorter gearing (+5) reaches 100 km/h sooner and tops out at
+219 km/h on the limiter against 237 as designed; full wing against none presses the car down
+several hundred newtons harder at 180 km/h and costs 10 km/h at the top; the stiffest rear
+bar against the softest moves the skidpad's lateral load transfer rearward by more than 5
+points; brake bias 10 points rearward locks the rears first with ABS off; the lowest, softest
+car rides Ridgeback's crests without going through its bump stops.
+
+Where the build differs from the plan below:
+
+- **Gearing is 5 % a click**, not 3 %: at 3 % even the shortest gearing never reached the
+  limiter, so it didn't lower the top speed. Longer gearing doesn't raise the top speed of
+  a car that drag already limits (the Kestrel's); it only blunts the acceleration.
+- **A wing click is 15 % of the car's own downforce**, so the Wren, a roadster with almost
+  none, gains little from its wings. No setup turns downforce into lift.
+- **The top-speed readout is "on a long straight"**: about 4 % above what the car reaches
+  round the long oval's bends, within 1 % when the limiter decides it.
+- **The wing test measures wheel load at 180 km/h**, not lateral g on a fast skidpad: the test
+  skidpad is too slow for aero to show above the noise.
+- **Where the garage opens:** the start menu (not for a championship, which visits every
+  circuit, or for joining online, before the circuit is known) and the pause menu (not
+  online, nor once a championship round has counted). From the pause menu a changed setup
+  reloads the game at the grid with it; an offline race starts afresh (a new grid draw).
+- **Fixed in passing:** a vehicle braking test now has a longer timeout; it timed out when
+  the setup tests' long drives ran beside it.
 
 The roadmap ended at Milestone 8, so this one is a proposal (other candidates are in
 question 1). The game is built around real car physics, and every number about a car is
