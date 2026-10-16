@@ -137,6 +137,8 @@ export interface OnlineOptions {
   seed?: number;
   /** The AI's difficulty (the host's choice). */
   difficulty?: Difficulty;
+  /** The host's car as designed, for its AI (`mine` may carry the player's setup). */
+  stock?: CarDef;
 }
 
 /** This player's car, and the other player's. */
@@ -214,7 +216,8 @@ export class OnlineRace {
     // The host simulates itself and the AI (in its car); the guest only itself.
     const own = host ? [0, ...ai] : [1];
     const proxies = host ? [1] : [0, ...ai];
-    this.sim = new Simulation(track, mine, { cars: own.length, slots: own.map(slot), field: this.count });
+    const stock = options.stock ?? mine;
+    this.sim = new Simulation(track, stock, { cars: own.length, slots: own.map(slot), field: this.count, defs: [mine] });
     for (const entry of proxies) {
       this.sim.addProxy(theirs, restingPose(theirs, this.sim.slotPose(slot(entry))));
       this.remotes.push(new RemoteCar());
@@ -222,7 +225,7 @@ export class OnlineRace {
     }
     this.rng = createRng(options.seed ?? 1);
     if (host && n > 0) {
-      fieldSkills(options.difficulty ?? 'medium', n, this.rng).forEach((skill, k) => this.drivers.push(createAiDriver(track, mine, skill, (options.seed ?? 1) * 100 + k)));
+      fieldSkills(options.difficulty ?? 'medium', n, this.rng).forEach((skill, k) => this.drivers.push(createAiDriver(track, stock, skill, (options.seed ?? 1) * 100 + k)));
       const other = this.sim.proxies[0];
       const remote = this.remotes[0];
       this.movers = [
@@ -234,7 +237,7 @@ export class OnlineRace {
           },
         },
       ];
-      this.traffic = new Traffic(track, this.movers, mine);
+      this.traffic = new Traffic(track, this.movers, stock);
     } else this.movers = [];
     this.finishTimes = Array.from({ length: this.count }, () => null);
     this.reportedBest = Array.from({ length: this.count }, () => null);

@@ -81,16 +81,18 @@ export class Race {
   private readonly checkpoints = new Map<number, number>();
   private readonly rng;
 
+  /** `def`: the AI's car; `playerDef`: the player's (the same car with their setup). */
   constructor(
     readonly track: Track,
     readonly options: RaceOptions = DEFAULT_RACE,
     def: CarDef = KESTREL,
+    playerDef: CarDef = def,
   ) {
     const count = 1 + Math.max(0, Math.min(AI_NAMES.length, options.opponents));
     const playerSlot = Math.min(count - 1, options.playerSlot ?? Math.floor(count / 2));
     // The player in their slot; the AI in the others, in order (unless a championship says).
     const slots = options.slots?.slice(0, count) ?? [playerSlot, ...Array.from({ length: count }, (_, s) => s).filter((s) => s !== playerSlot)];
-    this.sim = new Simulation(track, def, { cars: count, slots });
+    this.sim = new Simulation(track, def, { cars: count, slots, defs: [playerDef] });
     this.rng = createRng(options.seed);
     const skills = fieldSkills(options.difficulty, count - 1, this.rng);
     this.skills = options.skills ? options.skills.slice(0, count).map((s, k) => (k === 0 ? null : s)) : [null, ...skills];

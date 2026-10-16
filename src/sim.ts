@@ -28,8 +28,10 @@ const GRID = {
 };
 
 export interface SimOptions {
-  /** How many cars (default 1). Every car uses `carDef`. */
+  /** How many cars (default 1). Every car uses `carDef`, unless `defs` gives it its own. */
   cars?: number;
+  /** A car of its own for the first few cars (the player's, with their setup). */
+  defs?: readonly CarDef[];
   /** Grid slot of each car (default: car i in slot i). Slot 0 is pole. */
   slots?: readonly number[];
   /** Cars on the grid, counting other players' (default: `cars`). A car alone starts on the centreline. */
@@ -95,7 +97,7 @@ export class Simulation {
     this.lone = (options.field ?? count) === 1;
     for (let i = 0; i < count; i++) {
       const pose = this.gridPose(i);
-      this.cars.push(new Car(this.physics, pose, carDef));
+      this.cars.push(new Car(this.physics, pose, options.defs?.[i] ?? carDef));
       this.timers.push(new LapTimer(track, pose.position.x, pose.position.z));
       this.poses.push({ previous: createPose(), current: createPose() });
       this.carByCollider.set(this.cars[i].collider.handle, i);

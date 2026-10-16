@@ -155,6 +155,25 @@ export const TUNING = {
     /** After the leader finishes, cars still running are classified where they are after this long (s). */
     classifyAfter: 90,
   },
+  /** Car setup (`vehicle/setup.ts`): clicks either way from the car's own numbers, and what one click changes. */
+  setup: {
+    clicks: 5,
+    /** Spring rate, anti-roll bar and damping per click (fractions of the car's own). */
+    spring: 0.06,
+    antiRoll: 0.1,
+    dampers: 0.08,
+    /** Spring rest length per click (m). */
+    rideHeight: 0.01,
+    /** Downforce per click (a fraction of the car's own), and drag area added per m² of downforce area. */
+    wing: 0.15,
+    wingDrag: 0.3,
+    /** Front brake share per click, within these limits. */
+    brakeBias: { step: 0.02, min: 0.45, max: 0.8 },
+    /** Differential preload (fraction) and ramp (absolute) per click. */
+    diff: { preload: 0.2, ramp: 0.04 },
+    /** Final drive per click (fraction): up is shorter. */
+    gearing: 0.05,
+  },
   /** Online races (`online/session.ts`). */
   online: {
     /**
