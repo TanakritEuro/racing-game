@@ -1,6 +1,9 @@
 # Milestone 7 plan: championship
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (season length, the reverse grid, rivals
+feeling distinct, the standings screen, continuing after closing the tab) stay open.
 
 Approved as proposed: a championship rather than online, four rounds at 5 / 3 / 3 / 3 laps,
 reverse championship order on the grid after round 1, points 10-8-6-5-4-3-2-1.
