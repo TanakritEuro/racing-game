@@ -1,6 +1,10 @@
 # Milestone 5 plan: AI drivers
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (difficulty levels, the start and turn 1,
+passing and being passed, the AI's mistakes, the race panel and results, frame rate with
+eight cars) stay open.
 
 Approved as proposed: up to 7 opponents, 3 laps, you mid-grid; three difficulties with a
 seeded spread and no rubber-banding; full contact, no penalties, every car held on its brakes
