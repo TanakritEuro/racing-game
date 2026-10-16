@@ -197,7 +197,8 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/input/` — `keyboard.ts`, `gamepad.ts`, `index.ts` (`PlayerInput`: both devices → `Controls`).
 - `src/settings.ts` — player settings in localStorage.
 - `src/main.ts` — entry point and frame loop; `?track=<id>`, `?telemetry`, `?debug`
-  (exposes `sim`, `race`, `session()`, `step(controls)`, `replay()` and `autopilot` in the
+  (exposes `sim`, `race`, `session()`, `step(controls)`, `replay()`, `autopilot`, `effects`,
+  `sound()` and `stage` in the
   console), `?line`, `?autopilot`, `?mode=race` and its options.
 - `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
   line-following test driver (offset, curvature speed profile); `tracks.ts` has test-only
