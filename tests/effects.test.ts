@@ -34,7 +34,7 @@ describe('effects', () => {
   });
 
   it('never grow the smoke or spark pools', () => {
-    const smoke = new Smoke(20);
+    const smoke = new Smoke({ ...TUNING.effects.smoke, capacity: 20 });
     for (let k = 0; k < 100; k++) smoke.emit('car/0', 0, 0, 0, 10, 0, 1, 30, 0.1);
     expect(smoke.live).toBe(20);
     // Puffs fade away.

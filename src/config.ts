@@ -150,6 +150,41 @@ export const TUNING = {
   },
   /** Tyre and impact effects (`render/effects/`). */
   effects: {
+    /** The weather on screen (`render/weatherView.ts`): sky, fog and sun from dry to wet, and the rain. */
+    weather: {
+      sky: { dry: 0x9cc6ee, wet: 0x8a939c },
+      /** Fog from near to far (m). */
+      fog: { dry: [250, 900], wet: [90, 520] },
+      /** The sun's brightness when wet, as a share of the dry. */
+      sun: 0.35,
+      rain: {
+        drops: 5000,
+        /** The box round the camera (m), how fast the drops fall (m/s), streak length (m), wind (m/s, x and z). */
+        radius: 40,
+        height: 24,
+        fall: 9,
+        length: 0.7,
+        wind: [1.2, 0.6],
+        colour: 0xc9d3dc,
+        opacity: 0.45,
+      },
+      /** The road and kerbs when wet: glossier and darker. */
+      road: { roughness: 0.35, darken: 0.62 },
+      puddle: { colour: 0x2b3238, roughness: 0.06, metalness: 0.5, opacity: 0.9 },
+    },
+    /** Spray thrown up behind wheels on a wet road: puffs like smoke's, by speed. */
+    spray: {
+      capacity: 900,
+      rate: 28,
+      minSpeed: 8,
+      /** Speed (m/s) above `minSpeed` for full spray. */
+      fullSpeed: 30,
+      life: 0.55,
+      size: [0.8, 3.2],
+      rise: 0.9,
+      opacity: 0.28,
+      colour: 0xdfe4e8,
+    },
     /** A tyre slides once its slip passes this multiple of its peak (angle or ratio). */
     slideFrom: 1.15,
     skid: {
@@ -162,6 +197,7 @@ export const TUNING = {
       opacity: 0.6,
     },
     smoke: {
+      colour: 0xd8d8d8,
       capacity: 700,
       /** Puffs per second per wheel at full slide, from this speed (m/s) up. */
       rate: 45,

@@ -4,21 +4,41 @@ import { BARRIER_HEIGHT, BARRIER_THICKNESS } from '../physics';
 import { barriers, crossSection, KERB_STRIPE, kerbs, road, runoff, strip, type Offset, type Ribbon, type Sweep } from '../track/geometry';
 import type { Terrain } from '../track/terrain';
 import type { Track, TrackSample } from '../track/track';
+import { puddleSweeps } from '../track/puddles';
+import { TUNING } from '../config';
 import { createTerrainView } from './terrainView';
 
 /** Painted layers sit on the road with a polygon offset, so they never z-fight with it. */
 const decal = { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 };
 
-/** Road, edge lines, run-off, start line, ground and barriers, built from the same data as the colliders. */
-export function createTrackView(track: Track, terrain: Terrain): THREE.Group {
+/**
+ * Road, edge lines, run-off, start line, ground and barriers, built from the same data as the
+ * colliders; `wet` (0–1) darkens and glosses the road and kerbs, and fully wet adds the puddles.
+ */
+export function createTrackView(track: Track, terrain: Terrain, wet = 0): THREE.Group {
+  const W = TUNING.effects.weather;
   const group = new THREE.Group();
   const grass = grassTexture();
 
   group.add(createTerrainView(terrain, grass));
 
-  const surface = mesh(road(track), new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92 }), 6);
+  const wetLook = (m: THREE.MeshStandardMaterial) => {
+    m.roughness += (W.road.roughness - m.roughness) * wet;
+    m.color.multiplyScalar(1 - (1 - W.road.darken) * wet);
+    return m;
+  };
+  const surface = mesh(road(track), wetLook(new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92 })), 6);
   surface.receiveShadow = true;
   group.add(surface);
+  if (wet >= 1) {
+    const P = W.puddle;
+    const water = new THREE.MeshStandardMaterial({ color: P.colour, roughness: P.roughness, metalness: P.metalness, transparent: true, opacity: P.opacity, ...decal });
+    for (const p of puddleSweeps(track)) {
+      const m = sweepMesh(p, water, 4);
+      m.receiveShadow = true;
+      group.add(m);
+    }
+  }
 
   // A strip between two offsets on one side: +1 left, −1 right (mirrored so it still faces up).
   const side = (s: number, inner: (p: TrackSample) => number, outer: (p: TrackSample) => number, lift = 0): Ribbon =>
@@ -35,7 +55,7 @@ export function createTrackView(track: Track, terrain: Terrain): THREE.Group {
   for (const s of [1, -1]) group.add(mesh(side(s, (p) => p.halfWidth - 0.45, (p) => p.halfWidth - 0.3, 0.01), lineMat));
 
   // Kerbs: one paint stripe per KERB_STRIPE, red over the ridges.
-  const kerbMat = new THREE.MeshStandardMaterial({ map: kerbTexture(), roughness: 0.8 });
+  const kerbMat = wetLook(new THREE.MeshStandardMaterial({ map: kerbTexture(), roughness: 0.8 }));
   for (const k of kerbs(track)) group.add(sweepMesh(k, kerbMat, 2 * KERB_STRIPE));
   const grassMat = new THREE.MeshStandardMaterial({ map: grass, roughness: 1 });
   const gravelMat = new THREE.MeshStandardMaterial({ map: gravelTexture(), roughness: 1 });

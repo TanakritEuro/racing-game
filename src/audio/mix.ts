@@ -24,7 +24,23 @@ export const MIX = {
   impact: { full: 6000, gain: 0.9 },
   /** Other cars: full volume within this distance (m), quieter with distance squared beyond it. */
   distance: 12,
+  /** Rain falling (wet only); tyres through water (gain at full speed, cut-off from slow to fast); squeal left on a wet road. */
+  rain: { gain: 0.09 },
+  swish: { gain: 0.24, fullSpeed: 40, cutoff: [500, 2600] },
+  wetSqueal: 0.25,
 };
+
+/** Rain falling: only when it's raining (fully wet). */
+export function rainHiss(wet: number): { gain: number } {
+  return { gain: wet >= 1 ? MIX.rain.gain : 0 };
+}
+
+/** Tyres through the water on the road, at `speed` (m/s) on a road `wet` (0–1). */
+export function swish(wet: number, speed: number): { gain: number; cutoff: number } {
+  const S = MIX.swish;
+  const f = Math.min(1, Math.abs(speed) / S.fullSpeed);
+  return { gain: S.gain * wet * f, cutoff: S.cutoff[0] + (S.cutoff[1] - S.cutoff[0]) * f };
+}
 
 export interface EngineVoice {
   /** Firing frequency (Hz): RPM ÷ 60 × cylinders ÷ 2. */
@@ -49,10 +65,12 @@ export function engineVoice(def: EngineDef, rpm: number, throttle: number): Engi
 }
 
 /** Tyre squeal: from how far past their grip the tyres are (0 = gripping) and the speed. */
-export function squeal(slide: number, speed: number): { gain: number; pitch: number } {
+export function squeal(slide: number, speed: number, wet = 0): { gain: number; pitch: number } {
   const S = MIX.squeal;
   const s = Math.min(1, slide);
-  return { gain: S.gain * Math.min(1, s * 1.5) * Math.min(1, speed / S.fullSpeed), pitch: S.pitch + S.pitchSlide * s };
+  // A wet tyre hardly squeals.
+  const muffle = 1 - (1 - MIX.wetSqueal) * wet;
+  return { gain: S.gain * Math.min(1, s * 1.5) * Math.min(1, speed / S.fullSpeed) * muffle, pitch: S.pitch + S.pitchSlide * s };
 }
 
 /** Wind: rising with speed squared, brighter as it rises. */

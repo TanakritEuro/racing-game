@@ -7,7 +7,9 @@ import type { Contact, Simulation } from '../sim';
 import type { Controls } from '../vehicle/car';
 import type { CarDef } from '../vehicle/carDef';
 import { CarVoice } from './carVoice';
-import { distanceGain, engineVoice, rumble, squeal, wind } from './mix';
+import { distanceGain, engineVoice, rainHiss, rumble, squeal, swish, wind } from './mix';
+import { RainVoice } from './rainVoice';
+import { wetness } from '../track/weather';
 import type { Sound } from './sound';
 
 /** Other cars given their own voice. */
@@ -37,6 +39,7 @@ export interface RemoteSound {
 export class GameAudio {
   private own: CarVoice | null = null;
   private others: CarVoice[] = [];
+  private rain: RainVoice | null = null;
   private lastGear = 0;
 
   constructor(private readonly sound: Sound) {}
@@ -48,6 +51,7 @@ export class GameAudio {
     if (!this.own) {
       this.own = new CarVoice(ctx, master, noise, true);
       this.others = Array.from({ length: VOICES }, () => new CarVoice(ctx, master, noise, false));
+      this.rain = new RainVoice(ctx, master, noise);
     }
     return true;
   }
@@ -60,7 +64,9 @@ export class GameAudio {
     const speed = Math.abs(car.speed);
     const slide = Math.max(...car.wheels.map(slideAmount));
     const kerbs = car.wheels.filter((w) => w.contact && w.surface === 'kerb').length;
-    this.own!.update(engineVoice(car.def.engine, car.drivetrain.rpm, c?.throttle ?? 0), squeal(slide, speed), 1, 0, rumble(kerbs, speed), wind(speed));
+    const wet = wetness(sim.conditions);
+    this.own!.update(engineVoice(car.def.engine, car.drivetrain.rpm, c?.throttle ?? 0), squeal(slide, speed, wet), 1, 0, rumble(kerbs, speed), wind(speed));
+    this.rain!.update(rainHiss(wet), swish(car.wheels.some((w) => w.contact) ? wet : 0, speed));
     // A pop on each gearshift under power.
     const gear = car.drivetrain.gearbox.gear;
     if (gear !== this.lastGear && (c?.throttle ?? 0) > 0.3) this.sound.pop(1);
@@ -91,7 +97,7 @@ export class GameAudio {
       }
       const { s } = o;
       const pan = ((s.x - listener.x) * listener.rightX + (s.z - listener.z) * listener.rightZ) / Math.max(1, o.d);
-      voice.update(engineVoice(s.def.engine, s.rpm, s.throttle), squeal(s.slide, s.speed), OTHERS * distanceGain(o.d), pan);
+      voice.update(engineVoice(s.def.engine, s.rpm, s.throttle), squeal(s.slide, s.speed, wet), OTHERS * distanceGain(o.d), pan);
     });
   }
 
@@ -110,5 +116,6 @@ export class GameAudio {
     if (!this.ready()) return;
     this.own!.update(engineVoice(def.engine, rpm, throttle), { gain: 0, pitch: 500 }, 1, 0, { gain: 0, frequency: 20 }, { gain: 0, cutoff: 400 });
     for (const v of this.others) v.silence();
+    this.rain!.update({ gain: 0 }, { gain: 0, cutoff: 500 });
   }
 }

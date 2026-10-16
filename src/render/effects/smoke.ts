@@ -29,6 +29,18 @@ void main() {
   gl_FragColor = vec4(uColour, a);
 }`;
 
+/** What a kind of puff is like: smoke, or spray (TUNING.effects). */
+export interface PuffDef {
+  colour: number;
+  capacity: number;
+  rate: number;
+  minSpeed: number;
+  life: number;
+  size: number[];
+  rise: number;
+  opacity: number;
+}
+
 export class Smoke {
   readonly points: THREE.Points;
   readonly capacity: number;
@@ -43,7 +55,8 @@ export class Smoke {
   /** Fractional puffs owed to each emitter between frames. */
   private readonly owed = new Map<string, number>();
 
-  constructor(capacity = TUNING.effects.smoke.capacity) {
+  constructor(private readonly S: PuffDef = TUNING.effects.smoke) {
+    const capacity = S.capacity;
     this.capacity = capacity;
     this.positions = new Float32Array(capacity * 3);
     this.sizes = new Float32Array(capacity);
@@ -58,7 +71,7 @@ export class Smoke {
     this.material = new THREE.ShaderMaterial({
       vertexShader: POINT_VERTEX,
       fragmentShader: POINT_FRAGMENT,
-      uniforms: { uScale: { value: 500 }, uColour: { value: new THREE.Color(0xd8d8d8) } },
+      uniforms: { uScale: { value: 500 }, uColour: { value: new THREE.Color(S.colour) } },
       transparent: true,
       depthWrite: false,
     });
@@ -77,7 +90,7 @@ export class Smoke {
    * (m/s), moving (vx, vz), over `dt` seconds.
    */
   emit(key: string, x: number, y: number, z: number, vx: number, vz: number, slide: number, speed: number, dt: number): void {
-    const S = TUNING.effects.smoke;
+    const { S } = this;
     if (slide <= 0 || speed < S.minSpeed) {
       this.owed.set(key, 0);
       return;
@@ -92,7 +105,7 @@ export class Smoke {
 
   /** One puff (if the pool is full, the oldest is reused). */
   spawn(x: number, y: number, z: number, vx: number, vz: number): void {
-    const S = TUNING.effects.smoke;
+    const { S } = this;
     let k = this.live;
     if (k < this.capacity) this.live++;
     else {
@@ -109,7 +122,7 @@ export class Smoke {
 
   /** Age, move and fade every puff by `dt` seconds. */
   update(dt: number): void {
-    const S = TUNING.effects.smoke;
+    const { S } = this;
     for (let k = 0; k < this.live; ) {
       this.age[k] += dt;
       const f = this.age[k] / S.life;

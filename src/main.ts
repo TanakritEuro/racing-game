@@ -43,6 +43,8 @@ import { NO_CONTROLS, poseOnTrack, wheelMounts, type Controls } from './vehicle/
 import { cleanRoomCode, joinRoom, openRoom, type Link } from './online/link';
 import { guestHandshake, hostHandshake, OnlineError, OnlineRace, type OnlineSetup } from './online/session';
 import { OnlinePanel } from './ui/onlinePanel';
+import { WeatherView } from './render/weatherView';
+import { CONDITIONS, wetness, type Conditions } from './track/weather';
 import { Garage } from './ui/garage';
 import { SetupStore } from './storage/setups';
 import { applySetup, cleanSetup, type Setup } from './vehicle/setup';
@@ -83,10 +85,13 @@ const carDef = CARS.find((c) => c.name.toLowerCase() === carId) ?? KESTREL;
 const setups = new SetupStore();
 const setup: Setup = params.get('setup') === 'default' ? {} : setups.load(circuit.id, carDef.name);
 const playerDef = applySetup(carDef, setup);
+// The weather: ?weather=dry|damp|wet.
+const conditions: Conditions = CONDITIONS.find((c) => c === params.get('weather')) ?? 'dry';
+const wet = wetness(conditions);
 const race = connected
   ? null
   : seasonRound
-    ? new Race(track, seasonRound.options, carDef, playerDef)
+    ? new Race(track, { ...seasonRound.options, conditions }, carDef, playerDef)
     : params.get('mode') === 'race'
       ? new Race(track, raceOptions(params), carDef, playerDef)
       : null;
@@ -100,7 +105,7 @@ const online = connected
       stock: carDef,
     })
   : null;
-const sim = online ? online.sim : race ? race.sim : new Simulation(track, playerDef);
+const sim = online ? online.sim : race ? race.sim : new Simulation(track, playerDef, { conditions });
 
 /** Open or join a room and agree the race; on failure, say why and offer the way back. */
 async function connect(joining: boolean): Promise<{ link: Link; setup: OnlineSetup }> {
@@ -157,11 +162,13 @@ function raceOptions(p: URLSearchParams, opponents = DEFAULT_RACE.opponents): Ra
     difficulty: DIFFICULTIES.includes(difficulty as Difficulty) ? (difficulty as Difficulty) : DEFAULT_RACE.difficulty,
     // A different race each time, unless ?seed= asks for a particular one.
     seed: int('seed', 1, 2 ** 30, 1 + Math.floor(Math.random() * 2 ** 30)),
+    conditions,
   };
 }
 
 const stage = createStage(canvas);
-stage.scene.add(createTrackView(track, sim.physics.terrain));
+stage.scene.add(createTrackView(track, sim.physics.terrain, wet));
+const weatherView = new WeatherView(stage, wet);
 if (circuit.scenery) stage.scene.add(createSceneryView(layoutScenery(track, sim.physics.terrain, circuit.scenery)));
 const carView = new CarView(
   sim.car.def,
@@ -239,7 +246,7 @@ if (params.has('line')) {
   stage.scene.add(createLineView(track, line, speedProfile(line, env)));
 }
 // ?autopilot hands your car to the AI (for watching it, and checking it).
-const autopilot = params.has('autopilot') ? createAiDriver(track, sim.car.def) : null;
+const autopilot = params.has('autopilot') ? createAiDriver(track, sim.car.def, undefined, 1, conditions) : null;
 // ?debug exposes the simulation in the console, for poking at it while developing.
 if (params.has('debug')) Object.assign(window, { sim, race, online, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay, autopilot, effects, sound: () => sound, stage });
 
@@ -555,6 +562,7 @@ function drawReplay(t: number, dt: number): void {
   tv.update(replayState.pose, dt, replay.jumped);
   replay.jumped = false;
   followSun(stage.sun, carView.root.position);
+  weatherView.update(dt, stage.camera.position);
   const valid = rec.valid ? '' : '  (INVALID)';
   replayHud.title.textContent = `REPLAY · ${replay.caption} ${formatLapTime(rec.lapTime)}${valid}`;
   const state = replay.paused ? 'PAUSED' : `${replay.speed}×`;
@@ -733,6 +741,7 @@ function frame(now: number): void {
     stage.renderer.domElement.height,
   );
   followSun(stage.sun, carView.root.position);
+  weatherView.update(dt, stage.camera.position);
   // The listener is the camera.
   const cam = stage.camera;
   cam.updateMatrixWorld();
