@@ -1,6 +1,12 @@
 # Milestone 6 plan: presentation
 
-## Status: built, in playtesting
+## Status: done
+
+Closed after two fixes from your first look: the circuit thumbnails in the start menu are
+drawn as SVG (on a small canvas Chrome drew them broken), and the bumper and hood cameras
+sit outside the car models (the hood camera above each model's bonnet; your car hidden from
+the bumper). The playtest questions (engine sounds, squeal, effects, the three cars, the
+rev counter, the menus and reloading) stay open.
 
 Approved as proposed: Kenney's Car Kit, Wren and Harrier, a start menu with Esc for pause.
 No engine character was asked for: Wren and Kestrel are high-revving fours, Harrier a six.
