@@ -1,6 +1,6 @@
 # Milestone 7 plan: championship
 
-## Status: proposed, waiting for your OK
+## Status: approved as written, being built
 
 The roadmap's last milestone is optional: a short championship against the AI, *or*
 two-player online racing. This plan proposes the **championship** (why, and how online
