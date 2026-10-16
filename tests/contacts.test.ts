@@ -18,14 +18,14 @@ function collect(sim: Simulation, driver: () => Controls | Controls[], seconds: 
   return seen;
 }
 
-/** Drive square into the barrier on the left of the first straight at `speed` (m/s). */
+/** Drive into the barrier on the right of the first straight (the pit lane is on its left) at `speed` (m/s). */
 async function intoBarrier(speed: number): Promise<{ contacts: Contact[]; sim: Simulation }> {
   const sim = await createSim();
   const { track } = sim;
   const p = track.samples[40];
-  // Turned 60° to the left of the track's direction, a few metres before the barrier.
+  // Turned 60° to the right of the track's direction.
   const pose = poseOnTrack(p);
-  const angle = Math.PI / 3;
+  const angle = -Math.PI / 3;
   const half = angle / 2;
   // Rotate about up (+Y): q_turn × q.
   const q = pose.rotation;
@@ -60,7 +60,7 @@ describe('contacts', () => {
       const c = r.contacts[0];
       const i = r.sim.timer.index;
       const off = Math.abs(lateralOffset(r.sim.track, i, c.x, c.z));
-      expect(off).toBeGreaterThan(barrierOffset(r.sim.track.samples[i], 'left') - 2);
+      expect(off).toBeGreaterThan(barrierOffset(r.sim.track.samples[i], 'right') - 2);
     }
     const hardest = (cs: Contact[]) => Math.max(...cs.map((c) => c.impulse));
     expect(hardest(fast.contacts)).toBeGreaterThan(1.5 * hardest(slow.contacts));
