@@ -50,6 +50,13 @@ export interface Controls {
 
 export const NO_CONTROLS: Readonly<Controls> = { throttle: 0, brake: 0, steer: 0, clutch: 0, shift: 0, handbrake: 0 };
 
+/** `c` as it is, or with any value that isn't a finite number replaced by 0. */
+function finiteControls(c: Controls): Controls {
+  if (Number.isFinite(c.throttle) && Number.isFinite(c.brake) && Number.isFinite(c.steer) && Number.isFinite(c.clutch) && Number.isFinite(c.handbrake)) return c;
+  const f = (v: number) => (Number.isFinite(v) ? v : 0);
+  return { throttle: f(c.throttle), brake: f(c.brake), steer: f(c.steer), clutch: f(c.clutch), shift: c.shift, handbrake: f(c.handbrake) };
+}
+
 /** Full `Controls` from the inputs given, with the clutch up, no shift and no handbrake. */
 export function controls(c: Partial<Controls>): Controls {
   return { ...NO_CONTROLS, ...c };
@@ -331,7 +338,9 @@ export class Car {
   }
 
   /** Compute and apply this step's suspension, tyre and drag forces. Call before `world.step()`. */
-  update(controls: Controls, dt: number): void {
+  update(input: Controls, dt: number): void {
+    // A bad input (NaN from a buggy driver) must not poison the car's state for good.
+    const controls = finiteControls(input);
     const body = this.body;
     body.resetForces(false);
     body.resetTorques(false);

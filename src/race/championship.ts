@@ -5,7 +5,7 @@
 
 import { fieldSkills, type Difficulty, type Skill } from '../ai/skill';
 import { createRng } from '../math';
-import { AI_NAMES } from './race';
+import { AI_NAMES, type RaceOptions, type Standing } from './race';
 
 /** The rounds, shortest first. */
 export const ROUNDS: readonly { track: string; laps: number }[] = [
@@ -119,6 +119,28 @@ export function gridSlots(season: Season): number[] {
 /** The seed for round `r`'s race (its lights and the AI's mistakes). */
 export function roundSeed(season: Season, r: number): number {
   return season.seed * 10 + r + 1;
+}
+
+/** The next round's race: its circuit, and the options that build it from the season. */
+export function roundRace(season: Season): { track: string; options: RaceOptions } {
+  const r = Math.min(nextRound(season), season.rounds.length - 1);
+  const round = season.rounds[r];
+  return {
+    track: round.track,
+    options: {
+      opponents: ENTRIES - 1,
+      laps: round.laps,
+      difficulty: season.difficulty,
+      seed: roundSeed(season, r),
+      slots: gridSlots(season),
+      skills: season.skills,
+    },
+  };
+}
+
+/** A race's finishing order (entry numbers, winner first) from its final standings. */
+export function finishingOrder(rows: readonly Standing[]): number[] {
+  return [...rows].sort((a, b) => a.position - b.position).map((r) => r.car);
 }
 
 /** A season from saved JSON, or null if it isn't one this version can read. */

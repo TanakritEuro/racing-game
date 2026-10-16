@@ -22,6 +22,9 @@ export interface RaceOptions {
   seed: number;
   /** The player's grid slot (0 = pole); by default the middle of the field. */
   playerSlot?: number;
+  /** A championship round: every car's grid slot and the AI's skills (null for the player), instead of drawing them. */
+  slots?: readonly number[];
+  skills?: readonly (Skill | null)[];
 }
 
 export const DEFAULT_RACE: Readonly<RaceOptions> = { opponents: 7, laps: 3, difficulty: 'medium', seed: 1 };
@@ -85,12 +88,12 @@ export class Race {
   ) {
     const count = 1 + Math.max(0, Math.min(AI_NAMES.length, options.opponents));
     const playerSlot = Math.min(count - 1, options.playerSlot ?? Math.floor(count / 2));
-    // The player in their slot; the AI in the others, in order.
-    const slots = [playerSlot, ...Array.from({ length: count }, (_, s) => s).filter((s) => s !== playerSlot)];
+    // The player in their slot; the AI in the others, in order (unless a championship says).
+    const slots = options.slots?.slice(0, count) ?? [playerSlot, ...Array.from({ length: count }, (_, s) => s).filter((s) => s !== playerSlot)];
     this.sim = new Simulation(track, def, { cars: count, slots });
     this.rng = createRng(options.seed);
     const skills = fieldSkills(options.difficulty, count - 1, this.rng);
-    this.skills = [null, ...skills];
+    this.skills = options.skills ? options.skills.slice(0, count).map((s, k) => (k === 0 ? null : s)) : [null, ...skills];
     this.drivers = this.skills.map((s, k) => (s ? createAiDriver(track, def, s, options.seed * 100 + k) : null));
     this.traffic = new Traffic(track, this.sim.cars);
     this.finishTimes = this.sim.cars.map(() => null);

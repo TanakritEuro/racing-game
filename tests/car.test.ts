@@ -324,3 +324,17 @@ describe('car', () => {
     expect(Math.abs(s.car.position.z)).toBeLessThan(17.5);
   });
 });
+
+describe('bad input', () => {
+  it('shrugs off a NaN control without its state going NaN', async () => {
+    const s = await createSim();
+    run(s, NO_CONTROLS, 1);
+    s.step(controls({ throttle: Number.NaN, brake: Number.NaN, steer: Number.NaN }));
+    run(s, controls({ throttle: 0.5 }), 2);
+    for (const w of s.car.wheels) {
+      expect(Number.isFinite(w.omega)).toBe(true);
+      expect(Number.isFinite(w.steer)).toBe(true);
+    }
+    expect(s.car.speed).toBeGreaterThan(1);
+  });
+});

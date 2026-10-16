@@ -71,6 +71,8 @@ export class Traffic {
     const T = TUNING.ai.traffic;
     const { positions, carLength, width } = this;
     const mine = positions[me];
+    // Not placed on the track yet (update() hasn't run): no advice.
+    if (mine.index < 0) return;
     const v = Math.max(mine.speed, 1);
     const line = driver.line;
     const lineLat = line.offset[mine.index];

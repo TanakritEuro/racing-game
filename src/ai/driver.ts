@@ -70,6 +70,7 @@ export class AiDriver {
     // Skill: wandering off the line, and now and then a mistake at a corner.
     this.judge(dt, spacing);
     const mistake = this.mistake;
+    if (!Number.isFinite(this.aim)) this.aim = 0;
     const offLine = clamp(this.aim + this.wander, line.right[this.index] - line.offset[this.index], line.left[this.index] - line.offset[this.index]);
     const aim = offLine + (mistake?.wide ?? 0);
     const faster = mistake?.speed ?? 1;
