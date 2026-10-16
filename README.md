@@ -3,14 +3,15 @@
 A 3D racing game for the browser with real car physics, built with Three.js, Rapier and TypeScript.
 Three invented circuits: fast Harrowmere, tight Saltmarsh and hilly Ridgeback. Time trial
 with sectors, a live delta, a ghost of your best lap (kept in the browser) and replays from
-trackside cameras. Race up to seven AI drivers who drive the same car you do.
+trackside cameras. Race up to seven AI drivers who drive the same car you do. Three cars,
+synthesised engine and tyre sounds, skid marks, smoke and sparks.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173.
+Open http://localhost:5173. The start menu picks the mode, circuit and car; Esc pauses.
 
 | Key | Action |
 | --- | --- |
@@ -29,6 +30,8 @@ Open http://localhost:5173.
 | G | Ghost of your best lap on or off |
 | Tab | Switch between time trial and a race (or open with `?mode=race`; options `&difficulty=easy\|medium\|hard&opponents=0..7&laps=3`) |
 | P / Shift+P | Replay the last lap / the best lap. In a replay: Space pause, ← / → skip, 1–4 speed (¼× to 2×), Esc back to driving |
+| U | Sound on or off |
+| Esc | Pause menu (resume, restart, settings, quit to the menu) |
 | T | Telemetry overlay (or open with `?telemetry`) |
 
 Gamepads work too: left stick steers, RT/LT throttle and brake, A handbrake, RB/LB shift,

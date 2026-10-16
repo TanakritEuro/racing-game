@@ -24,7 +24,7 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 ## Current state
 
 Milestones 1–5 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
-AI drivers) are done; **Milestone 6 (presentation) is planned** (`docs/milestone-6.md`).
+AI drivers) are done; **Milestone 6 (presentation) is built and in playtesting** (`docs/milestone-6.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -61,6 +61,16 @@ mistakes and a skill spread by difficulty (`?difficulty=easy|medium|hard`), and 
 (following, passing where there is room, conceding, keeping a car's width). No
 rubber-banding. `?opponents=0..7`, `?laps=N`, `?seed=N`.
 
+Three cars (`vehicle/cars.ts`): Wren (light roadster), Kestrel (the reference) and Harrier
+(a powerful GT), drawn with Kenney's CC0 Car Kit models fitted to each car and repainted
+(`render/carModels.ts`, placeholder if they fail to load; `ASSETS.md`). Skid marks, tyre
+smoke and sparks (`render/effects/`, pooled; sparks from the simulation's contact events,
+`sim.contacts`). Synthesised sound (`audio/`): engines from RPM and throttle (yours and the
+three nearest), tyre squeal, kerb rumble, wind, gearshift pops and knocks. A dashboard with a
+rev counter and shift lights (`ui/dashboard.ts`). A start menu (mode, circuit, car, race
+options), Esc for pause and settings (`ui/menu.ts`); a link with `?track`, `?car` or `?mode`
+skips the menu.
+
 Keyboard steering goes through an assist (`drivers/steeringAssist.ts`: speed-sensitive lock,
 counter-steer help, toggleable); gamepads steer the rack directly with analogue triggers
 (`input/`). Chase, bumper and hood cameras; the car is drawn interpolated between physics
@@ -72,7 +82,7 @@ reverse in automatic), A/D or arrows to steer, Space handbrake, E/Q to shift up/
 automatic/manual, Z ABS, X traction control, V steering assist, C camera, R to put the car
 back on the track, Backspace restart from the grid, N next circuit, G ghost on/off, P replay
 the last lap (Shift+P the best; in a replay Space pause, ←/→ skip 2 s, 1–4 speed, Esc back),
-Tab race / time trial, T telemetry. Gamepad: left stick, RT/LT, A handbrake, RB/LB shift, Y
+Tab race / time trial, U sound, Esc pause, T telemetry. Gamepad: left stick, RT/LT, A handbrake, RB/LB shift, Y
 camera, View/Back reset.
 
 Measured (tests): 0–100 km/h in ~6.5 s (aids on), ~235 km/h top speed, ~0.98 g on a 40 m
@@ -176,7 +186,14 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   `ghostView.ts` (translucent ghost car), `lineView.ts` (`?line`), `telemetry.ts` (`?telemetry` overlay),
   `terrainView.ts`, `scenery.ts`, `minimap.ts`.
 - `src/ui/timingHud.ts` — lap, delta, sector splits, last and best; `raceHud.ts` —
-  position, lap, gaps, start lights, results.
+  position, lap, gaps, start lights, results; `dashboard.ts` — rev counter, speed, gear, aid
+  lights; `menu.ts` — start, pause and settings menus.
+- `src/render/carModels.ts` — loads, fits and paints the car models; `render/effects/` —
+  `skidMarks.ts`, `smoke.ts`, `sparks.ts` and `index.ts` (`Effects`).
+- `src/audio/` — `sound.ts` (context, volume, knocks and pops), `carVoice.ts` (one car's
+  engine, squeal, rumble and wind), `mix.ts` (pure: car state → voice parameters),
+  `index.ts` (`GameAudio`).
+- `scripts/prepare-cars.mjs` — copies the kit's models into `public/models/cars/`.
 - `src/input/` — `keyboard.ts`, `gamepad.ts`, `index.ts` (`PlayerInput`: both devices → `Controls`).
 - `src/settings.ts` — player settings in localStorage.
 - `src/main.ts` — entry point and frame loop; `?track=<id>`, `?telemetry`, `?debug`

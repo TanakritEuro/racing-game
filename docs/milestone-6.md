@@ -1,6 +1,33 @@
 # Milestone 6 plan: presentation
 
-## Status: approved as written, being built
+## Status: built, in playtesting
+
+Approved as proposed: Kenney's Car Kit, Wren and Harrier, a start menu with Esc for pause.
+No engine character was asked for: Wren and Kestrel are high-revving fours, Harrier a six.
+
+Measured in the production build with eight cars racing and every effect: ~0.8 ms per physics
+step (~1.6 ms of each 60 fps frame), ~1.4 ms to render (about 100 draw calls), effects
+0.07 ms. Wren: 0–100 km/h in 7.9 s, 203 km/h, 0.93 g; Harrier: 5.3 s, 281 km/h, 1.0 g.
+
+Where the build differs from the plan below:
+
+- **Models:** the kit's `race` and `race-future` are open-wheelers, which don't suit a GT,
+  so Wren is `hatchback-sports`, Kestrel `sedan` and Harrier `sedan-sports` (the one with
+  the wing). The files are small, so the script copies them unchanged rather than trimming.
+  Paint: the kit shares one palette texture; the body's most-used colourful cell is repainted
+  in the car's colour, keeping its shading.
+- **Harrier needed taming for the AI:** it spun under power on corner exits (the rear lets go
+  sideways before the wheels spin enough for traction control to notice). Its diff locks a
+  little less and its rear tyres grip a little more, and every AI driver now keeps the
+  throttle within what the rear tyres have to spare while cornering.
+- **Sparks are glowing points**, not streaks: one-pixel lines were all but invisible.
+- **Mute is U**, not M (M already switches automatic and manual).
+- **Engines need a cylinder count**, so `EngineDef.cylinders` is new car data.
+- **Menus reload the page:** Start writes the choices into the URL (which then skips the menu)
+  and Quit to menu goes back to the bare URL. Rebuilding the world in place can come later if
+  the reload ever feels slow. `?car=wren|kestrel|harrier` joins the other URL options.
+- **Only the dashboard was restyled**; the timing and race panels already matched it. The key
+  list moved into the menus, with a short hint left at the bottom.
 
 Goal: make it look, sound and start like a game. The placeholder boxes become real car
 models; tyres leave skid marks and smoke, barriers throw sparks; the engine, tyres and wind

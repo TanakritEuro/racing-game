@@ -125,7 +125,7 @@ if (params.has('line')) {
 // ?autopilot hands your car to the AI (for watching it, and checking it).
 const autopilot = params.has('autopilot') ? createAiDriver(track, sim.car.def) : null;
 // ?debug exposes the simulation in the console, for poking at it while developing.
-if (params.has('debug')) Object.assign(window, { sim, race, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay, autopilot, effects, sound: () => sound });
+if (params.has('debug')) Object.assign(window, { sim, race, poseOnTrack, session: () => session, step: (c: Controls) => step(c), replay: () => replay, autopilot, effects, sound: () => sound, stage });
 
 // Bests from earlier visits: the ghost, the delta and the sector colours carry on from them.
 const store = await openBestStore();
