@@ -1,6 +1,10 @@
 # Milestone 12 plan: a track editor
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (how drawing feels, the problem messages,
+where kerbs, gravel and the pit lane land, driving and racing a drawn circuit, a shared link
+on another device) stay open.
 
 Approved as written: the track editor next, editing from above in 2D, sharing as links,
 custom circuits online.
