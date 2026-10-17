@@ -1,6 +1,9 @@
 # Milestone 11 plan: tyre wear, fuel and pit stops
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (feeling the tyres go off, sensible stops,
+finding and driving the pit lane, the AI in the lane, the tyre panel) stay open.
 
 Approved as written: fuel burns without refuelling, stops are free choice, the championship
 keeps its lengths with normal wear.
