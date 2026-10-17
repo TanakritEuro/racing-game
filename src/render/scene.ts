@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Quality } from './quality';
 
 export interface Stage {
   renderer: THREE.WebGLRenderer;
@@ -10,9 +11,9 @@ export interface Stage {
 
 const SUN_OFFSET = new THREE.Vector3(-40, 70, 30);
 
-export function createStage(canvas: HTMLCanvasElement): Stage {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+export function createStage(canvas: HTMLCanvasElement, q: Quality): Stage {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: q.antialias });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.pixelRatio));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -28,7 +29,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   scene.add(new THREE.HemisphereLight(0xe4f0ff, 0x46603a, 1.1));
   const sun = new THREE.DirectionalLight(0xfff3e0, 2.4);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(q.shadowMap, q.shadowMap);
   const s = sun.shadow.camera;
   s.left = -30;
   s.right = 30;

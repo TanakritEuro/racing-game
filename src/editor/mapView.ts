@@ -1,7 +1,7 @@
 // The editor's map: the circuit from above as it will be built (run-off, road, kerbs, the
 // pit lane, the start line and which way it runs) over a metre grid, its control points as
 // handles, and the problems marked in red. Drag a handle to move it, click the road (or near
-// it) to add a point, drag empty ground to pan, wheel to zoom.
+// it) to add a point, drag empty ground to pan, wheel (or pinch, on a touch screen) to zoom.
 
 import { barrierOffset } from '../track/geometry';
 import { laneEdges, pitLane } from '../track/pitLane';
@@ -36,6 +36,9 @@ export class MapView {
   private problems: readonly Problem[] = [];
   private selected: number | null = null;
   private dragging: { kind: 'handle'; index: number } | { kind: 'pan'; x: number; y: number; moved: boolean } | null = null;
+  /** Fingers on the map (for a pinch): where each is now. */
+  private readonly fingers = new Map<number, [number, number]>();
+  private pinch: { distance: number } | null = null;
 
   constructor(
     parent: HTMLElement,
@@ -114,8 +117,20 @@ export class MapView {
   }
 
   private down(e: PointerEvent): void {
-    this.canvas.setPointerCapture(e.pointerId);
+    try {
+      this.canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // An unknown pointer: its moves still come while it's over the map.
+    }
     const [sx, sy] = this.local(e);
+    this.fingers.set(e.pointerId, [sx, sy]);
+    // A second finger on the ground: pinch, not pan.
+    if (this.fingers.size === 2 && this.dragging?.kind !== 'handle') {
+      const [a, b] = [...this.fingers.values()];
+      this.pinch = { distance: Math.max(1, Math.hypot(a[0] - b[0], a[1] - b[1])) };
+      this.dragging = null;
+      return;
+    }
     const h = e.button === 0 ? this.handleAt(sx, sy) : null;
     if (h !== null) {
       this.dragging = { kind: 'handle', index: h };
@@ -125,6 +140,14 @@ export class MapView {
   }
 
   private move(e: PointerEvent): void {
+    if (this.fingers.has(e.pointerId)) this.fingers.set(e.pointerId, this.local(e));
+    if (this.pinch && this.fingers.size === 2) {
+      const [a, b] = [...this.fingers.values()];
+      const distance = Math.max(1, Math.hypot(a[0] - b[0], a[1] - b[1]));
+      this.zoomAbout((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, distance / this.pinch.distance);
+      this.pinch.distance = distance;
+      return;
+    }
     const d = this.dragging;
     if (!d) {
       const [sx, sy] = this.local(e);
@@ -146,6 +169,13 @@ export class MapView {
   }
 
   private up(e: PointerEvent): void {
+    this.fingers.delete(e.pointerId);
+    if (this.pinch) {
+      // The pinch ends with its fingers (no click, no pan).
+      if (this.fingers.size === 0) this.pinch = null;
+      this.dragging = null;
+      return;
+    }
     const d = this.dragging;
     this.dragging = null;
     if (!d) return;
@@ -160,9 +190,13 @@ export class MapView {
   private wheel(e: WheelEvent): void {
     e.preventDefault();
     const [sx, sy] = this.local(e);
+    this.zoomAbout(sx, sy, Math.exp(-e.deltaY * 0.0015));
+  }
+
+  /** Zoom by `factor`, keeping the point under screen (sx, sy) where it is. */
+  private zoomAbout(sx: number, sy: number, factor: number): void {
     const [wx, wz] = this.toWorld(sx, sy);
-    this.scale = Math.min(8, Math.max(0.05, this.scale * Math.exp(-e.deltaY * 0.0015)));
-    // Keep the point under the cursor where it is.
+    this.scale = Math.min(8, Math.max(0.05, this.scale * factor));
     const [nx, nz] = this.toWorld(sx, sy);
     this.cx += wx - nx;
     this.cz += wz - nz;

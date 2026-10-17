@@ -50,6 +50,7 @@ import { OnlinePanel } from './ui/onlinePanel';
 import { WeatherView } from './render/weatherView';
 import { TyresHud } from './ui/tyresHud';
 import { TouchControls } from './ui/touchControls';
+import { quality, thin } from './render/quality';
 import { WEAR_RATES } from './vehicle/wear';
 import { CONDITIONS, wetness, type Conditions } from './track/weather';
 import { Garage } from './ui/garage';
@@ -213,10 +214,16 @@ function linkConditions(p: URLSearchParams): Conditions {
   return CONDITIONS.find((c) => c === p.get('weather')) ?? 'dry';
 }
 
-const stage = createStage(canvas);
+// What's drawn: High, or Low on a phone (or as chosen). A change takes a reload.
+const graphics = quality(settings.graphics);
+const graphicsChosen = settings.graphics;
+const stage = createStage(canvas, graphics);
 stage.scene.add(createTrackView(track, sim.physics.terrain, wet));
-const weatherView = new WeatherView(stage, wet);
-if (circuit.scenery) stage.scene.add(createSceneryView(layoutScenery(track, sim.physics.terrain, circuit.scenery)));
+const weatherView = new WeatherView(stage, wet, graphics.rain);
+if (circuit.scenery) {
+  const layout = layoutScenery(track, sim.physics.terrain, circuit.scenery);
+  stage.scene.add(createSceneryView({ ...layout, trees: thin(layout.trees, graphics.trees) }));
+}
 const carView = new CarView(
   sim.car.def,
   sim.car.wheels.map((w) => w.mount),
@@ -274,7 +281,7 @@ const ghost = new GhostView(
 stage.scene.add(ghost.root);
 const replay = new Replay();
 const replayState = createRecordedState();
-const effects = new Effects(stage.scene);
+const effects = new Effects(stage.scene, graphics.particles);
 const tv = new TvCameraView(stage.camera, track, placeTvCameras(track, sim.physics.terrain));
 const replayHud = {
   title: document.querySelector<HTMLDivElement>('#replay .r-title')!,
@@ -337,6 +344,11 @@ function applySettings(): void {
   sim.setGearboxMode(settings.gearbox);
   steering.assist = settings.steeringAssist;
   touchControls.setTilt(settings.touchSteer === 'tilt');
+  // New graphics take a fresh renderer: start again with them.
+  if (settings.graphics !== graphicsChosen) {
+    saveSettings(settings);
+    location.reload();
+  }
   if (cameras.mode !== settings.camera) cameras.setMode(settings.camera);
   sound.setVolume(settings.volume);
   sound.setMuted(settings.muted);

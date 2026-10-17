@@ -280,6 +280,14 @@ export class Menu {
       this.choiceButton(camRow, label, () => settings.camera === mode, () => (settings.camera = mode), true);
     }
     toggle('Ghost', () => settings.ghost, (v) => (settings.ghost = v));
+    const graphicsRow = this.row(this.settingsPanel, 'Graphics');
+    for (const [g, label] of [
+      ['auto', 'Auto'],
+      ['high', 'High'],
+      ['low', 'Low'],
+    ] as const) {
+      this.choiceButton(graphicsRow, label, () => settings.graphics === g, () => (settings.graphics = g), true);
+    }
     const touchRow = this.row(this.settingsPanel, 'Touch steering');
     this.choiceButton(touchRow, 'Thumb', () => settings.touchSteer === 'thumb', () => (settings.touchSteer = 'thumb'), true);
     this.choiceButton(touchRow, 'Tilt', () => settings.touchSteer === 'tilt', () => (settings.touchSteer = 'tilt'), true);

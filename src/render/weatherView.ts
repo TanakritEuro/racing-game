@@ -46,7 +46,8 @@ export class WeatherView {
   private time = 0;
 
   /** `wet`: how wet (0 dry … 1 wet): the sky greys and the light dims with it; rain falls when fully wet. */
-  constructor(stage: Stage, wet: number) {
+  /** `share`: how much of the rain to draw (Graphics Low draws less). */
+  constructor(stage: Stage, wet: number, share = 1) {
     const W = TUNING.effects.weather;
     const sky = new THREE.Color(W.sky.dry).lerp(new THREE.Color(W.sky.wet), wet);
     stage.scene.background = sky;
@@ -57,7 +58,7 @@ export class WeatherView {
     stage.sun.intensity *= 1 - (1 - W.sun) * wet;
     if (wet < 1) return;
 
-    const R = W.rain;
+    const R = { ...W.rain, drops: Math.ceil(W.rain.drops * share) };
     const positions = new Float32Array(R.drops * 6);
     const ends = new Float32Array(R.drops * 2);
     for (let i = 0; i < R.drops; i++) {

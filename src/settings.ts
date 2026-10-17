@@ -2,6 +2,7 @@
 // simulation gets them through its own setters (setAids, setGearboxMode).
 
 import type { CameraMode } from './render/cameras';
+import type { Graphics } from './render/quality';
 import type { GearboxMode } from './vehicle/gearbox';
 import type { StartChoice } from './ui/menu';
 
@@ -9,6 +10,8 @@ export interface Settings {
   abs: boolean;
   tc: boolean;
   steeringAssist: boolean;
+  /** What's drawn: Auto (Low on a phone), High or Low. */
+  graphics: Graphics;
   /** On a touch screen: steer with the thumb or by tilting the device. */
   touchSteer: 'thumb' | 'tilt';
   gearbox: GearboxMode;
@@ -26,6 +29,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   tc: true,
   steeringAssist: true,
   touchSteer: 'thumb',
+  graphics: 'auto',
   gearbox: 'auto',
   camera: 'chase',
   ghost: true,

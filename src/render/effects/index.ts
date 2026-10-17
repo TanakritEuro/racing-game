@@ -13,14 +13,18 @@ import { Sparks } from './sparks';
 
 export class Effects {
   readonly skids = new SkidMarks();
-  readonly smoke = new Smoke();
+  readonly smoke: Smoke;
   readonly sparks = new Sparks();
-  readonly spray = new Smoke(TUNING.effects.spray);
+  readonly spray: Smoke;
   private readonly point = new THREE.Vector3();
   private readonly q = new THREE.Quaternion();
   private readonly keys: string[][] = [];
 
-  constructor(scene: THREE.Scene) {
+  /** `particles`: the share of smoke and spray drawn (Graphics Low draws less). */
+  constructor(scene: THREE.Scene, particles = 1) {
+    const fewer = <T extends { capacity: number; rate: number }>(d: T): T => ({ ...d, capacity: Math.ceil(d.capacity * particles), rate: d.rate * particles });
+    this.smoke = new Smoke(fewer(TUNING.effects.smoke));
+    this.spray = new Smoke(fewer(TUNING.effects.spray));
     scene.add(this.skids.mesh, this.smoke.points, this.sparks.points, this.spray.points);
   }
 

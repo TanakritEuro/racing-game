@@ -207,6 +207,12 @@ export const TUNING = {
   },
   /** Tyre and impact effects (`render/effects/`). */
   effects: {
+    /** Graphics High and Low (`render/quality.ts`); a phone is a touch screen whose short side is under `phoneSide` (px). */
+    quality: {
+      phoneSide: 600,
+      high: { pixelRatio: 2, antialias: true, shadowMap: 2048, trees: 1, particles: 1, rain: 1 },
+      low: { pixelRatio: 1, antialias: false, shadowMap: 1024, trees: 0.35, particles: 0.4, rain: 0.4 },
+    },
     /** The weather on screen (`render/weatherView.ts`): sky, fog and sun from dry to wet, and the rain. */
     weather: {
       sky: { dry: 0x9cc6ee, wet: 0x8a939c },
