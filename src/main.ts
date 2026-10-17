@@ -408,7 +408,7 @@ const menu = new Menu(
     onEditor: (id) => goTo({ editor: id ?? '' }),
     onDeleteCircuit(id) {
       const c = customTracks.get(id);
-      if (!c || !window.confirm(`Delete ${c.name}? Its best laps go with it.`)) return;
+      if (!c || !window.confirm(`Delete ${c.name}?`)) return;
       customTracks.remove(id);
       goTo({});
     },

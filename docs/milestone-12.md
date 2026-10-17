@@ -1,6 +1,31 @@
 # Milestone 12 plan: a track editor
 
-## Status: planned, waiting for your approval
+## Status: built, in playtesting
+
+Approved as written: the track editor next, editing from above in 2D, sharing as links,
+custom circuits online.
+
+Measured: checking a circuit takes 2–21 ms (the built-in ones); every built-in circuit and the
+blank oval keep every rule, and layouts made to break each rule are caught with the place
+marked; the AI laps a drawn circuit (the oval with its back straight bent into an S) twice
+without leaving the road. Checked in the browser: the editor on the blank oval, dragging a
+point into a hairpin (gravel placed on its outside, still valid at 2.23 km), test drive into
+the game on it (pit lane, building and grandstand placed, the minimap's shape), the circuit
+in the start menu with Edit and Delete, and a shared link (about 550 characters for 15
+points) opening it again.
+
+Where the build differs from the plan below:
+
+- **A shared link opens the editor** with the circuit in it, ready to test-drive or save,
+  rather than a separate "drive it / keep it" prompt: one place to look at it first.
+- **A copy of the Proving Ground has no automatic pit lane**: its straight is too short for
+  the lane's standard tapers (its built-in lane is placed by hand with short ones). The
+  editor says so; lengthen the straight or start from another circuit.
+- **Deleting a custom circuit leaves its best laps stored**, keyed by the circuit: draw the
+  identical circuit again and they come back.
+- **While a point or slider moves, only the road is rebuilt** (no kerbs, pit lane or checks);
+  the full circuit and its checks follow when it stops, as planned.
+- **N** (next circuit) still cycles through the built-in circuits only.
 
 The roadmap's planned milestones are done, so this one is a proposal (the other candidate is
 in question 1). A circuit is already pure data, a `TrackDef`: a loop of control points with

@@ -25,7 +25,8 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 Milestones 1–11 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing, car setup, weather, tyre
-wear and pit stops) are done; **Milestone 12 (a track editor) is planned** (`docs/milestone-12.md`).
+wear and pit stops) are done; **Milestone 12 (a track editor) is built and in playtesting**
+(`docs/milestone-12.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -118,6 +119,15 @@ limiter and a 5 s penalty, and a 4 s tyre change for a car that stops in its box
 (`race/pits.ts`, in the simulation for every car). Once a lap the pit wall weighs each car's
 tyres against the laps left (`ai/pitStrategy.ts`, `race/pitCalls.ts`): the AI stops on it,
 and the player sees BOX on the tyre panel (`ui/tyresHud.ts`).
+
+The track editor (`editor/`, start menu → Track editor, or `?editor`): a circuit drawn from
+above (`mapView.ts`: handles to drag, click to add, pan and zoom; `panels.ts`: each point's
+elevation, banking and width, the circuit's settings; `state.ts`: edits, undo and redo).
+A drawn circuit (`track/custom.ts`: `CustomCircuit` → `TrackDef`, with kerbs, gravel, a pit
+lane placed by `autoPitLane`, pits and a grandstand) is checked by `validateTrack`
+(`track/validate.ts`, the rules every circuit keeps, the built-in ones too), saved in the
+browser (`storage/customTracks.ts`), offered in the start menu, raced, shared as a link
+(`share.ts`, `?share=`) and sent to an online guest in full.
 
 Keyboard steering goes through an assist (`drivers/steeringAssist.ts`: speed-sensitive lock,
 counter-steer help, toggleable); gamepads steer the rack directly with analogue triggers
@@ -216,6 +226,10 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   ratios and shift timing; locking torque for open / locked / limited-slip.
 - `src/vehicle/drivetrain.ts` — automatic and manual shifting, automatic clutch, idle and
   limiter, and the substep solver coupling engine, clutch, diff, brakes and driven wheels.
+- `src/track/validate.ts` — `validateTrack`: every circuit rule, each problem with where it is;
+  `custom.ts` — custom circuits → `TrackDef`, `autoPitLane`, `cleanCustom`, templates.
+- `src/editor/` — the track editor: `index.ts` (`openEditor`), `state.ts`, `mapView.ts`, `panels.ts`;
+  `src/share.ts` — a custom circuit packed into a link and back.
 - `src/track/pitLane.ts` — the pit lane: where it is, its edges, the lane strip, wall and boxes.
 - `src/track/weather.ts` — conditions, wetness, `surfaceGrip` (wet grip, aquaplaning);
   `puddles.ts` — where water stands, and its strips.
@@ -237,7 +251,8 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   between frames, encode / decode; `session.ts` — `TimeTrial`: records laps, keeps the
   best as the ghost, restarts, loads stored bests.
 - `src/storage/bests.ts` — each circuit and car's best lap in IndexedDB (memory fallback), with
-  the setup it was set with; `setups.ts` — each car's setup per circuit in localStorage.
+  the setup it was set with; `setups.ts` — each car's setup per circuit in localStorage;
+  `customTracks.ts` — the custom circuits.
 - `src/replay/replay.ts` — the replay player (speed, pause, skip, hand back to live).
 - `src/vehicle/pose.ts` — `CarPose` and interpolation between physics steps.
 - `src/render/` — `scene.ts` (renderer, sky, sun), `trackView.ts`, `carView.ts`
@@ -267,7 +282,7 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/main.ts` — entry point and frame loop; `?track=<id>`, `?telemetry`, `?debug`
   (exposes `sim`, `race`, `online`, `session()`, `step(controls)`, `replay()`, `autopilot`,
   `effects`, `sound()` and `stage` in the console), `?line`, `?autopilot`, `?mode=race` and
-  its options, `?season`, `?online`, `?setup=default`, `?weather=dry|damp|wet`, `?wear=off|normal|high`.
+  its options, `?season`, `?online`, `?setup=default`, `?weather=dry|damp|wet`, `?wear=off|normal|high`, `?editor` (`=<id>` to edit one), `?share=`.
 - `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
   line-following test driver (offset, curvature speed profile); `tracks.ts` has test-only
   layouts (skidpads, long oval, hill, kerbed oval, grass and gravel pads).

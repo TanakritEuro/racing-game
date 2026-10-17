@@ -11,6 +11,7 @@ your car up in the garage (springs, anti-roll bars, dampers, ride height, wings,
 differential, gearing) for each circuit. Race in the dry, the damp or the wet: less grip,
 slippery kerbs, standing water that floats the car at speed, rain and spray. In longer races
 tyres wear and fuel burns: every circuit has a pit lane, and the AI chooses when to stop.
+Draw your own circuits in the track editor, race the AI on them and share them as links.
 
 ```bash
 npm install
