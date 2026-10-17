@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { curvature } from '../src/track/corners';
 import { barrierOffset } from '../src/track/geometry';
 import { CIRCUITS } from '../src/track/circuits';
 import { buildTrack, lateralOffset, nearestSample } from '../src/track/track';
+import { validateTrack } from '../src/track/validate';
 import { laneAlong, laneEdges, pitLane, pitWall } from '../src/track/pitLane';
 import { TUNING } from '../src/config';
 import { BARRIER_THICKNESS } from '../src/physics';
@@ -19,7 +19,6 @@ describe.each(CIRCUITS.map((def) => [def.name, def] as const))('%s', (_, def) =>
   const track = buildTrack(def);
   const { samples } = track;
   const n = samples.length;
-  const spacing = track.length / n;
 
   it('has its intended length', () => {
     const [lo, hi] = LENGTHS[def.id];
@@ -27,33 +26,8 @@ describe.each(CIRCUITS.map((def) => [def.name, def] as const))('%s', (_, def) =>
     expect(track.length).toBeLessThan(hi);
   });
 
-  it('has no corner tighter than 12 m, no grade over 12 %, no banking over 12°', () => {
-    for (let i = 0; i < n; i++) {
-      expect(Math.abs(curvature(track, i))).toBeLessThan(1 / 12);
-      expect(Math.abs(samples[(i + 1) % n].y - samples[i].y) / spacing).toBeLessThan(0.12);
-      expect(Math.abs(samples[i].bank)).toBeLessThan((12 * Math.PI) / 180);
-    }
-  });
-
-  it('never lets one part of the track (with its run-off) touch another', () => {
-    const reach = (i: number) => Math.max(barrierOffset(samples[i], 'left'), barrierOffset(samples[i], 'right'));
-    for (let i = 0; i < n; i += 2) {
-      for (let j = i + 2; j < n; j += 2) {
-        if (Math.min(j - i, n - (j - i)) * spacing < 150) continue; // neighbours along the track
-        const gap = Math.hypot(samples[i].x - samples[j].x, samples[i].z - samples[j].z);
-        expect(gap).toBeGreaterThan(reach(i) + reach(j));
-      }
-    }
-  });
-
-  it('starts on a straight', () => {
-    // Nothing tighter than a gentle 300 m bend within 150 m after the start line (the grid is behind it).
-    for (let i = 0; i * spacing < 150; i++) expect(Math.abs(curvature(track, i))).toBeLessThan(1 / 300);
-  });
-
-  it('has its grid on a straight', () => {
-    // Eight cars two by two reach ~40 m behind the line: nothing tighter than a 200 m bend there.
-    for (let i = 1; i * spacing < 50; i++) expect(Math.abs(curvature(track, n - i))).toBeLessThan(1 / 200);
+  it('keeps every circuit rule (no tight corners, steep grades or banking, overlaps; a straight start and grid; room for the pits)', () => {
+    expect(validateTrack(track)).toEqual([]);
   });
 
   it('puts its kerbs and gravel on the track', () => {

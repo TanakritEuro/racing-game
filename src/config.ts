@@ -103,6 +103,12 @@ export const TUNING = {
     boxSpacing: 12,
     /** The lane's road sits this far above the run-off under it (m). */
     lift: 0.01,
+    /**
+     * A pit lane placed for a drawn circuit: along road straighter than a `bend` (m radius)
+     * through the line, `margin` (m) short of its corners (their kerbs), at most `maxEntry` /
+     * `maxExit` (m) either side of the line and at least `minEntry` before it.
+     */
+    auto: { bend: 250, margin: 35, maxEntry: 150, maxExit: 650, minEntry: 30 },
     /** The speed limit (m/s, 60 km/h); the limiter cuts the throttle within `limiterBand` of it. Over by `tolerance` is a `penalty` (s). */
     limit: 60 / 3.6,
     limiterBand: 0.3,

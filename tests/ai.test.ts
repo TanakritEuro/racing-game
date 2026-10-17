@@ -11,6 +11,8 @@ import { CIRCUITS } from '../src/track/circuits';
 import { barrierOffset } from '../src/track/geometry';
 import { buildTrack, lateralOffset } from '../src/track/track';
 import { KESTREL } from '../src/vehicle/cars';
+import { customDef, ovalTemplate } from '../src/track/custom';
+import { validateTrack } from '../src/track/validate';
 
 /** Flying-lap targets for a hard AI (s): measured, with a few percent either way. */
 const TARGETS: Record<string, [number, number]> = {
@@ -81,5 +83,32 @@ describe.each(CIRCUITS.map((c) => [c.name, c] as const))('AI at %s', (_, def) =>
     const { line, env } = circuitAi(track, KESTREL);
     const predicted = profileLapTime(line, speedProfile(line, env));
     expect(laps[2].time / predicted).toBeLessThan(1.06);
+  }, 300_000);
+});
+
+describe('AI on a custom circuit', () => {
+  it('laps the oval template bent into an S cleanly', async () => {
+    await initPhysics();
+    const c = ovalTemplate('S bend');
+    // The back straight (x 330 → 0 at z −220) kinked into an S.
+    c.points[8] = { x: 330, z: -180 };
+    c.points[9] = { x: 160, z: -260 };
+    c.points[10] = { x: 0, z: -190 };
+    const track = buildTrack(customDef(c));
+    expect(validateTrack(track)).toEqual([]);
+    const sim = new Simulation(track);
+    const ai = createAiDriver(track, KESTREL);
+    let recoveries = 0;
+    for (let k = 0; k < 300 * 120 && sim.timer.laps < 2; k++) {
+      sim.step(ai.drive(sim.car, PHYSICS_STEP));
+      if (ai.stuck) {
+        recoveries++;
+        sim.recover();
+        ai.recovered();
+      }
+    }
+    expect(sim.timer.laps).toBe(2);
+    expect(sim.timer.lastValid).toBe(true);
+    expect(recoveries).toBe(0);
   }, 300_000);
 });
