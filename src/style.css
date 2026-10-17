@@ -913,3 +913,178 @@ body.standings-up .race-panel {
     opacity: 0.35;
   }
 }
+
+/* The track editor (?editor). */
+.editor-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  z-index: 30;
+  background: #1b2430;
+  color: #fff;
+  font-family: system-ui, sans-serif;
+}
+
+.editor-map-box {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.editor-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.editor-panel {
+  width: 330px;
+  overflow-y: auto;
+  padding: 14px 16px;
+  background: rgba(14, 20, 30, 0.97);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.editor-panel button {
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.editor-panel button.selected {
+  background: #f0c419;
+  color: #111;
+  border-color: #f0c419;
+}
+
+.editor-panel button.menu-go {
+  background: #3fa95a;
+  border-color: #3fa95a;
+  font-weight: 700;
+}
+
+.editor-panel button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.editor-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.editor-name,
+.editor-select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+}
+
+.editor-select option {
+  color: #111;
+}
+
+.editor-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.editor-help {
+  font-size: 11px;
+  opacity: 0.65;
+  line-height: 1.45;
+}
+
+.editor-section {
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editor-section.hidden {
+  display: none;
+}
+
+.editor-section-title {
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+}
+
+.editor-slider {
+  display: grid;
+  grid-template-columns: 96px 1fr 52px;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-slider input[type='range'] {
+  width: 100%;
+  accent-color: #f0c419;
+}
+
+.editor-label {
+  opacity: 0.8;
+}
+
+.editor-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-choices {
+  grid-column: 2 / 4;
+  display: flex;
+  gap: 4px;
+}
+
+.editor-problems {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-ok {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(63, 169, 90, 0.25);
+  font-weight: 700;
+}
+
+.editor-problem {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 59, 48, 0.22);
+  line-height: 1.4;
+}
+
+.editor-problem.clickable {
+  cursor: pointer;
+}
+
+.editor-note {
+  font-size: 12px;
+  opacity: 0.85;
+  word-break: break-all;
+}
