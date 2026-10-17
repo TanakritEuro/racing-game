@@ -3,7 +3,8 @@ import { createAiDriver } from '../src/ai/driver';
 import { PHYSICS_STEP } from '../src/constants';
 import { loopback, type Loopback } from '../src/online/loopback';
 import { parseMessage, type Message } from '../src/online/protocol';
-import { guestHandshake, hostHandshake, OnlineError, OnlineRace } from '../src/online/session';
+import { guestHandshake, hostHandshake, OnlineError, OnlineRace, type OnlineSetup } from '../src/online/session';
+import { cleanCustom, customId, ovalTemplate, type CustomCircuit } from '../src/track/custom';
 import { initPhysics } from '../src/physics';
 import { TEST_CIRCUIT } from '../src/track/circuits';
 import { buildTrack, type Track } from '../src/track/track';
@@ -27,7 +28,7 @@ async function pair(laps = 1, opponents = 0, conditions: Conditions = 'dry') {
   track ??= buildTrack(TEST_CIRCUIT);
   const line = loopback({ delay: 0.05, jitter: 0.02, seed: 3 });
   const clock = { now: 0 };
-  const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps, car: 'Kestrel', opponents, conditions, wear: 'normal' }, NAMES);
+  const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps, car: 'Kestrel', opponents, conditions, wear: 'normal', custom: null }, NAMES);
   const guest = guestHandshake(line.b, 'Wren', TRACKS, NAMES);
   await pump(line, clock, 0.3);
   const [hs, gs] = await Promise.all([host, guest]);
@@ -234,10 +235,34 @@ describe('an online race', () => {
     }
   });
 
+  it('sends the guest a custom circuit it does not have, and refuses one that breaks the rules', async () => {
+    const shake = async (custom: CustomCircuit) => {
+      const line = loopback({ delay: 0.02 });
+      const clock = { now: 0 };
+      const id = customId(custom);
+      const host = hostHandshake(line.a, { track: id, laps: 2, car: 'Kestrel', opponents: 0, conditions: 'dry', wear: 'off', custom }, NAMES);
+      // The guest knows only the built-in circuits.
+      const guest = guestHandshake(line.b, 'Wren', TRACKS, NAMES).then(
+        (s) => s,
+        (e: unknown) => e,
+      );
+      await pump(line, clock, 0.3);
+      void host.catch(() => {});
+      return guest;
+    };
+    const good = cleanCustom(ovalTemplate('Ours'))!;
+    const got = (await shake(good)) as OnlineSetup;
+    expect(got.custom).toEqual(good);
+    expect(got.track).toBe(customId(good));
+    // Squashed until it overlaps itself: still a circuit's shape, but not a circuit.
+    const bad = cleanCustom({ ...good, points: good.points.map((p) => ({ ...p, z: p.z * 0.12 })) })!;
+    expect(await shake(bad)).toBeInstanceOf(OnlineError);
+  });
+
   it('turns away a guest with another version', async () => {
     const line = loopback({ delay: 0.02 });
     const clock = { now: 0 };
-    const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps: 3, car: 'Kestrel', opponents: 0, conditions: 'dry', wear: 'off' }, NAMES);
+    const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps: 3, car: 'Kestrel', opponents: 0, conditions: 'dry', wear: 'off', custom: null }, NAMES);
     const heard: (Message | null)[] = [];
     line.b.onMessage = (raw) => heard.push(parseMessage(raw));
     line.b.send({ type: 'hello', version: 0, car: 'Wren' });

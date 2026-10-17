@@ -1088,3 +1088,26 @@ body.standings-up .race-panel {
   opacity: 0.85;
   word-break: break-all;
 }
+
+/* Custom circuits in the start menu. */
+.menu-card-custom {
+  border-style: dashed !important;
+}
+
+.menu-card-tools {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.menu-card-tool {
+  text-decoration: underline;
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+.menu-card-tool:hover {
+  opacity: 1;
+}

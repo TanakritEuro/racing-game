@@ -47,6 +47,8 @@ export interface CircuitInfo {
   blurb: string;
   /** The centreline's shape, for a thumbnail. */
   outline: { x: number; z: number }[];
+  /** Drawn in the editor (it can be edited and deleted). */
+  custom?: boolean;
 }
 
 export interface CarInfo {
@@ -66,6 +68,9 @@ export interface MenuEvents {
   onQuit(): void;
   /** A setting changed (already written into the settings object). */
   onSettings(): void;
+  /** The track editor: a new circuit (null) or the custom circuit with this id; and deleting one. */
+  onEditor(id: string | null): void;
+  onDeleteCircuit(id: string): void;
   /** Open the garage: for the circuit and car picked in the start menu, or (null) the car being driven. */
   onGarage(choice: { track: string; car: string; weather: Conditions } | null): void;
 }
@@ -153,6 +158,23 @@ export class Menu {
       div(b, 'menu-card-name', c.name);
       div(b, 'menu-card-sub', `${c.length.toFixed(1)} km · ${c.blurb}`);
       const best = div(b, 'menu-card-sub');
+      if (c.custom) {
+        b.classList.add('menu-card-custom');
+        const tools = div(b, 'menu-card-tools');
+        for (const [label, act] of [
+          ['Edit', () => events.onEditor(c.id)],
+          ['Delete', () => events.onDeleteCircuit(c.id)],
+        ] as const) {
+          const link = document.createElement('span');
+          link.className = 'menu-card-tool';
+          link.textContent = label;
+          link.addEventListener('click', (e) => {
+            e.stopPropagation();
+            act();
+          });
+          tools.appendChild(link);
+        }
+      }
       this.refresh.push(() => {
         const t = this.bestFor(c.id, choice.car, choice.weather);
         best.textContent = t === null ? 'No best yet' : `Best ${formatLapTime(t)}`;
@@ -215,6 +237,7 @@ export class Menu {
       start.classList.toggle('menu-go', !continuing);
       start.disabled = online && choice.online === 'join' && choice.code.length !== 4;
     });
+    button(go, 'Track editor').addEventListener('click', () => events.onEditor(null));
     const setupButton = button(go, 'Car setup');
     setupButton.addEventListener('click', () => events.onGarage({ track: choice.track, car: choice.car, weather: choice.weather }));
     // A championship visits every circuit, and a guest online doesn't know the circuit yet: set up from the pause menu.

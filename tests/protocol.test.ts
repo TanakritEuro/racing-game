@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { ClockSync } from '../src/online/clock';
 import { loopback } from '../src/online/loopback';
 import { parseMessage, PROTOCOL, type Message } from '../src/online/protocol';
+import { cleanCustom, customId, ovalTemplate } from '../src/track/custom';
 
 describe('protocol', () => {
   it('passes every message type through a structured clone unchanged', () => {
     const all: Message[] = [
       { type: 'hello', version: PROTOCOL, car: 'Kestrel' },
-      { type: 'welcome', track: 'saltmarsh', laps: 3, car: 'Wren', opponents: 3, conditions: 'wet', wear: 'high' },
+      { type: 'welcome', track: 'saltmarsh', laps: 3, car: 'Wren', opponents: 3, conditions: 'wet', wear: 'high', custom: null },
+      { type: 'welcome', track: customId(cleanCustom(ovalTemplate())!), laps: 3, car: 'Wren', opponents: 0, conditions: 'dry', wear: 'off', custom: cleanCustom(ovalTemplate()) },
       { type: 'reject', reason: 'full' },
       { type: 'ready' },
       { type: 'ping', t: 1.5 },
@@ -33,7 +35,10 @@ describe('protocol', () => {
       { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 8, conditions: 'dry' },
       { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0 },
       { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0, conditions: 'snow', wear: 'off' },
-      { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0, conditions: 'dry', wear: 'extreme' },
+      { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0, conditions: 'dry', wear: 'extreme', custom: null },
+      // A custom circuit that isn't the one named, or isn't one at all.
+      { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0, conditions: 'dry', wear: 'off', custom: ovalTemplate() },
+      { type: 'welcome', track: 'custom-x', laps: 2, car: 'Wren', opponents: 0, conditions: 'dry', wear: 'off', custom: { version: 1, points: [] } },
       { type: 'ping', t: Number.NaN },
       { type: 'lights', outAt: Infinity, wait: 1 },
       { type: 'lights', outAt: 3, wait: -1 },

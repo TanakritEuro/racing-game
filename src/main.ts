@@ -37,6 +37,7 @@ import { bestKey, openBestStore } from './storage/bests';
 import { CIRCUITS } from './track/circuits';
 import { CustomTrackStore } from './storage/customTracks';
 import { customDef } from './track/custom';
+import { unpackCircuit } from './share';
 import type { TrackDef } from './track/track';
 import { AI_NAMES, DEFAULT_RACE, Race, type RaceOptions } from './race/race';
 import { DIFFICULTIES, type Difficulty } from './ai/skill';
@@ -67,12 +68,19 @@ await initPhysics();
 const params = new URLSearchParams(location.search);
 // Settings: remembered between visits, applied to the simulation through its setters.
 const settings = loadSettings();
-// The track editor (?editor, or ?editor=<id> to edit a saved circuit): its own screen, no game.
-if (params.has('editor')) {
+// The track editor (?editor, or ?editor=<id> to edit a saved circuit; a shared link, ?share=,
+// opens its circuit there to drive and keep): its own screen, no game.
+if (params.has('editor') || params.has('share')) {
   document.querySelector('#loading')?.remove();
   const { openEditor } = await import('./editor');
+  const shared = params.has('share') ? unpackCircuit(params.get('share') ?? '') : null;
+  if (params.has('share') && !shared) {
+    window.alert('That link is not a circuit (it may have been cut short).');
+    goTo({});
+  }
   openEditor(document.body, {
     id: params.get('editor') || null,
+    circuit: shared,
     drive: (id) => goTo({ track: id, car: settings.start.car.toLowerCase(), from: 'editor' }),
     quit: () => goTo({}),
   });
@@ -80,6 +88,8 @@ if (params.has('editor')) {
 }
 // Circuits drawn in the editor, kept in this browser.
 const customTracks = new CustomTrackStore();
+/** Every circuit on offer: the built-in ones, then the custom ones. */
+const ALL_CIRCUITS: TrackDef[] = [...CIRCUITS, ...customTracks.list().map(customDef)];
 /** A circuit by id: built-in, or one of the custom circuits kept here. */
 function findCircuit(id: string | null): TrackDef | null {
   if (!id) return null;
@@ -100,7 +110,9 @@ const seasonRound = params.has('season') && season && !seasonOver(season) ? roun
 if (!seasonRound) season = null;
 const fromUrl = seasonRound !== null || connected !== null || ['track', 'car', 'mode'].some((k) => params.has(k));
 const circuit =
-  findCircuit(connected ? connected.setup.track : seasonRound ? seasonRound.track : fromUrl ? params.get('track') : settings.start.track) ?? CIRCUITS[0];
+  (connected?.setup.custom ? customDef(connected.setup.custom) : null) ??
+  findCircuit(connected ? connected.setup.track : seasonRound ? seasonRound.track : fromUrl ? params.get('track') : settings.start.track) ??
+  CIRCUITS[0];
 const track = buildTrack(circuit);
 document.querySelector('#track-name')!.textContent = circuit.name.toUpperCase();
 // Race mode (?mode=race, Tab switches): ?difficulty=easy|medium|hard, ?opponents=0..7, ?laps=N.
@@ -159,8 +171,10 @@ async function connect(joining: boolean): Promise<{ link: Link; setup: OnlineSet
       const link = await room.guest;
       panel.show('Online race', 'Connected: setting up the race…');
       const { laps, opponents, conditions, wear } = raceOptions(params, 0);
-      const trackId = (CIRCUITS.find((c) => c.id === params.get('track')) ?? CIRCUITS[0]).id;
-      return { link, setup: await hostHandshake(link, { track: trackId, laps, car, opponents, conditions: conditions ?? 'dry', wear: wear ?? 'off' }, names) };
+      const trackId = (findCircuit(params.get('track')) ?? CIRCUITS[0]).id;
+      // A custom circuit goes to the guest in full.
+      const custom = customTracks.get(trackId);
+      return { link, setup: await hostHandshake(link, { track: trackId, laps, car, opponents, conditions: conditions ?? 'dry', wear: wear ?? 'off', custom }, names) };
     }
     const code = cleanRoomCode(params.get('code') ?? '');
     if (!code) throw new OnlineError('That is not a room code: it is four letters and digits, as the host sees it.');
@@ -338,7 +352,7 @@ const CAR_BLURBS: Record<string, string> = {
   Kestrel: 'Balanced coupé',
   Harrier: 'Heavy GT: fast, a handful',
 };
-const builtCircuits = CIRCUITS.map((c) => (c === circuit ? track : buildTrack(c)));
+const builtCircuits = ALL_CIRCUITS.map((c) => (c.id === circuit.id ? track : buildTrack(c)));
 const menu = new Menu(
   document.body,
   {
@@ -391,14 +405,22 @@ const menu = new Menu(
     },
     onSettings: applySettings,
     onGarage: openGarage,
+    onEditor: (id) => goTo({ editor: id ?? '' }),
+    onDeleteCircuit(id) {
+      const c = customTracks.get(id);
+      if (!c || !window.confirm(`Delete ${c.name}? Its best laps go with it.`)) return;
+      customTracks.remove(id);
+      goTo({});
+    },
   },
   { ...settings.start },
-  CIRCUITS.map((c, i) => ({
+  ALL_CIRCUITS.map((c, i) => ({
     id: c.id,
     name: c.name,
     length: builtCircuits[i].length / 1000,
-    blurb: BLURBS[c.id] ?? '',
+    blurb: BLURBS[c.id] ?? 'your own',
     outline: builtCircuits[i].samples.filter((_, k) => k % 8 === 0).map((s) => ({ x: s.x, z: s.z })),
+    custom: i >= CIRCUITS.length,
   })),
   CARS.map((c) => ({
     name: c.name,
@@ -431,7 +453,7 @@ if (online) {
 }
 // Each circuit's best with each car, for the circuit cards.
 void Promise.all(
-  CIRCUITS.flatMap((c, i) =>
+  ALL_CIRCUITS.flatMap((c, i) =>
     CARS.flatMap((car) =>
       CONDITIONS.map(async (w) => {
         const best = await store.load(bestKey(c.id, car.name, w), trackFingerprint(builtCircuits[i]));
@@ -450,8 +472,8 @@ void Promise.all(
  */
 function openGarage(choice: { track: string; car: string; weather: Conditions } | null): void {
   const def = choice ? (CARS.find((c) => c.name === choice.car) ?? KESTREL) : carDef;
-  const index = choice ? Math.max(0, CIRCUITS.findIndex((c) => c.id === choice.track)) : -1;
-  const where = choice ? CIRCUITS[index] : circuit;
+  const index = choice ? Math.max(0, ALL_CIRCUITS.findIndex((c) => c.id === choice.track)) : -1;
+  const where = choice ? ALL_CIRCUITS[index] : circuit;
   const best = choice
     ? store.load(bestKey(where.id, def.name, choice.weather), trackFingerprint(builtCircuits[index])).then((r) => (r ? (r.setup ?? {}) : null))
     : Promise.resolve(bestSetup);
