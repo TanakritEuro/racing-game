@@ -9,6 +9,8 @@ export interface Settings {
   abs: boolean;
   tc: boolean;
   steeringAssist: boolean;
+  /** On a touch screen: steer with the thumb or by tilting the device. */
+  touchSteer: 'thumb' | 'tilt';
   gearbox: GearboxMode;
   camera: CameraMode;
   ghost: boolean;
@@ -23,6 +25,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   abs: true,
   tc: true,
   steeringAssist: true,
+  touchSteer: 'thumb',
   gearbox: 'auto',
   camera: 'chase',
   ghost: true,

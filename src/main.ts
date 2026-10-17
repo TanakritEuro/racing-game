@@ -49,6 +49,7 @@ import { guestHandshake, hostHandshake, OnlineError, OnlineRace, type OnlineSetu
 import { OnlinePanel } from './ui/onlinePanel';
 import { WeatherView } from './render/weatherView';
 import { TyresHud } from './ui/tyresHud';
+import { TouchControls } from './ui/touchControls';
 import { WEAR_RATES } from './vehicle/wear';
 import { CONDITIONS, wetness, type Conditions } from './track/weather';
 import { Garage } from './ui/garage';
@@ -280,6 +281,8 @@ const replayHud = {
   time: document.querySelector<HTMLDivElement>('#replay .r-time')!,
 };
 const input = new PlayerInput();
+// Phones and tablets: the on-screen controls, shown at the first touch.
+const touchControls = new TouchControls(document.body, input.touch);
 const steering = input.steering;
 let controls = NO_CONTROLS;
 const telemetry = new Telemetry(document.body);
@@ -333,6 +336,7 @@ function applySettings(): void {
   sim.setAids({ abs: settings.abs, tc: settings.tc });
   sim.setGearboxMode(settings.gearbox);
   steering.assist = settings.steeringAssist;
+  touchControls.setTilt(settings.touchSteer === 'tilt');
   if (cameras.mode !== settings.camera) cameras.setMode(settings.camera);
   sound.setVolume(settings.volume);
   sound.setMuted(settings.muted);
@@ -692,6 +696,7 @@ function updateHud(dt: number): void {
     dt,
   );
   timing.update(sim.timer, sim.time);
+  touchControls.update(settings.gearbox === 'manual');
   // BOX: the same call the AI acts on.
   tyresHud.update(sim.car, sim.pits?.state[0] ?? null, race?.boxCalls[0] ?? online?.boxCall ?? false);
   const racing = race ?? online;
