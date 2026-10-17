@@ -12,6 +12,8 @@ differential, gearing) for each circuit. Race in the dry, the damp or the wet: l
 slippery kerbs, standing water that floats the car at speed, rain and spray. In longer races
 tyres wear and fuel burns: every circuit has a pit lane, and the AI chooses when to stop.
 Draw your own circuits in the track editor, race the AI on them and share them as links.
+On a phone or tablet: on-screen controls (thumb or tilt steering, analogue pedals) and lighter
+graphics.
 
 ```bash
 npm install

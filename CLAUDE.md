@@ -25,8 +25,8 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 Milestones 1–12 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing, car setup, weather, tyre
-wear and pit stops, a track editor) are done; **Milestone 13 (touch controls) is planned**
-(`docs/milestone-13.md`).
+wear and pit stops, a track editor) are done; **Milestone 13 (touch controls) is built and in
+playtesting** (`docs/milestone-13.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -128,6 +128,14 @@ lane placed by `autoPitLane`, pits and a grandstand) is checked by `validateTrac
 (`track/validate.ts`, the rules every circuit keeps, the built-in ones too), saved in the
 browser (`storage/customTracks.ts`), offered in the start menu, raced, shared as a link
 (`share.ts`, `?share=`) and sent to an online guest in full.
+
+Touch controls (`input/touch.ts`, `ui/touchControls.ts`), shown at the first touch: the left
+half steers by the thumb's travel from where it landed (or by tilting the device, a setting),
+through the same assist as the keys; analogue brake and accelerator by how far up they're
+pressed, a handbrake, and buttons for pause, camera, put back and shifting. Full screen, the
+screen kept awake, a notice to turn a phone sideways, the HUD smaller on a touch screen.
+Graphics Auto / High / Low (`render/quality.ts`; Low on a phone): pixel ratio, antialiasing,
+shadow map, trees, particles and rain.
 
 Keyboard steering goes through an assist (`drivers/steeringAssist.ts`: speed-sensitive lock,
 counter-steer help, toggleable); gamepads steer the rack directly with analogue triggers
@@ -277,7 +285,9 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   wire), `remoteCar.ts` (`RemoteCar`: states → pose now), `session.ts` (handshakes and
   `OnlineRace`). All but `link.ts` are pure (the clock is passed in); `ui/onlinePanel.ts`
   shows the connecting screens and the status line over the race.
-- `src/input/` — `keyboard.ts`, `gamepad.ts`, `index.ts` (`PlayerInput`: both devices → `Controls`).
+- `src/input/` — `keyboard.ts`, `gamepad.ts`, `touch.ts` (`TouchInput`: thumb, tilt, pedals,
+  buttons), `index.ts` (`PlayerInput`: all three → `Controls`, `whoSteers`);
+  `ui/touchControls.ts` — the on-screen controls; `render/quality.ts` — graphics High and Low.
 - `src/settings.ts` — player settings in localStorage.
 - `src/main.ts` — entry point and frame loop; `?track=<id>`, `?telemetry`, `?debug`
   (exposes `sim`, `race`, `online`, `session()`, `step(controls)`, `replay()`, `autopilot`,

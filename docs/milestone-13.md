@@ -1,6 +1,33 @@
 # Milestone 13 plan: touch controls (phones and tablets)
 
-## Status: planned, waiting for your approval
+## Status: built, in playtesting
+
+Approved as written: thumb steering by default with tilt as a setting, analogue pedals, Low
+graphics chosen automatically on a phone. (Question 4, what could follow, is still open.)
+
+Checked in the browser at a phone's size (812 × 375, touch faked with synthetic events): the
+controls appear at the first touch and not before; the accelerator drives the car (95 km/h
+held flat out), the thumb steers through the assist and lets go back to centre, the put-back
+button works; the dashboard sits bottom centre out of the thumbs' way and the start lights
+under the buttons; held upright (375 × 700) the game asks to be turned sideways; the start
+menu fits and scrolls. Measured on the in-app browser (1024 × 768, one device pixel per
+pixel), Harrowmere in the wet with seven AI cars: High 7.2 ms a frame and 446 000
+triangles, Low 6.2 ms and 373 000.
+
+Where the build differs from the plan below:
+
+- **Low's biggest saving doesn't show on that screen.** It draws at one device pixel per CSS
+  pixel where High draws up to two; on a phone with three, that's a quarter of the pixels.
+  It hasn't been measured on a real phone: that's for your playtest.
+- **A pedal pressed at its very bottom gives 30 %**, rising to full by half way up, so a quick
+  stab still does something.
+- **Changing Graphics reloads the game** (a new renderer is needed); the setting says so by
+  doing it at once.
+- **Touch merging is tested in `touch.test.ts`** (no separate `input.test.ts`): which device
+  steers, the hardest pedal press, the thumb through the assist.
+- **Not checked with real fingers:** tilt steering (the in-app browser has no tilt sensor),
+  pinch to zoom in the editor, full screen and the wake lock, and typing a room code with the
+  on-screen keyboard.
 
 The last candidate from the earlier lists. The game runs in a phone's browser already, but
 it can't be driven there: there's no keyboard, and the menus, HUD and renderer were made for
