@@ -87,6 +87,18 @@ export const TUNING = {
     cliff: 0.8,
     beyond: 1.6,
   },
+  /** Touch controls (`input/touch.ts`). */
+  touch: {
+    /** The thumb: travel (px) ignored, and travel to full steering. */
+    thumbDead: 6,
+    thumbFull: 70,
+    /** Tilt: roll (degrees) ignored, and roll to full steering. */
+    tiltDead: 3,
+    tiltFull: 30,
+    /** A pedal pressed at its very bottom gives `pedalFloor`; full from `pedalFull` of the way up. */
+    pedalFloor: 0.3,
+    pedalFull: 0.5,
+  },
   /** Pit lanes and stops (`track/pitLane.ts`, `race/pits.ts`). */
   pits: {
     /** Across, from the road edge (m): the pit wall's middle, the lane's inner edge, the lane's width (boxes on its outer side, `boxDepth` deep), and room to the barrier. */

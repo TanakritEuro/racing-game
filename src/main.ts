@@ -735,6 +735,11 @@ function frame(now: number): void {
     settings.camera = cameras.mode;
     saveSettings(settings);
   }
+  // The touch controls' pause button: as Esc.
+  if (pad.pause && !menu.open && !garage.open && !standingsScreen.open) {
+    if (replay.active) endReplay();
+    else pauseGame();
+  }
   // Paused, or the start menu: no steps (and no catching up afterwards); the scene is still drawn.
   if (menu.open) accumulator = 0;
   if (replay.active && !menu.open) {
