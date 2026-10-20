@@ -26,7 +26,7 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 Milestones 1–13 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing, car setup, weather, tyre
 wear and pit stops, a track editor, touch controls) are done; **Milestone 14 (career mode) is
-planned** (`docs/milestone-14.md`).
+built and in playtesting** (`docs/milestone-14.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -136,6 +136,14 @@ pressed, a handbrake, and buttons for pause, camera, put back and shifting. Full
 screen kept awake, a notice to turn a phone sideways, the HUD smaller on a touch screen.
 Graphics Auto / High / Low (`render/quality.ts`; Low on a phone): pixel ratio, antialiasing,
 shadow map, trees, particles and rain.
+
+Career (`race/career.ts`, start menu → Career, `?career`): a ladder of three series (Club Cup:
+Wren, easy, dry; National Series: Kestrel, medium, weather, normal wear; Grand Championship:
+Harrier, hard, longer races, high wear), each a championship season with its own rounds.
+A top-three season opens the next series and its car; every round pays prize money, which
+buys upgrades for your cars (`vehicle/upgrades.ts`: engine, tyres, weight, brakes, three levels;
+your car only, like a setup). Saved in localStorage (`storage/career.ts`); the career screen
+(`ui/careerScreen.ts`) shows the ladder, the season, money and the shop.
 
 Keyboard steering goes through an assist (`drivers/steeringAssist.ts`: speed-sensitive lock,
 counter-steer help, toggleable); gamepads steer the rack directly with analogue triggers
@@ -253,7 +261,9 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   `pits.ts` — the limiter, penalties and stops; `pitCalls.ts` — the pit wall's BOX calls.
 - `src/ai/pitStrategy.ts` — when to stop: the time worn tyres lose against a stop's cost.
 - `src/race/championship.ts` — `Season`: rounds, the field's skills, points, standings and
-  tie-breaks, the grid, each round's race options, JSON; `storage/season.ts` keeps it.
+  tie-breaks, the grid, each round's race options (weather drawn or dry, the wear rate), JSON;
+  `storage/season.ts` keeps it. `career.ts` — `Career`: the series, prizes, promotion,
+  buying upgrades; `storage/career.ts` keeps it. `vehicle/upgrades.ts` — `applyUpgrades`, prices.
 - `src/race/timing.ts` — lap timer, sectors, live delta, track limits and time formatting.
 - `src/race/recording.ts` — lap recordings (30 Hz frames of pose and readouts), sampling
   between frames, encode / decode; `session.ts` — `TimeTrial`: records laps, keeps the
@@ -272,7 +282,7 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
   position, lap, gaps, start lights, results; `dashboard.ts` — rev counter, speed, gear, aid
   lights; `menu.ts` — start, pause and settings menus; `standings.ts` — championship
   standings between rounds; `garage.ts` — the setup screen; `tyresHud.ts` — tyres, fuel,
-  the limiter light and BOX.
+  the limiter light and BOX; `careerScreen.ts` — the career.
 - `src/render/carModels.ts` — loads, fits and paints the car models; `render/effects/` —
   `skidMarks.ts`, `smoke.ts`, `sparks.ts` and `index.ts` (`Effects`).
 - `src/audio/` — `sound.ts` (context, volume, knocks and pops), `carVoice.ts` (one car's
@@ -292,7 +302,7 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/main.ts` — entry point and frame loop; `?track=<id>`, `?telemetry`, `?debug`
   (exposes `sim`, `race`, `online`, `session()`, `step(controls)`, `replay()`, `autopilot`,
   `effects`, `sound()` and `stage` in the console), `?line`, `?autopilot`, `?mode=race` and
-  its options, `?season`, `?online`, `?setup=default`, `?weather=dry|damp|wet`, `?wear=off|normal|high`, `?editor` (`=<id>` to edit one), `?share=`.
+  its options, `?season`, `?online`, `?setup=default`, `?weather=dry|damp|wet`, `?wear=off|normal|high`, `?editor` (`=<id>` to edit one), `?share=`, `?career` (the next career round), `?menu=career`.
 - `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
   line-following test driver (offset, curvature speed profile); `tracks.ts` has test-only
   layouts (skidpads, long oval, hill, kerbed oval, grass and gravel pads).

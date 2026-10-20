@@ -13,7 +13,8 @@ slippery kerbs, standing water that floats the car at speed, rain and spray. In 
 tyres wear and fuel burns: every circuit has a pit lane, and the AI chooses when to stop.
 Draw your own circuits in the track editor, race the AI on them and share them as links.
 On a phone or tablet: on-screen controls (thumb or tilt steering, analogue pedals) and lighter
-graphics.
+graphics. A career: climb three series from the Club Cup to the Grand Championship, earning
+prize money for upgrades.
 
 ```bash
 npm install

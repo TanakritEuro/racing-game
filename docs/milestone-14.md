@@ -1,6 +1,31 @@
 # Milestone 14 plan: career mode
 
-## Status: planned, waiting for your approval
+## Status: built, in playtesting
+
+Approved as written: three series, promotion for a top-three finish, prize money and upgrades,
+unlocks only inside the career.
+
+Measured (headless): the engine's third level (+12 % torque) reaches 160 km/h at least 5 %
+sooner (to 100 km/h only 0.18 s sooner: off the line the car is limited by its traction, not
+its power); the tyres' third level (+6 % grip) corners over 2 % harder on the skidpad.
+Checked in the browser: Career in the start menu, a new career's screen (the ladder with the
+Club Cup open, round 1 next, the Wren's upgrades), round 1 run to the flag with the autopilot
+(the Wren, 4 laps, eight cars, dry, no wear, easy rivals), the Club Cup standings with the
+prize (100 cr for P8), and back to the career screen with the money and round 2 next.
+
+Where the build differs from the plan below:
+
+- **Races carry more fuel:** 0.35 kg per km, up from 0.25. In the Club Cup's opening round
+  the Wren had used half its fuel by half distance: the stop-start Proving Ground burns
+  ~0.31 kg/km (Harrowmere's long straights ~0.21). Running dry never stopped a car, but a
+  race should start with enough.
+- **The 10-lap high-wear soak now allows up to two cars put back on the track**, and a stop
+  costing 18–45 s: with a few kilos more fuel aboard the race ran differently. One car spun
+  on worn tyres, and one ran wide out of Saltmarsh's last corner into the **blunt end of the
+  pit wall**, which sits a metre beyond the road edge where the lane's entry taper ends.
+  That's worth looking at in your playtest; a sloped nose on the wall is the likely fix.
+- **Not clicked in the browser:** buying an upgrade and a promotion at a season's end (the
+  test career had 100 cr); both are covered by `career.test.ts`.
 
 Your choice of what's next. Today the championship is one season in one car against one
 field. A career turns the game into a long climb: a ladder of three series, each a step up in
