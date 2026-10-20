@@ -18,6 +18,9 @@ import { GhostView } from './render/ghostView';
 import { Simulation } from './sim';
 import { TimingHud } from './ui/timingHud';
 import { createRecordedState, duration, sampleRecording, type LapRecording } from './race/recording';
+import { sampleCar, standingsAt } from './race/raceRecording';
+import { Director, type Shot, type ShotCamera } from './replay/director';
+import { ReplayHud } from './ui/replayHud';
 import { formatLapTime } from './race/timing';
 import { Replay, REPLAY_SPEEDS } from './replay/replay';
 import { TvCameraView } from './render/tvCameras';
@@ -62,7 +65,8 @@ import { Garage } from './ui/garage';
 import { SetupStore } from './storage/setups';
 import { applySetup, cleanSetup, type Setup } from './vehicle/setup';
 import { CARS, KESTREL } from './vehicle/cars';
-import { createPose, interpolatePose } from './vehicle/pose';
+import type { CarDef } from './vehicle/carDef';
+import { copyPose, createPose, interpolatePose } from './vehicle/pose';
 import { NEUTRAL, REVERSE } from './vehicle/gearbox';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
@@ -146,6 +150,8 @@ const race = connected
       : null;
 /** This championship round's result has been recorded (it can't be run again). */
 let recorded = false;
+/** The championship standings after this round, to come back to after watching it (null until then). */
+let showStandings: (() => void) | null = null;
 const online = connected
   ? new OnlineRace(connected.link, connected.setup, track, playerDef, CARS.find((c) => c.name === connected.setup.theirs) ?? KESTREL, {
       clock: () => performance.now() / 1000,
@@ -266,6 +272,7 @@ const standingsScreen = new StandingsScreen(
   {
     onNext: () => goTo(career ? { career: '' } : { season: '' }),
     onMenu: () => goTo(career ? { menu: 'career' } : {}),
+    onReplay: race && !online ? () => watchFromStandings() : undefined,
   },
   carName,
   colourOf,
@@ -295,7 +302,33 @@ const tv = new TvCameraView(stage.camera, track, placeTvCameras(track, sim.physi
 const replayHud = {
   title: document.querySelector<HTMLDivElement>('#replay .r-title')!,
   time: document.querySelector<HTMLDivElement>('#replay .r-time')!,
+  keys: document.querySelector<HTMLDivElement>('#replay .r-keys')!,
 };
+const LAP_REPLAY_KEYS = replayHud.keys.innerHTML;
+const RACE_REPLAY_KEYS = 'Space pause &nbsp; ←/→ skip &nbsp; Q/E moments &nbsp; ↑/↓ car ahead/behind &nbsp; C camera &nbsp; D director &nbsp; 1–4 speed &nbsp; Esc back';
+// A race replay: every car drawn from the race's recording, the director's shots (or the car
+// you picked, from the camera you picked), and its own screen.
+let director: Director | null = null;
+/** The car you picked to follow (null: the director chooses), and from where. */
+let following: number | null = null;
+let followCamera: ShotCamera = 'tv';
+let lastFollow = { car: -1, camera: '' };
+const raceStates = (race?.sim.cars ?? []).map(() => createRecordedState());
+const replayRigs = new Map<string, CameraRig>();
+const raceReplayHud =
+  race && !online
+    ? new ReplayHud(
+        document.querySelector<HTMLDivElement>('#hud')!,
+        {
+          pick(car) {
+            following = car;
+          },
+          seek: (time) => replay.seek(time),
+        },
+        carName,
+        colourOf,
+      )
+    : null;
 const input = new PlayerInput();
 // Phones and tablets: the on-screen controls, shown at the first touch.
 const touchControls = new TouchControls(document.body, input.touch);
@@ -428,6 +461,12 @@ const menu = new Menu(
       sound.suspend(false);
       restart();
     },
+    onReplay() {
+      menu.hide();
+      input.reset();
+      sound.suspend(false);
+      startRaceReplay();
+    },
     onContinueSeason: () => goTo({ season: '' }),
     onQuit: () => {
       online?.leave();
@@ -496,6 +535,7 @@ const careerScreen = new CareerScreen(
   (k) => (k === 0 ? 'You' : AI_NAMES[k - 1]),
   (id) => findCircuit(id)?.name ?? id,
 );
+menu.allowReplay(race !== null && !online);
 if (params.get('menu') === 'career') {
   menu.showStart();
   careerScreen.show(loadCareer());
@@ -606,6 +646,7 @@ window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (e.code === 'KeyP') {
     if (e.shiftKey) startReplay(session.ghost, 'BEST LAP');
+    else if (race) startRaceReplay();
     else startReplay(session.lastLap, 'LAST LAP');
   }
   if (e.code === 'KeyT') telemetry.toggle();
@@ -657,14 +698,38 @@ function afterStep(c: Controls): void {
 function startReplay(rec: LapRecording | null, caption: string): void {
   if (!rec) return;
   replay.play(rec, caption);
+  replayHud.keys.innerHTML = LAP_REPLAY_KEYS;
   document.body.classList.add('replaying');
 }
 
+/** Watch the race so far (or all of it), every car, as television; the race waits until it ends. */
+function startRaceReplay(): void {
+  if (!race || online || !raceReplayHud || race.recorder.frameCount < 2) return;
+  const rec = race.recorder.recording();
+  replay.playRace(rec, race.phase === 'finished' ? 'RACE' : 'RACE SO FAR');
+  director = new Director(rec, 0, track.samples.length);
+  following = null;
+  followCamera = 'tv';
+  lastFollow = { car: -1, camera: '' };
+  raceReplayHud.load(rec, replay.raceMoments);
+  replayHud.keys.innerHTML = RACE_REPLAY_KEYS;
+  document.body.classList.add('replaying', 'race-replaying');
+}
+
+/** From the championship standings: watch the race, then back to them. */
+function watchFromStandings(): void {
+  standingsScreen.hide();
+  startRaceReplay();
+}
+
 function endReplay(): void {
+  const wasRace = replay.race !== null;
   replay.stop();
-  document.body.classList.remove('replaying');
+  director = null;
+  document.body.classList.remove('replaying', 'race-replaying');
   cameras.setMode(cameras.mode);
   input.reset();
+  if (wasRace && showStandings) showStandings();
 }
 
 function replayKey(e: KeyboardEvent): void {
@@ -672,12 +737,106 @@ function replayKey(e: KeyboardEvent): void {
     e.preventDefault();
     if (!e.repeat) replay.togglePause();
   }
-  if (e.code === 'ArrowLeft') replay.scrub(-2);
-  if (e.code === 'ArrowRight') replay.scrub(2);
+  const skip = replay.race ? TUNING.replay.skip : 2;
+  if (e.code === 'ArrowLeft') replay.scrub(-skip);
+  if (e.code === 'ArrowRight') replay.scrub(skip);
+  if (replay.race && !e.repeat) raceReplayKey(e);
   const speed = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
   if (speed >= 0) replay.speed = REPLAY_SPEEDS[speed];
   if (e.code === 'Escape' || (e.code === 'KeyP' && !e.repeat)) endReplay();
   if (e.code === 'KeyT' && !e.repeat) telemetry.toggle();
+}
+
+/** A race replay's own keys: moments, the car to follow, the camera, the director. */
+function raceReplayKey(e: KeyboardEvent): void {
+  const rec = replay.race!;
+  if (e.code === 'KeyE') replay.nextMoment();
+  if (e.code === 'KeyQ') replay.previousMoment();
+  if (e.code === 'KeyD') following = null;
+  if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+    e.preventDefault();
+    const rows = standingsAt(rec, replay.time);
+    const now = following ?? lastFollow.car;
+    const i = Math.max(0, rows.findIndex((r) => r.car === now));
+    following = rows[Math.max(0, Math.min(rows.length - 1, i + (e.code === 'ArrowUp' ? -1 : 1)))].car;
+  }
+  if (e.code === 'KeyC') {
+    const order: ShotCamera[] = ['tv', 'chase', 'onboard'];
+    following ??= lastFollow.car;
+    followCamera = order[(order.indexOf(lastFollow.camera as ShotCamera) + 1) % order.length];
+  }
+}
+
+/** A chase or onboard camera for a car of this kind (the replay's own; yours stays as you set it). */
+function rigFor(def: CarDef): CameraRig {
+  let rig = replayRigs.get(def.name);
+  if (!rig) {
+    rig = new CameraRig(stage.camera, def);
+    replayRigs.set(def.name, rig);
+  }
+  return rig;
+}
+
+/** A frame of a race replay: every car where the recording has it, from the director's (or your) shot. */
+function drawRaceReplay(t: number, dt: number): void {
+  const rec = replay.race!;
+  const shot: Shot | null = following === null ? director!.at(t) : null;
+  const car = shot ? shot.car : following!;
+  const camera = shot ? shot.camera : followCamera;
+  rec.cars.forEach((_, k) => sampleCar(rec, k, t, raceStates[k]));
+  carView.update(raceStates[0].pose);
+  others.forEach((o, j) => {
+    const s = raceStates[j + 1];
+    if (!s) return;
+    o.view.update(s.pose);
+    copyPose(s.pose, o.drawn);
+  });
+  ghost.update(null, null, false);
+  minimap.update(
+    raceStates[0].pose,
+    others.map((o) => ({ x: o.drawn.position.x, z: o.drawn.position.z, colour: o.colour })),
+  );
+  const followed = raceStates[car];
+  const def = race!.sim.cars[car].def;
+  const cut = replay.jumped || lastFollow.car !== car || lastFollow.camera !== camera;
+  lastFollow = { car, camera };
+  if (camera === 'tv') tv.update(followed.pose, dt, cut);
+  else {
+    const rig = rigFor(def);
+    if (cut) {
+      rig.setMode(camera === 'onboard' ? 'hood' : 'chase');
+      rig.snap();
+    }
+    rig.update(followed.pose, dt);
+  }
+  // Every car drawn, but from inside one you see the road, not its own bodywork.
+  const inside = camera === 'onboard' ? car : -1;
+  carView.root.visible = inside !== 0;
+  others.forEach((o, j) => (o.view.root.visible = raceStates[j + 1] !== undefined && inside !== j + 1));
+  replay.jumped = false;
+  followSun(stage.sun, stage.camera.position);
+  weatherView.update(dt, stage.camera.position);
+  const rows = standingsAt(rec, t);
+  const lap = Math.min(rec.laps, rows[0].laps + 1);
+  replayHud.title.textContent = `REPLAY · ${replay.caption}`;
+  const state = replay.paused ? 'PAUSED' : `${replay.speed}×`;
+  replayHud.time.textContent = `LAP ${lap} / ${rec.laps}  ·  ${formatLapTime(t)} / ${formatLapTime(rec.duration)}  ·  ${state}`;
+  raceReplayHud!.update(t, rows, car, shot, rec.laps);
+  audio.replay(def, followed.rpm, followed.throttle);
+  dash.update(
+    {
+      rpm: followed.rpm,
+      speed: Math.abs(followed.speed) * 3.6,
+      gear: gearLabel(Math.round(followed.gear)),
+      mode: 'REPLAY',
+      limiter: def.engine.limiterRpm,
+      upshift: def.gearbox.upshiftRpm.full,
+      abs: [false, false],
+      tc: [false, false],
+      assist: false,
+    },
+    dt,
+  );
 }
 
 /** A frame of the replay: the recorded car (and the ghost beside it) from the TV cameras. */
@@ -785,12 +944,17 @@ function updateHud(dt: number): void {
         else if (result.final.promoted) notes.push(`Promoted: the ${result.final.promoted.name} is open, and the ${result.final.promoted.car} is yours.`);
         else if (result.final.position > TUNING.career.promotion) notes.push(`A top ${TUNING.career.promotion} finish moves you up: run the series again.`);
       }
-      standingsScreen.show(season, { title: SERIES[career.series].name.toUpperCase(), notes, back: 'Career' });
+      const shown = season;
+      const series = SERIES[career.series].name.toUpperCase();
+      showStandings = () => standingsScreen.show(shown, { title: series, notes, back: 'Career' });
+      showStandings();
     } else {
       season = recordRound(season, finishingOrder(race.standings()));
       saveSeason(season);
       if (seasonOver(season)) menu.setSeason(null);
-      standingsScreen.show(season);
+      const shown = season;
+      showStandings = () => standingsScreen.show(shown);
+      showStandings();
     }
   }
 }
@@ -833,7 +997,8 @@ function frame(now: number): void {
     const t = replay.update(dt);
     if (t === null) endReplay();
     else {
-      drawReplay(t, dt);
+      if (replay.race) drawRaceReplay(t, dt);
+      else drawReplay(t, dt);
       stage.renderer.render(stage.scene, stage.camera);
       requestAnimationFrame(frame);
       return;

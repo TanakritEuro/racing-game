@@ -67,6 +67,8 @@ export interface MenuEvents {
   onContinueSeason(): void;
   onResume(): void;
   onRestart(): void;
+  /** Watch the race so far (the pause menu, in a race). */
+  onReplay(): void;
   onQuit(): void;
   /** A setting changed (already written into the settings object). */
   onSettings(): void;
@@ -90,6 +92,7 @@ export class Menu {
   private readonly root: HTMLElement;
   private readonly start: HTMLElement;
   private readonly pause: HTMLElement;
+  private replayButton!: HTMLButtonElement;
   private readonly settingsPanel: HTMLElement;
   private readonly refresh: (() => void)[] = [];
   /** Where Back from settings goes. */
@@ -255,6 +258,8 @@ export class Menu {
     const pauseRow = div(this.pause, 'menu-row');
     button(pauseRow, 'Resume', 'menu-go').addEventListener('click', () => events.onResume());
     this.restartButton = button(pauseRow, 'Restart');
+    this.replayButton = button(pauseRow, 'Watch replay', 'hidden');
+    this.replayButton.addEventListener('click', () => events.onReplay());
     this.restartButton.addEventListener('click', () => events.onRestart());
     this.pauseSetup = button(pauseRow, 'Car setup');
     this.pauseSetup.addEventListener('click', () => events.onGarage(null));
@@ -338,6 +343,11 @@ export class Menu {
   /** Whether the pause menu offers the garage (not once a championship round has counted). */
   allowSetup(allowed: boolean): void {
     this.pauseSetup.classList.toggle('hidden', !allowed);
+  }
+
+  /** Offer to watch the race so far from the pause menu. */
+  allowReplay(allowed: boolean): void {
+    this.replayButton.classList.toggle('hidden', !allowed);
   }
 
   /** The championship in progress, if any (for Continue). */

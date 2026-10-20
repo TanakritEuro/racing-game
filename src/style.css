@@ -157,6 +157,7 @@ body {
 }
 
 body.replaying .race-panel,
+body.replaying .start-lights,
 body.replaying .results {
   display: none !important;
 }
@@ -206,6 +207,139 @@ body.replaying #replay {
 body.replaying #timing,
 body.replaying #keys {
   display: none;
+}
+
+/* A race replay: the standings tower at that moment, the followed car, the timeline of moments. */
+.race-replay {
+  display: none;
+}
+
+body.race-replaying .race-replay {
+  display: block;
+}
+
+body.race-replaying .tyres-panel,
+body.race-replaying .touch-controls {
+  display: none !important;
+}
+
+.rr-tower {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  min-width: 210px;
+  padding: 6px 0;
+  border-radius: 6px;
+  background: rgba(10, 14, 20, 0.7);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: auto;
+}
+
+.rr-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 12px;
+  cursor: pointer;
+}
+
+.rr-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.rr-row.followed {
+  background: rgba(255, 213, 74, 0.18);
+}
+
+.rr-row.me .rr-name {
+  color: #ffd54a;
+}
+
+.rr-pos {
+  width: 16px;
+  text-align: right;
+  opacity: 0.75;
+}
+
+.rr-chip {
+  width: 4px;
+  height: 14px;
+  border-radius: 2px;
+}
+
+.rr-name {
+  flex: 1;
+}
+
+.rr-gap {
+  font-size: 12px;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+.rr-caption {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 4px;
+  background: rgba(10, 14, 20, 0.7);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rr-timeline {
+  position: absolute;
+  left: 50%;
+  bottom: 40px;
+  width: min(60vw, 720px);
+  height: 14px;
+  transform: translateX(-50%);
+  border-radius: 7px;
+  background: rgba(10, 14, 20, 0.7);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.rr-mark {
+  position: absolute;
+  top: 3px;
+  width: 3px;
+  height: 8px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: #9aa6b8;
+}
+
+.rr-pass {
+  background: #4fc3ff;
+}
+
+.rr-spin,
+.rr-contact,
+.rr-recovered {
+  background: #ff6b4a;
+}
+
+.rr-stop {
+  background: #b98cff;
+}
+
+.rr-finish,
+.rr-fastestLap {
+  background: #ffd54a;
+}
+
+.rr-head {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 20px;
+  margin-left: -1px;
+  background: #fff;
 }
 
 #minimap {

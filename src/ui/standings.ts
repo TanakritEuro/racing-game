@@ -9,6 +9,8 @@ export interface StandingsEvents {
   onNext(): void;
   /** Back to the start menu. */
   onMenu(): void;
+  /** Watch the race just run. */
+  onReplay?(): void;
 }
 
 export class StandingsScreen {
@@ -81,6 +83,8 @@ export class StandingsScreen {
     this.panel.appendChild(table);
 
     const actions = div(this.panel, 'menu-row');
+    const replay = this.events.onReplay;
+    if (replay) button(actions, 'Watch the race').addEventListener('click', () => replay());
     if (!over) {
       const next = season.rounds[done];
       button(actions, `Next round: ${this.circuitName(next.track)}`, 'menu-go').addEventListener('click', () => this.events.onNext());

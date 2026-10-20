@@ -34,7 +34,7 @@ export class RaceHud {
   /** `footer`: the keys line under the results (a championship round has its own way on); `name`: each car's driver. */
   constructor(
     root: HTMLElement,
-    private readonly footer = '⌫ race again &nbsp; Tab time trial &nbsp; N next circuit',
+    private readonly footer = 'P watch the race &nbsp; ⌫ race again &nbsp; Tab time trial &nbsp; N next circuit',
     private readonly name: (car: number) => string = carName,
   ) {
     const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent: HTMLElement) => {
