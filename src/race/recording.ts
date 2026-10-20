@@ -86,7 +86,8 @@ export class LapRecorder {
   }
 }
 
-function writeFrame(data: Float32Array, k: number, s: RecordedState): void {
+/** Frame `k` of `data` (FRAME_SIZE floats a frame) from `s`. */
+export function writeFrame(data: Float32Array, k: number, s: RecordedState): void {
   const o = k * FRAME_SIZE;
   const { position: p, rotation: q } = s.pose;
   data[o] = p.x;
@@ -110,7 +111,11 @@ function writeFrame(data: Float32Array, k: number, s: RecordedState): void {
 
 /** Frame `k` of a recording into `out`. */
 export function readFrame(rec: LapRecording, k: number, out: RecordedState): void {
-  const d = rec.frames;
+  readFrameData(rec.frames, k, out);
+}
+
+/** Frame `k` of `d` (FRAME_SIZE floats a frame) into `out`. */
+export function readFrameData(d: Float32Array, k: number, out: RecordedState): void {
   const o = k * FRAME_SIZE;
   out.pose.position.x = d[o];
   out.pose.position.y = d[o + 1];
@@ -145,15 +150,20 @@ const scratchB = createRecordedState();
 
 /** The recording at `t` seconds into the lap (held at its ends), blended between frames, into `out`. */
 export function sampleRecording(rec: LapRecording, t: number, out: RecordedState): void {
-  const last = frameCount(rec) - 1;
-  const f = Math.max(0, Math.min(last, t / rec.frameDt));
+  sampleFrames(rec.frames, frameCount(rec), rec.frameDt, t, out);
+}
+
+/** The first `count` frames of `data` at `t` seconds (held at their ends), blended between frames, into `out`. */
+export function sampleFrames(data: Float32Array, count: number, frameDt: number, t: number, out: RecordedState): void {
+  const last = count - 1;
+  const f = Math.max(0, Math.min(last, t / frameDt));
   const k = Math.min(last - 1, Math.floor(f));
   if (last < 1) {
-    readFrame(rec, 0, out);
+    readFrameData(data, 0, out);
     return;
   }
-  readFrame(rec, k, scratchA);
-  readFrame(rec, k + 1, scratchB);
+  readFrameData(data, k, scratchA);
+  readFrameData(data, k + 1, scratchB);
   const a = f - k;
   interpolatePose(scratchA.pose, scratchB.pose, a, out.pose);
   const lerp = (x: number, y: number) => x + (y - x) * a;

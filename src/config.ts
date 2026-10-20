@@ -310,6 +310,39 @@ export const TUNING = {
     /** A championship round's chance of being wet, and of being damp. */
     seasonWeather: { wet: 0.25, damp: 0.25 },
   },
+  /** Race replays: the race's moments (`race/raceMoments.ts`) and the director (`replay/director.ts`). */
+  replay: {
+    moments: {
+      /** A change of places counts as a pass once it has held this long (s): side by side, they swap back and forth. */
+      passHold: 1,
+      /** A spin: body slip past this (rad) above this speed (m/s); one per car in `gap` (s). */
+      spin: { angle: 1.2, speed: 8, gap: 5 },
+      /** A contact worth showing: an impulse past this (N·s) in one step; one per car in `gap` (s). */
+      contact: { impulse: 400, gap: 3 },
+      /** A car moved further than this between frames (m) was put back on the track. */
+      recoverJump: 15,
+    },
+    director: {
+      /** How much each kind of moment is worth showing (the race's winner taking the flag gets `winner` more). */
+      interest: { spin: 6, pass: 5, contact: 3, stop: 2, finish: 4, fastestLap: 1, recovered: 0, start: 3, lastLap: 0 },
+      winner: 4,
+      /** A moment is shown from this long before it (s) to this long after. */
+      lead: 3,
+      after: 2,
+      /** A moment worth at least this cuts in on a shot that isn't of a moment (once it has run `minShot`). */
+      cutIn: 4,
+      /** Every shot runs at least this long (s); a battle or the fallback holds this long. */
+      minShot: 3,
+      hold: 8,
+      /** Two cars this close on the road (s) are a battle. */
+      battleGap: 1,
+      /** Every third shot is from the car (onboard, or chasing it if it is spinning) rather than the TV cameras. */
+      inCarEvery: 3,
+    },
+    /** Replay controls: a skip (s), and a jump to a moment lands this long before it (s). */
+    skip: 5,
+    jumpLead: 2,
+  },
   /** Car setup (`vehicle/setup.ts`): clicks either way from the car's own numbers, and what one click changes. */
   setup: {
     clicks: 5,

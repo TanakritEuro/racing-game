@@ -16,6 +16,10 @@ import { KESTREL } from '../vehicle/cars';
 import type { Conditions } from '../track/weather';
 import type { WearRate } from '../vehicle/wear';
 import { PitCalls } from './pitCalls';
+import { MomentWatcher } from './raceMoments';
+import { RaceRecorder } from './raceRecording';
+import { createRecordedState, type RecordedState } from './recording';
+import { copyPose } from '../vehicle/pose';
 
 export interface RaceOptions {
   /** AI cars (0–7). */
@@ -90,6 +94,10 @@ export class Race {
   controls: readonly Controls[] = [];
   /** AI cars put back on the track so far (stuck, spun into a gravel trap). */
   recoveries = 0;
+  /** Every car through the race, and its moments, for the replay. */
+  readonly recorder: RaceRecorder;
+  private readonly watcher: MomentWatcher;
+  private readonly states: RecordedState[];
   /** Simulation time the countdown began. */
   private gridTime = 0;
   /** Laps each car had done when the leader took the flag. */  /** The first time any car reached each checkpoint (simulation time). */
@@ -117,6 +125,9 @@ export class Race {
     this.traffic = new Traffic(track, this.sim.cars, def);
     this.finishTimes = this.sim.cars.map(() => null);
     this.lightsOutAt = this.drawLightsOut();
+    this.recorder = new RaceRecorder(track.def.id, this.sim.cars.map((c) => c.def.name), options.laps);
+    this.watcher = new MomentWatcher(this.recorder, count);
+    this.states = this.sim.cars.map(() => createRecordedState());
   }
 
   /** Laps in the race. */
@@ -166,6 +177,8 @@ export class Race {
     this.finishTimes.fill(null);
     this.checkpoints.clear();
     this.lightsOutAt = this.drawLightsOut();
+    this.recorder.reset();
+    this.watcher.reset();
   }
 
   /** One step: the player's controls, the AI's own, and the race around them. */
@@ -195,8 +208,35 @@ export class Race {
       this.phase = 'racing';
       this.startTime = sim.time;
     }
-    if (this.phase === 'racing') this.score();
+    if (this.phase === 'racing') {
+      this.score();
+      this.record();
+    }
   }
+
+  /** The step into the recording: the moments it brought, and every car's frame. */
+  private record(): void {
+    const { sim, recorder } = this;
+    const due = recorder.due;
+    this.watcher.afterStep(this, due);
+    if (!due) {
+      recorder.capture(this.states, this.progressNow);
+      return;
+    }
+    sim.cars.forEach((car, k) => {
+      const s = this.states[k];
+      copyPose(sim.poses[k].current, s.pose);
+      s.speed = car.speed;
+      s.rpm = car.drivetrain.rpm;
+      s.gear = car.drivetrain.gearbox.nextGear;
+      s.throttle = this.controls[k]?.throttle ?? 0;
+      s.brake = this.controls[k]?.brake ?? 0;
+      this.progressNow[k] = this.progressOf(k);
+    });
+    recorder.capture(this.states, this.progressNow);
+  }
+
+  private readonly progressNow: number[] = [];
 
   /** Every car's place: finishers in the order they took the flag, then the rest by progress. */
   standings(): Standing[] {
@@ -204,7 +244,7 @@ export class Race {
     const now = sim.time;
     const rows = sim.cars.map((_, k) => {
       const timer = sim.timers[k];
-      const progress = this.progress(k);
+      const progress = this.progressOf(k);
       return {
         car: k,
         position: 0,
@@ -243,8 +283,8 @@ export class Race {
     return rows;
   }
 
-  /** Laps completed plus the fraction of the current lap (negative until the line). */
-  private progress(k: number): number {
+  /** Car `k`'s laps completed plus the fraction of the current lap (negative until the line). */
+  progressOf(k: number): number {
     const timer = this.sim.timers[k];
     const pos = this.traffic.positions[k];
     const fraction = pos.distance / this.track.length;
@@ -258,7 +298,7 @@ export class Race {
     const { sim, options } = this;
     const now = sim.time;
     sim.cars.forEach((_, k) => {
-      const key = Math.floor((this.progress(k) * this.track.length) / CHECKPOINT);
+      const key = Math.floor((this.progressOf(k) * this.track.length) / CHECKPOINT);
       if (!this.checkpoints.has(key)) this.checkpoints.set(key, now);
       if (this.finishTimes[k] !== null) return;
       const laps = sim.timers[k].laps;
