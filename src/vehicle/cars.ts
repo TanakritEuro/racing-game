@@ -94,8 +94,9 @@ export const KESTREL: CarDef = {
     frontBias: 0.62, // the front axle's share of the load at ~1 g: the fronts still lock first
     handbrakeTorque: 1500,
   },
-  // A rich racing mixture: ~0.35 kg per kWh (~0.21 kg/km on Harrowmere); the tank ahead of the rear axle.
-  fuel: { burn: 0.35, tankZ: 1, perKm: 0.25 },
+  // A rich racing mixture: ~0.35 kg per kWh (~0.21 kg/km on Harrowmere, ~0.31 on the stop-start
+  // Proving Ground: a race fills for 0.35 kg/km); the tank ahead of the rear axle.
+  fuel: { burn: 0.35, tankZ: 1, perKm: 0.35 },
   aids: {
     abs: { slip: 1, release: 12, apply: 5, minSpeed: 2 },
     tc: { slip: 1.2, minSlipSpeed: 0.5, cut: 10, restore: 6 },

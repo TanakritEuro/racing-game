@@ -9,7 +9,7 @@ import type { Settings } from '../settings';
 import { CONDITIONS, type Conditions } from '../track/weather';
 import { WEAR_RATES, type WearRate } from '../vehicle/wear';
 
-export type Mode = 'trial' | 'race' | 'season' | 'online';
+export type Mode = 'trial' | 'race' | 'season' | 'online' | 'career';
 
 /** A championship in progress, for the start menu. */
 export interface SeasonInfo {
@@ -119,6 +119,9 @@ export class Menu {
     this.choiceButton(modeRow, 'Race', () => choice.mode === 'race', () => (choice.mode = 'race'));
     this.choiceButton(modeRow, 'Championship', () => choice.mode === 'season', () => (choice.mode = 'season'));
     this.choiceButton(modeRow, 'Online', () => choice.mode === 'online', () => (choice.mode = 'online'));
+    this.choiceButton(modeRow, 'Career', () => choice.mode === 'career', () => (choice.mode = 'career'));
+    const careerInfo = div(this.start, 'menu-help', 'Climb three series, each a step up in car, rivals and race length: finish a season in the top three to move up. Every race pays, and the money buys upgrades.');
+    this.refresh.push(() => careerInfo.classList.toggle('hidden', choice.mode !== 'career'));
 
     // Online: host (pick the circuit and laps, get a code) or join (type the code).
     const onlineRows = div(this.start, 'menu-group');
@@ -233,7 +236,7 @@ export class Menu {
       cont.classList.toggle('hidden', !continuing);
       if (s) cont.textContent = `Continue: round ${s.round} of ${s.rounds} · P${s.position}, ${s.points} pts`;
       const online = choice.mode === 'online';
-      start.textContent = continuing ? 'New championship' : online ? (choice.online === 'host' ? 'Host' : 'Join') : 'Start';
+      start.textContent = continuing ? 'New championship' : online ? (choice.online === 'host' ? 'Host' : 'Join') : choice.mode === 'career' ? 'Open career' : 'Start';
       start.classList.toggle('menu-go', !continuing);
       start.disabled = online && choice.online === 'join' && choice.code.length !== 4;
     });

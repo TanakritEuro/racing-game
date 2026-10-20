@@ -31,14 +31,17 @@ export class StandingsScreen {
     return !this.root.classList.contains('hidden');
   }
 
-  show(season: Season): void {
+  /** `extra`: a career's series name, lines about the prize and promotion, and where Back goes. */
+  show(season: Season, extra: { title?: string; notes?: string[]; back?: string } = {}): void {
     const rows = standings(season);
     const done = season.results.length;
     const over = done >= season.rounds.length;
     this.panel.innerHTML = '';
     const last = season.rounds[done - 1];
-    div(this.panel, 'menu-title', over ? 'CHAMPIONSHIP: FINAL' : 'CHAMPIONSHIP');
+    const title = extra.title ?? 'CHAMPIONSHIP';
+    div(this.panel, 'menu-title', over ? `${title}: FINAL` : title);
     div(this.panel, 'menu-help', `After round ${done} of ${season.rounds.length}${last ? `, ${this.circuitName(last.track)}` : ''}`);
+    for (const note of extra.notes ?? []) div(this.panel, 'standings-note', note);
     if (over) {
       const champion = rows[0];
       div(this.panel, 'standings-champion', champion.entry === 0 ? 'You are the champion!' : `${this.name(champion.entry)} is the champion`);
@@ -81,9 +84,9 @@ export class StandingsScreen {
     if (!over) {
       const next = season.rounds[done];
       button(actions, `Next round: ${this.circuitName(next.track)}`, 'menu-go').addEventListener('click', () => this.events.onNext());
-      button(actions, 'Back to menu').addEventListener('click', () => this.events.onMenu());
+      button(actions, extra.back ?? 'Back to menu').addEventListener('click', () => this.events.onMenu());
     } else {
-      button(actions, 'Back to menu', 'menu-go').addEventListener('click', () => this.events.onMenu());
+      button(actions, extra.back ?? 'Back to menu', 'menu-go').addEventListener('click', () => this.events.onMenu());
     }
     this.root.classList.remove('hidden');
   }

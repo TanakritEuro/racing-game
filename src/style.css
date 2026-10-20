@@ -1325,3 +1325,114 @@ body.touch #minimap {
     height: 56px;
   }
 }
+
+/* The career screen. */
+.career {
+  width: min(820px, calc(100vw - 32px));
+  /* Opaque: it opens over the start menu. */
+  background: rgb(14, 20, 30);
+}
+
+.career-money {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  color: #f0c419;
+}
+
+.career-ladder {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.career-series {
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  text-align: center;
+}
+
+.career-series.current {
+  border-color: #f0c419;
+}
+
+.career-series.locked {
+  opacity: 0.45;
+}
+
+.career-series-name {
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.career-status {
+  font-size: 12px;
+  font-weight: 700;
+  margin: 2px 0;
+}
+
+.career-season,
+.career-garage {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.career-season-title {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 13px;
+}
+
+.career-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.career-row.me {
+  color: #ffd54a;
+  font-weight: 700;
+}
+
+.career-car {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.career-upgrade {
+  display: grid;
+  grid-template-columns: 90px 60px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.career-upgrade-level {
+  letter-spacing: 0.15em;
+  color: #f0c419;
+}
+
+.standings-note {
+  text-align: center;
+  font-weight: 700;
+  color: #ffd54a;
+}
+
+@media (max-width: 640px) {
+  .career-ladder {
+    grid-template-columns: 1fr;
+  }
+}

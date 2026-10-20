@@ -27,6 +27,11 @@ import { Menu } from './ui/menu';
 import { StandingsScreen } from './ui/standings';
 import { finishingOrder, newSeason, nextRound, recordRound, roundRace, seasonOver, standings } from './race/championship';
 import { loadSeason, saveSeason } from './storage/season';
+import { loadCareer, saveCareer } from './storage/career';
+import { buyUpgrade, newCareer, recordCareerRound, SERIES, startSeries } from './race/career';
+import { applyUpgrades, noUpgrades } from './vehicle/upgrades';
+import { CareerScreen } from './ui/careerScreen';
+import { TUNING } from './config';
 import { GameAudio, type Listener } from './audio';
 import { Sound } from './audio/sound';
 import { placeTvCameras } from './track/cameras';
@@ -106,9 +111,12 @@ function findCircuit(id: string | null): TrackDef | null {
 // connect first; the host's choice of circuit, laps and AI field comes back from the handshake.
 const onlinePanel = params.has('online') ? new OnlinePanel(document.body) : null;
 const connected = onlinePanel ? await connect(params.get('online') === 'join') : null;
+// A career round (?career): its season's next round, in your car with its upgrades.
+let career = connected || !params.has('career') ? null : loadCareer();
+if (career && seasonOver(career.season)) career = null;
 // A championship round (?season): the saved season's next round, on its circuit, in its car.
-let season = connected ? null : loadSeason();
-const seasonRound = params.has('season') && season && !seasonOver(season) ? roundRace(season) : null;
+let season = connected ? null : career ? career.season : loadSeason();
+const seasonRound = (params.has('season') || career) && season && !seasonOver(season) ? roundRace(season) : null;
 if (!seasonRound) season = null;
 const fromUrl = seasonRound !== null || connected !== null || ['track', 'car', 'mode'].some((k) => params.has(k));
 const circuit =
@@ -124,7 +132,8 @@ const carId = connected ? connected.setup.mine.toLowerCase() : season ? season.c
 const carDef = CARS.find((c) => c.name.toLowerCase() === carId) ?? KESTREL;
 const setups = new SetupStore();
 const setup: Setup = params.get('setup') === 'default' ? {} : setups.load(circuit.id, carDef.name);
-const playerDef = applySetup(carDef, setup);
+// In a career, your car also carries its upgrades.
+const playerDef = applyUpgrades(applySetup(carDef, setup), career?.garage[carDef.name] ?? noUpgrades());
 // The weather: the host's online, the round's in a championship, else ?weather=dry|damp|wet.
 const conditions: Conditions = connected ? connected.setup.conditions : seasonRound ? (seasonRound.options.conditions ?? 'dry') : linkConditions(params);
 const wet = wetness(conditions);
@@ -255,8 +264,8 @@ const colourOf = (entry: number) => `#${(entry === 0 ? 0xe0b020 : AI_COLOURS[(en
 const standingsScreen = new StandingsScreen(
   document.body,
   {
-    onNext: () => goTo({ season: '' }),
-    onMenu: () => goTo({}),
+    onNext: () => goTo(career ? { career: '' } : { season: '' }),
+    onMenu: () => goTo(career ? { menu: 'career' } : {}),
   },
   carName,
   colourOf,
@@ -375,6 +384,10 @@ const menu = new Menu(
     onStart(choice) {
       settings.start = choice;
       saveSettings(settings);
+      if (choice.mode === 'career') {
+        careerScreen.show(loadCareer());
+        return;
+      }
       if (choice.mode === 'season') {
         const current = loadSeason();
         if (current && !seasonOver(current) && !window.confirm(`Start a new championship? The one in progress (round ${nextRound(current) + 1} of ${current.rounds.length}) will be lost.`)) return;
@@ -446,7 +459,44 @@ const menu = new Menu(
   })),
   settings,
 );
-if (!fromUrl) menu.showStart();
+// The career screen: from the start menu, or straight back to it after a round (?menu=career).
+const careerScreen = new CareerScreen(
+  document.body,
+  {
+    race: () => goTo({ career: '' }),
+    startSeries(i) {
+      const c = loadCareer();
+      if (!c) return;
+      const next = startSeries(c, i);
+      saveCareer(next);
+      careerScreen.show(next);
+    },
+    buy(car, kind) {
+      const c = loadCareer();
+      const next = c && buyUpgrade(c, car, kind);
+      if (!next) return;
+      saveCareer(next);
+      careerScreen.show(next);
+    },
+    newCareer() {
+      const c = loadCareer();
+      if (c && !window.confirm('Start a new career? This one, its money and upgrades will be lost.')) return;
+      const next = newCareer(1 + Math.floor(Math.random() * 2 ** 30));
+      saveCareer(next);
+      careerScreen.show(next);
+    },
+    close() {
+      careerScreen.hide();
+      menu.showStart();
+    },
+  },
+  (k) => (k === 0 ? 'You' : AI_NAMES[k - 1]),
+  (id) => findCircuit(id)?.name ?? id,
+);
+if (params.get('menu') === 'career') {
+  menu.showStart();
+  careerScreen.show(loadCareer());
+} else if (!fromUrl) menu.showStart();
 const garage = new Garage(document.body);
 if (online) {
   menu.setOnline();
@@ -714,16 +764,31 @@ function updateHud(dt: number): void {
   const racing = race ?? online;
   if (racing) raceHud?.update(racing);
   if (online) onlinePanel?.setStatus(onlineStatus(online));
-  // A championship round over: count it, save the season, and show the standings.
+  // A championship (or career) round over: count it, save it, and show the standings.
   if (season && race && race.phase === 'finished' && !recorded) {
     recorded = true;
     // It can't be run again, so not set up again either.
     menu.allowSetup(false);
-    season = recordRound(season, finishingOrder(race.standings()));
-    saveSeason(season);
-    if (seasonOver(season)) menu.setSeason(null);
     document.body.classList.add('standings-up');
-    standingsScreen.show(season);
+    if (career) {
+      const result = recordCareerRound(career, finishingOrder(race.standings()));
+      career = result.career;
+      season = career.season;
+      saveCareer(career);
+      const notes = [`Prize money: ${result.prize.toLocaleString('en-GB')} cr (${result.position === 1 ? 'a win' : `P${result.position}`}).`];
+      if (result.final) {
+        if (result.final.bonus > 0) notes.push(`Season bonus for P${result.final.position}: ${result.final.bonus.toLocaleString('en-GB')} cr.`);
+        if (result.final.complete) notes.push('You are the Grand Champion: your career is complete!');
+        else if (result.final.promoted) notes.push(`Promoted: the ${result.final.promoted.name} is open, and the ${result.final.promoted.car} is yours.`);
+        else if (result.final.position > TUNING.career.promotion) notes.push(`A top ${TUNING.career.promotion} finish moves you up: run the series again.`);
+      }
+      standingsScreen.show(season, { title: SERIES[career.series].name.toUpperCase(), notes, back: 'Career' });
+    } else {
+      season = recordRound(season, finishingOrder(race.standings()));
+      saveSeason(season);
+      if (seasonOver(season)) menu.setSeason(null);
+      standingsScreen.show(season);
+    }
   }
 }
 
