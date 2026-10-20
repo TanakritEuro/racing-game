@@ -19,8 +19,14 @@ const MODEL_FOR: Record<string, string> = {
   Osprey: 'race-future',
 };
 
-/** Parts left off: the spare wheel on the suv's tailgate (the Finch is a hot hatch). */
+/** Parts left off, wherever they are in the model: the spare wheel on the suv's tailgate (the Finch is a hot hatch). */
 const LEFT_OFF = ['wheel-back'];
+
+/**
+ * The palette cell of a model's paint, where the rule (the colourful cell most of the body
+ * uses) would pick its trim: the suv's paint is a pale blue-grey, its trim green.
+ */
+const PAINT_CELL: Record<string, number> = { suv: 131 };
 
 /** Wheel node names in the order of `Car.wheels`: front left, front right, rear left, rear right. */
 const WHEEL_NODES = ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right'];
@@ -54,19 +60,20 @@ export async function loadCarModel(def: CarDef, colour: number): Promise<CarMode
   try {
     let file = files.get(name);
     if (!file) files.set(name, (file = loader.loadAsync(`${import.meta.env.BASE_URL}models/cars/${name}.glb`)));
-    return fit((await file).scene, def, colour);
+    return fit((await file).scene, def, colour, PAINT_CELL[name]);
   } catch (e) {
     console.warn(`Car model ${name} didn't load; drawing the placeholder.`, e);
     return null;
   }
 }
 
-function fit(scene: THREE.Object3D, def: CarDef, colour: number): CarModel {
+function fit(scene: THREE.Object3D, def: CarDef, colour: number, paintCell?: number): CarModel {
   const source = scene.clone(true);
   source.rotation.y = Math.PI;
   source.updateMatrixWorld(true);
   const wheelNodes = WHEEL_NODES.map((n) => source.getObjectByName(n));
-  const bodyParts = source.children.filter((c) => !WHEEL_NODES.includes(c.name) && !LEFT_OFF.includes(c.name));
+  for (const name of LEFT_OFF) source.getObjectByName(name)?.removeFromParent();
+  const bodyParts = source.children.filter((c) => !WHEEL_NODES.includes(c.name));
   if (wheelNodes.some((w) => !w) || bodyParts.length === 0) throw new Error('unexpected model layout');
 
   // Wheel centres in the turned model, and the body's extent.
@@ -116,7 +123,7 @@ function fit(scene: THREE.Object3D, def: CarDef, colour: number): CarModel {
     return holder;
   });
 
-  paint(body, colour);
+  paint(body, colour, paintCell);
 
   // Cameras: above the bonnet (a ray down onto the body), and just ahead of the nose.
   body.updateMatrixWorld(true);
@@ -137,8 +144,8 @@ function fit(scene: THREE.Object3D, def: CarDef, colour: number): CarModel {
 
 const painted = new Map<string, THREE.Texture>();
 
-/** Repaint the body's paint cell in `colour`, keeping the palette's shading. */
-function paint(body: THREE.Object3D, colour: number): void {
+/** Repaint the body's paint cell (`forced`, or found) in `colour`, keeping the palette's shading. */
+function paint(body: THREE.Object3D, colour: number, forced?: number): void {
   const meshes: THREE.Mesh[] = [];
   body.traverse((o) => {
     if (o instanceof THREE.Mesh) meshes.push(o);
@@ -182,9 +189,9 @@ function paint(body: THREE.Object3D, colour: number): void {
     const n = (CELL_W / 4) * (CELL_H / 4);
     return new THREE.Color(r / n / 255, g / n / 255, b / n / 255);
   };
-  let paintCell = -1;
+  let paintCell = forced ?? -1;
   let most = 0;
-  for (const [key, count] of counts) {
+  for (const [key, count] of forced === undefined ? counts : []) {
     const hsl = cellMean(key).getHSL({ h: 0, s: 0, l: 0 });
     if (hsl.s > 0.35 && hsl.l > 0.2 && count > most) {
       most = count;
