@@ -26,7 +26,7 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 Milestones 1–14 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing, car setup, weather, tyre
 wear and pit stops, a track editor, touch controls, career mode) are done; **Milestone 15 (front-
-and all-wheel drive) is planned** (`docs/milestone-15.md`).
+and all-wheel drive) is built and in playtesting** (`docs/milestone-15.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -63,8 +63,12 @@ mistakes and a skill spread by difficulty (`?difficulty=easy|medium|hard`), and 
 (following, passing where there is room, conceding, keeping a car's width). No
 rubber-banding. `?opponents=0..7`, `?laps=N`, `?seed=N`.
 
-Three cars (`vehicle/cars.ts`): Wren (light roadster), Kestrel (the reference) and Harrier
-(a powerful GT), drawn with Kenney's CC0 Car Kit models fitted to each car and repainted
+Five cars (`vehicle/cars.ts`): Wren (light roadster), Finch (front-wheel-drive hot hatch),
+Kestrel (the reference), Osprey (all-wheel-drive coupé) and Harrier (a powerful GT). A car's
+`drivetrain.layout` is `rwd`, `fwd` or `awd`; all-wheel drive goes through a centre
+differential with a torque split (`drivetrain.centre`) and a differential on each axle, all in
+the drivetrain's substep solver. Traction control, the gearbox's speed, telemetry and the AI's
+traction share follow the layout; an AWD car's setup has a centre split. Drawn with Kenney's CC0 Car Kit models fitted to each car and repainted
 (`render/carModels.ts`, placeholder if they fail to load; `ASSETS.md`). Skid marks, tyre
 smoke and sparks (`render/effects/`, pooled; sparks from the simulation's contact events,
 `sim.contacts`). Synthesised sound (`audio/`): engines from RPM and throttle (yours and the
@@ -241,7 +245,8 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/vehicle/engine.ts`, `gearbox.ts`, `differential.ts` — torque curve and engine braking;
   ratios and shift timing; locking torque for open / locked / limited-slip.
 - `src/vehicle/drivetrain.ts` — automatic and manual shifting, automatic clutch, idle and
-  limiter, and the substep solver coupling engine, clutch, diff, brakes and driven wheels.
+  limiter, and the substep solver coupling engine, clutch, diff, brakes and driven wheels
+  (`substep` for two driven wheels, `substepAwd` for four through the centre differential).
 - `src/track/validate.ts` — `validateTrack`: every circuit rule, each problem with where it is;
   `custom.ts` — custom circuits → `TrackDef`, `autoPitLane`, `cleanCustom`, templates.
 - `src/editor/` — the track editor: `index.ts` (`openEditor`), `state.ts`, `mapView.ts`, `panels.ts`;

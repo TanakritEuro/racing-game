@@ -1,6 +1,58 @@
 # Milestone 15 plan: front- and all-wheel drive
 
-## Status: planned, waiting for your approval
+## Status: built, in playtesting
+
+Approved as written: two new cars, the career unchanged.
+
+Measured (headless):
+
+| Car | 0–100 km/h | Top speed | 100–0 | Skidpad | AI lap, Proving Ground |
+| --- | --- | --- | --- | --- | --- |
+| Finch (FWD) | 6.7 s | 236 km/h | 40.2 m | 0.96 g | 51.0 s |
+| Osprey (AWD) | 3.9 s | 272 km/h | 37.6 m | 1.01 g | 48.7 s |
+
+With traction control off the Finch spins only its fronts, and the Osprey is the quickest of
+the five to 100 km/h. In the wet it loses the least: 3.9 → 4.5 s. Circling the skidpad at
+~0.75 g and going to full throttle, the Finch's front slip angle grows against the rear's
+(power understeer), the Kestrel's shrinks (it turns in), and the Osprey sits between them.
+The AI laps all four circuits cleanly in both cars. Flying laps: Finch 102.1 / 90.5 / 102.7 /
+51.0 s, Osprey 95.9 / 85.9 / 97.5 / 48.7 s (Harrowmere, Saltmarsh, Ridgeback, Proving Ground).
+The Kestrel, Wren and Harrier measure as before.
+Checked in the browser: the start menu's five car cards with their layouts; the Osprey on
+the Proving Ground pulling away with 954 / 1567 N·m on each front / rear wheel (its 38 : 62
+split) and drive torque on all four in the telemetry; the Finch driving its fronts only; the
+Osprey's garage with its drive split and the centre split row. No console errors.
+
+Where the build differs from the plan below:
+
+- **The Osprey's centre differential is gentle:** limited-slip with a 25 N·m preload and a
+  0.2 ramp, not a strong lock. With a strong one, and the AI counting on all four wheels'
+  grip for drive, the Osprey spun in the Proving Ground's fast corner every lap. Either
+  alone was fine. The AI now counts an LSD centre's traction between an open and a locked
+  one's (`tractionShare`). Less power than planned (~260 kW, 440 N·m): at 300 kW it reached
+  100 km/h in 3.6 s.
+- **The Finch has a rear spoiler** and a softer rear anti-roll bar than first written (12 000
+  against 17 000 N/m). Lifting at 210 km/h in Harrowmere's long bend, its light rear stepped
+  out and the AI spun it every lap. It still tightens its line when you lift; less violently.
+- **The AI keeps a margin in fast corners** (`TUNING.ai.envelope.fast`: up to 5 % of the grip,
+  from 160 to 235 km/h) and counts downforce by the axle with the least of it for its share of
+  the weight, at 60 % (`aeroCredit`). The Osprey (and the Harrier) took Harrowmere's 400 m
+  bend at ~235 km/h right on the limit; on its bumps the loads swing ±25 % and the front
+  washed out. The Kestrel's lap times barely moved (Harrowmere 104.0 s).
+- **Traction control and the automatic clutch:** pulling away, the clutch now carries only
+  what traction control leaves of the engine's torque, and it doesn't latch fully in while
+  TC is cutting. TC-on launches spin less (Wren 4.8 → 3.3 m/s, Harrier 4.9 → 4.0), but
+  not zero: the Finch's light front still spins ~8 m/s for a moment. The test asks for less
+  than half the TC-off wheelspin, not none.
+- **Not fixed: the Harrier at Harrowmere.** The hard AI still loses the Harrier's rear in
+  that bend: its throttle hunts on and off at 225 km/h. This was already happening before
+  this milestone; the Harrier's soak test only runs the Proving Ground. Worth its own look,
+  since the Grand Championship opens at Harrowmere in the Harrier.
+- **The high-wear soak's own car is put back on the track** like the AI's, inside the same
+  allowance of two. It spun on worn tyres at Saltmarsh's last corner and sat against the
+  wall, since nothing recovered it.
+- **Models:** the Finch is the kit's `suv` without the spare wheel on its tailgate, painted
+  on its pale body colour (the usual rule picked its green trim); the Osprey is `race-future`.
 
 Every car today is rear-wheel drive: `car.ts` drives wheels 2 and 3 through one
 differential, and the AI's envelope assumes the rear axle puts the power down. The three

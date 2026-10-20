@@ -3,10 +3,11 @@
 A 3D racing game for the browser with real car physics, built with Three.js, Rapier and TypeScript.
 Three invented circuits: fast Harrowmere, tight Saltmarsh and hilly Ridgeback. Time trial
 with sectors, a live delta, a ghost of your best lap (kept in the browser) and replays from
-trackside cameras. Race up to seven AI drivers who drive the same car you do. Three cars,
-synthesised engine and tyre sounds, skid marks, smoke and sparks. A four-round championship
-against the same seven drivers, kept between visits. Race a friend online: one hosts and
-gets a four-character room code, the other joins with it, with or without AI drivers. Set
+trackside cameras. Race up to seven AI drivers who drive the same car you do. Five cars,
+rear-, front- and all-wheel drive; synthesised engine and tyre sounds, skid marks, smoke and
+sparks. A four-round championship against the same seven drivers, kept between visits. Race
+a friend online: one hosts and gets a four-character room code, the other joins with it,
+with or without AI drivers. Set
 your car up in the garage (springs, anti-roll bars, dampers, ride height, wings, brake bias,
 differential, gearing) for each circuit. Race in the dry, the damp or the wet: less grip,
 slippery kerbs, standing water that floats the car at speed, rain and spray. In longer races
