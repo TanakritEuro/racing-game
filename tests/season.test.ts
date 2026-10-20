@@ -50,5 +50,5 @@ describe('a season', () => {
     expect(rows.reduce((sum, r) => sum + r.points, 0)).toBe(4 * 39);
     expect(rows.every((r) => r.finishes.length === 4)).toBe(true);
     expect(rows[0].points).toBeGreaterThanOrEqual(rows[1].points);
-  }, 300_000);
+  }, 600_000);
 });

@@ -21,7 +21,7 @@ import { wetness, type Conditions } from '../track/weather';
 import { controls, type Car, type Controls } from '../vehicle/car';
 import { usableLock } from '../drivers/steeringAssist';
 import type { CarDef } from '../vehicle/carDef';
-import { carEnvelope, gripAt, type CarEnvelope } from './envelope';
+import { carEnvelope, fastMu, gripAt, type CarEnvelope } from './envelope';
 import { racingLine, type RacingLine } from './racingLine';
 import { speedProfile } from './speedProfile';
 import { brakeEarlier, gaussian, PERFECT, type Skill } from './skill';
@@ -142,7 +142,7 @@ export class AiDriver {
       // car slides its rear out (or a front-driven one runs wide) before the wheels spin enough
       // for traction control to notice.
       const env = this.env;
-      const grip = gripAt(env, env.lateralMu, v);
+      const grip = gripAt(env, fastMu(env.lateralMu, v), v);
       const lateral = v * v * Math.abs(line.curvature[this.index]);
       const spare = env.traction * Math.sqrt(Math.max(0, grip * grip - lateral * lateral));
       throttle = Math.min(throttle, Math.max(D.cruiseThrottle, (spare + env.drag * v * v) / available));

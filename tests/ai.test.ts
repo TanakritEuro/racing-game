@@ -10,7 +10,8 @@ import { Simulation } from '../src/sim';
 import { CIRCUITS } from '../src/track/circuits';
 import { barrierOffset } from '../src/track/geometry';
 import { buildTrack, lateralOffset } from '../src/track/track';
-import { KESTREL } from '../src/vehicle/cars';
+import { FINCH, KESTREL, OSPREY } from '../src/vehicle/cars';
+import type { CarDef } from '../src/vehicle/carDef';
 import { customDef, ovalTemplate } from '../src/track/custom';
 import { validateTrack } from '../src/track/validate';
 
@@ -83,6 +84,37 @@ describe.each(CIRCUITS.map((c) => [c.name, c] as const))('AI at %s', (_, def) =>
     const { line, env } = circuitAi(track, KESTREL);
     const predicted = profileLapTime(line, speedProfile(line, env));
     expect(laps[2].time / predicted).toBeLessThan(1.06);
+  }, 300_000);
+});
+
+/** Flying laps for a hard AI in the front- and all-wheel-drive cars (s): measured, ±4 %. */
+const LAYOUT_LAPS: [CarDef, Record<string, number>][] = [
+  [FINCH, { harrowmere: 102.1, saltmarsh: 90.5, ridgeback: 102.7, 'proving-ground': 51.0 }],
+  [OSPREY, { harrowmere: 95.9, saltmarsh: 85.9, ridgeback: 97.5, 'proving-ground': 48.7 }],
+];
+
+describe.each(LAYOUT_LAPS.flatMap(([car, laps]) => CIRCUITS.map((c) => [`${car.name} at ${c.name}`, car, c, laps[c.id]] as const)))('AI in the %s', (_, car, def, target) => {
+  it('laps twice cleanly within its target time', async () => {
+    await initPhysics();
+    const track = buildTrack(def);
+    const sim = new Simulation(track, car);
+    const ai = createAiDriver(track, car);
+    let recoveries = 0;
+    const valid: boolean[] = [];
+    for (let k = 0; k < 400 * 120 && sim.timer.laps < 2; k++) {
+      sim.step(ai.drive(sim.car, PHYSICS_STEP));
+      if (ai.stuck) {
+        recoveries++;
+        sim.recover();
+        ai.recovered();
+      }
+      if (sim.timer.laps > valid.length) valid.push(sim.timer.lastValid);
+    }
+    expect(sim.timer.laps).toBe(2);
+    expect(valid).toEqual([true, true]);
+    expect(recoveries).toBe(0);
+    expect(sim.timer.lastLap!).toBeGreaterThan(target * 0.96);
+    expect(sim.timer.lastLap!).toBeLessThan(target * 1.04);
   }, 300_000);
 });
 

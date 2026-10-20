@@ -368,6 +368,17 @@ export const TUNING = {
        * this much for the load that moves onto the rear under acceleration (`tractionShare`).
        */
       tractionTransfer: 0.08,
+      /**
+       * Share of the downforce the cornering limit counts on: fast corners come with crests
+       * and bumps that unload the car, and a slide at 230 km/h is hard to catch.
+       */
+      aeroCredit: 0.6,
+      /**
+       * Fast corners: the share of the grip given up, rising from nothing at `from` to all of
+       * `margin` at `to` (m/s). At speed the road's bumps swing the tyres' loads, and a tyre
+       * grips less on a swinging load than on a steady one.
+       */
+      fast: { from: 45, to: 65, margin: 0.05 },
       /** Share of the engine's ideal acceleration the car really gets: gearshifts cut the drive, and the automatic shifts late. Measured on the long oval. */
       power: 0.88,
     },

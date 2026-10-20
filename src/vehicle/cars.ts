@@ -252,5 +252,154 @@ export const HARRIER: CarDef = {
   },
 };
 
+/**
+ * Finch: a front-wheel-drive hot hatch, nose-heavy and short. Targets: 1150 kg, 61 % on the
+ * front axle, ~155 kW from a turbocharged four, about 7 s to 100 km/h, ~235 km/h, ~0.95 g.
+ * It understeers on the power (the front tyres drive and steer) and, with a stiff rear bar,
+ * tightens its line or steps its tail out when you lift.
+ */
+export const FINCH: CarDef = {
+  name: 'Finch',
+  mass: 1150,
+  // 61 % front: 0.28 m ahead of the middle of the 2.55 m wheelbase.
+  centreOfMass: { x: 0, y: -0.24, z: -0.28 },
+  halfExtents: { x: 0.88, y: 0.36, z: 2.0 },
+  wheelbaseHalf: 1.275,
+  trackHalf: 0.78,
+  mountHeight: -0.1,
+  steering: { lock: 0.6, rate: 3, ackermann: 0.6 },
+  suspension: {
+    // ~1.5 Hz at the heavy front, ~1.6 Hz at the rear; a stiffer rear bar for rotation.
+    front: { ...SPORT_SUSPENSION, stiffness: 31000, bump: 2950, rebound: 4600, antiRoll: 10000 },
+    rear: { ...SPORT_SUSPENSION, stiffness: 22500, bump: 2000, rebound: 3150, antiRoll: 12000 },
+  },
+  tyres: {
+    front: { ...SPORT_TYRE, radius: 0.32, width: 0.215, inertia: 0.85, mu: 1.08, nominalLoad: 2900 },
+    rear: { ...SPORT_TYRE, radius: 0.32, width: 0.215, inertia: 0.85, mu: 1.08, nominalLoad: 2900 },
+  },
+  engine: {
+    // A turbocharged four: 280 N·m from 3000 to 4500 rpm, ~155 kW at 5500.
+    torqueCurve: [
+      [1000, 160],
+      [2000, 225],
+      [2500, 270],
+      [3000, 280],
+      [4500, 280],
+      [5500, 265],
+      [6000, 240],
+      [6500, 210],
+      [7000, 180],
+    ],
+    friction: { base: 14, perRpm: 0.006 },
+    idleRpm: 850,
+    limiterRpm: 6700,
+    inertia: 0.11,
+    throttleMap: 2,
+    cylinders: 4,
+  },
+  clutch: { maxTorque: 450, engageRate: 6, launchRpm: 3000 },
+  gearbox: {
+    ratios: [3.25, 2.05, 1.5, 1.17, 0.95, 0.78],
+    reverse: 3.2,
+    finalDrive: 4.0,
+    efficiency: 0.93,
+    shiftTime: 0.2,
+    upshiftRpm: { light: 3000, full: 6500 },
+    downshiftRpm: { coast: 2000, full: 3800 },
+  },
+  // A gentle limited-slip diff on the front axle.
+  drivetrain: { layout: 'fwd' },
+  differential: { type: 'lsd', preload: 30, ramp: 0.25 },
+  brakes: { maxTorque: 4600, frontBias: 0.68, handbrakeTorque: 1300 },
+  aids: KESTREL.aids,
+  fuel: KESTREL.fuel,
+  aero: {
+    dragArea: 0.72,
+    // A rear spoiler: ~360 N at 200 km/h, most of it at the light rear, to keep it planted at speed.
+    lift: { front: -0.07, rear: -0.16 },
+  },
+  cameras: {
+    bumper: { x: 0, y: -0.05, z: -2.05 },
+    hood: { x: 0, y: 0.36, z: -0.7 },
+  },
+};
+
+/**
+ * Osprey: an all-wheel-drive coupé with a turbocharged six. Targets: 1420 kg, 53 % on the
+ * front axle, ~260 kW, about 4 s to 100 km/h, ~270 km/h, ~1.0 g. The centre differential
+ * sends 38 % of the drive to the front and, limited-slip, moves more to the axle that grips:
+ * it launches and leaves slow corners harder than anything else, most of all in the wet. With
+ * most of the drive at the rear it still turns on the power, and can be pushed into a slide.
+ */
+export const OSPREY: CarDef = {
+  name: 'Osprey',
+  mass: 1420,
+  // 53 % front: 0.081 m ahead of the middle of the 2.7 m wheelbase.
+  centreOfMass: { x: 0, y: -0.25, z: -0.081 },
+  halfExtents: { x: 0.95, y: 0.33, z: 2.2 },
+  wheelbaseHalf: 1.35,
+  trackHalf: 0.83,
+  mountHeight: -0.1,
+  steering: { lock: 0.58, rate: 3, ackermann: 0.6 },
+  suspension: {
+    // ~1.55 Hz.
+    front: { ...SPORT_SUSPENSION, stiffness: 35700, bump: 3300, rebound: 5130, antiRoll: 14000 },
+    rear: { ...SPORT_SUSPENSION, stiffness: 31600, bump: 2920, rebound: 4540, antiRoll: 18000 },
+  },
+  tyres: {
+    // The same size all round, so a locked centre differential doesn't fight itself.
+    front: { ...SPORT_TYRE, radius: 0.34, width: 0.245, inertia: 1.0, mu: 1.12, nominalLoad: 3500 },
+    rear: { ...SPORT_TYRE, radius: 0.34, width: 0.245, inertia: 1.0, mu: 1.12, nominalLoad: 3500 },
+  },
+  engine: {
+    // 440 N·m from 3000 to 5000 rpm, ~260 kW at 6000.
+    torqueCurve: [
+      [1000, 265],
+      [2000, 370],
+      [2500, 430],
+      [3000, 440],
+      [5000, 440],
+      [5500, 430],
+      [6000, 415],
+      [6500, 390],
+      [7000, 345],
+    ],
+    friction: { base: 20, perRpm: 0.008 },
+    idleRpm: 850,
+    limiterRpm: 7000,
+    inertia: 0.15,
+    throttleMap: 2,
+    cylinders: 6,
+  },
+  clutch: { maxTorque: 800, engageRate: 6, launchRpm: 3500 },
+  gearbox: {
+    ratios: [3.1, 2.1, 1.55, 1.22, 1.0, 0.83],
+    reverse: 3.0,
+    finalDrive: 3.9,
+    efficiency: 0.9,
+    shiftTime: 0.2,
+    upshiftRpm: { light: 3000, full: 6700 },
+    downshiftRpm: { coast: 2000, full: 3800 },
+  },
+  drivetrain: {
+    layout: 'awd',
+    centre: { split: 0.38, diff: { type: 'lsd', preload: 25, ramp: 0.2 } },
+    front: { type: 'open', preload: 0, ramp: 0 },
+  },
+  differential: { type: 'lsd', preload: 60, ramp: 0.28 },
+  brakes: { maxTorque: 7000, frontBias: 0.6, handbrakeTorque: 1600 },
+  aids: KESTREL.aids,
+  fuel: KESTREL.fuel,
+  aero: {
+    dragArea: 0.76,
+    // ~1200 N of downforce at 200 km/h, 40 % of it at the front.
+    lift: { front: -0.25, rear: -0.38 },
+  },
+  cameras: {
+    bumper: { x: 0, y: -0.05, z: -2.25 },
+    hood: { x: 0, y: 0.34, z: -0.85 },
+  },
+};
+
 /** Every car, in the order a menu lists them. */
-export const CARS: readonly CarDef[] = [WREN, KESTREL, HARRIER];
+export const CARS: readonly CarDef[] = [WREN, FINCH, KESTREL, OSPREY, HARRIER];

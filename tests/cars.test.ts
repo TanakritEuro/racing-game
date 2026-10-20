@@ -6,7 +6,7 @@ import { PHYSICS_STEP } from '../src/constants';
 import { TEST_CIRCUIT } from '../src/track/circuits';
 import { controls, NO_CONTROLS } from '../src/vehicle/car';
 import type { CarDef } from '../src/vehicle/carDef';
-import { CARS, HARRIER, KESTREL, WREN } from '../src/vehicle/cars';
+import { CARS, FINCH, HARRIER, KESTREL, OSPREY, WREN } from '../src/vehicle/cars';
 import { createSim, followLine, run, runUntil, skidpadLimit } from './helpers';
 import { LONG_OVAL, SKIDPAD } from './tracks';
 
@@ -24,6 +24,8 @@ interface Targets {
 const TARGETS = new Map<CarDef, Targets>([
   [WREN, { zeroTo100: [7.3, 8.6], topSpeed: [195, 212], stop: [39, 45], skidpad: [0.88, 0.98], aiLap: [52, 55.5] }],
   [HARRIER, { zeroTo100: [4.8, 5.9], topSpeed: [270, 292], stop: [35.5, 41], skidpad: [0.95, 1.06], aiLap: [47.5, 50.5] }],
+  [FINCH, { zeroTo100: [6.2, 7.3], topSpeed: [227, 244], stop: [37.5, 43], skidpad: [0.91, 1.0], aiLap: [49.5, 52.5] }],
+  [OSPREY, { zeroTo100: [3.5, 4.4], topSpeed: [262, 282], stop: [35, 40.5], skidpad: [0.96, 1.05], aiLap: [47, 50.5] }],
 ]);
 
 const within = (value: number, [lo, hi]: [number, number]) => {

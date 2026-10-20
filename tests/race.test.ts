@@ -90,11 +90,17 @@ describe('race', () => {
     const race = new Race(salt, { opponents: 3, laps: 10, difficulty: 'medium', seed: 9, wear: 'high' });
     const me = createAiDriver(salt, KESTREL, { pace: 0.94, braking: 1, precision: 0.1, mistakes: 0, aggression: 0.6 }, 78);
     const laps: number[][] = race.sim.cars.map(() => []);
+    let mine = 0;
     for (let k = 0; k < 1200 * 120 && race.phase !== 'finished'; k++) {
-      // The "player" answers the BOX call as the AI does.
+      // The "player" answers the BOX call as the AI does, and is put back on the track as the AI is.
       if (race.boxCalls[0] && !me.pit) me.pit = { lane: pitLane(salt)!, state: race.sim.pits!.state[0], leaving: false };
       race.traffic.advise(0, me, PHYSICS_STEP, race.sim.timer.laps < 1);
       race.step(race.phase === 'lights' ? controls({}) : me.drive(race.sim.car, PHYSICS_STEP));
+      if (me.stuck) {
+        mine++;
+        race.sim.recover();
+        me.recovered();
+      }
       race.sim.timers.forEach((t, c) => {
         if (t.laps > laps[c].length) laps[c].push(t.lastLap!);
       });
@@ -105,7 +111,7 @@ describe('race', () => {
     for (const r of rows) expect(r.stops).toBeGreaterThanOrEqual(1);
     // Ten laps on tyres going off: a spin or a car running wide into the end of the pit wall
     // can happen (and is put back); nobody is left stuck, in the lane or anywhere else.
-    expect(race.recoveries).toBeLessThanOrEqual(2);
+    expect(race.recoveries + mine).toBeLessThanOrEqual(2);
     // What a stop costs: the lane crosses the line, so it is spread over two laps (in on one,
     // out on the next); against the car's typical lap. (The first lap is from the grid.)
     for (const times of laps.slice(1)) {

@@ -16,6 +16,13 @@ export interface CarEnvelope {
   brakingMu: number;
   /** Downforce per unit of speed squared, over mass (1/m): downforce / m = downforce·v². */
   downforce: number;
+  /**
+   * The downforce cornering can use (1/m, as `downforce`): each axle has to hold its share
+   * of the car's weight sideways, so the end with the least downforce for its share of the
+   * weight sets the limit (a car with its downforce further back than its weight runs out of
+   * front grip first at speed); and only part of that (`aeroCredit`).
+   */
+  corneringDownforce: number;
   /** Drag per unit of speed squared, over mass (1/m), and rolling resistance (fraction of g). */
   drag: number;
   rolling: number;
@@ -43,6 +50,7 @@ export function carEnvelope(def: CarDef, wet = 0): CarEnvelope {
   const rearMu = frictionCoefficient(def.tyres.rear, (weight * (1 - frontShare)) / 2);
   const mu = (frontMu * frontShare + rearMu * (1 - frontShare)) * surfaceGrip('asphalt', wet, 0).grip;
   const lift = -(def.aero.lift.front + def.aero.lift.rear);
+  const balanced = Math.min(-def.aero.lift.front / frontShare, -def.aero.lift.rear / (1 - frontShare));
   const { engine, gearbox, clutch } = def;
   const radius = drivenTyre(def).radius;
   const rpmPerSpeed = 60 / (2 * Math.PI * radius);
@@ -68,6 +76,7 @@ export function carEnvelope(def: CarDef, wet = 0): CarEnvelope {
     lateralMu: mu * E.lateral,
     brakingMu: mu * E.braking,
     downforce: (0.5 * AIR_DENSITY * lift) / def.mass,
+    corneringDownforce: (0.5 * AIR_DENSITY * Math.max(0, balanced) * E.aeroCredit) / def.mass,
     drag: (0.5 * AIR_DENSITY * def.aero.dragArea) / def.mass,
     rolling: def.tyres.rear.rollingResistance,
     traction: tractionShare(def, frontShare),
@@ -79,8 +88,9 @@ export function carEnvelope(def: CarDef, wet = 0): CarEnvelope {
 /**
  * Share of the car's grip its driven wheels can use to accelerate: their axle's static
  * share of the weight, plus (rear) or minus (front) what moves back onto the rear under
- * acceleration. All-wheel drive uses all of it if its centre differential locks, and with
- * an open one only as much as the axle with the least grip for its share of the torque.
+ * acceleration. All-wheel drive with an open centre differential uses only as much as the
+ * axle with the least grip for its share of the torque; a locked one uses all of it, and a
+ * limited-slip one some of the rest, as much as its ramp moves the torque.
  */
 export function tractionShare(def: CarDef, frontShare: number): number {
   const transfer = TUNING.ai.envelope.tractionTransfer;
@@ -89,9 +99,18 @@ export function tractionShare(def: CarDef, frontShare: number): number {
   const D = def.drivetrain;
   if (D.layout === 'rwd') return rear;
   if (D.layout === 'fwd') return front;
-  if (D.centre && D.centre.diff.type !== 'open') return 1;
   const split = D.centre ? D.centre.split : 0.5;
-  return Math.min(1, front / split, rear / (1 - split));
+  const open = Math.min(1, front / split, rear / (1 - split));
+  const diff = D.centre?.diff;
+  if (!diff || diff.type === 'open') return open;
+  if (diff.type === 'locked') return 1;
+  return open + (1 - open) * Math.min(1, diff.ramp);
+}
+
+/** `mu` with the share fast corners give up at speed v (`TUNING.ai.envelope.fast`). */
+export function fastMu(mu: number, v: number): number {
+  const F = TUNING.ai.envelope.fast;
+  return mu * (1 - F.margin * Math.min(1, Math.max(0, (v - F.from) / (F.to - F.from))));
 }
 
 /**

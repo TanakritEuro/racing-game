@@ -157,9 +157,9 @@ export class Drivetrain {
     } else if (this.latched) {
       if (inputRpm < E.idleRpm + T.unlatchAboveIdle) this.latched = false;
     } else {
-      // Pulling away: the clutch carries the engine's torque, plus more the further the
-      // revs are above a bite point set by the throttle, so the engine holds near the bite
-      // point while the car gathers speed. At (nearly) full throttle it is dumped instead:
+      // Pulling away: the clutch carries the engine's torque (what traction control leaves of
+      // it), plus more the further the revs are above a bite point set by the throttle, so the
+      // engine holds near the bite point while the car gathers speed. At (nearly) full throttle it is dumped instead:
       // held out until the revs reach the bite point, then snapped in, so the flywheel's
       // energy spins the wheels (traction control's job to tame, in Milestone 2). Off the
       // throttle it lets go.
@@ -173,10 +173,11 @@ export class Drivetrain {
         ? this.dumped
           ? 1
           : 0
-        : clamp((engineTorque(E, rpm, p) + T.biteGain * p * (rpm - bite)) / C.maxTorque, 0, 1);
+        : clamp((engineTorque(E, rpm, p) * this.tcFactor + T.biteGain * p * (rpm - bite)) / C.maxTorque, 0, 1);
       this.autoClutch = p === 0 ? 0 : Math.min(target, this.autoClutch + C.engageRate * dt);
       const slipRpm = Math.abs(this.engineOmega - inputOmega) * RPM_PER_RAD_S;
-      if (slipRpm < T.latchSlipRpm && inputRpm > E.idleRpm + T.latchAboveIdle) this.latched = true;
+      // Not while traction control is cutting: latched onto spinning wheels, the flywheel keeps them spinning.
+      if (slipRpm < T.latchSlipRpm && inputRpm > E.idleRpm + T.latchAboveIdle && this.tcFactor === 1) this.latched = true;
     }
     if (this.latched) this.autoClutch = 1;
     // Pulling the handbrake dips the clutch, as a driver would, so the engine keeps running.

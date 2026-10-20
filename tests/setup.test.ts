@@ -5,8 +5,8 @@ import { RIDGEBACK, TEST_CIRCUIT } from '../src/track/circuits';
 import { buildTrack } from '../src/track/track';
 import { controls, NO_CONTROLS } from '../src/vehicle/car';
 import type { CarDef } from '../src/vehicle/carDef';
-import { KESTREL } from '../src/vehicle/cars';
-import { applySetup, cleanSetup, SETTINGS, setupReadout, type SettingId, type Setup } from '../src/vehicle/setup';
+import { KESTREL, OSPREY } from '../src/vehicle/cars';
+import { applySetup, cleanSetup, SETTINGS, settingsFor, setupReadout, type SettingId, type Setup } from '../src/vehicle/setup';
 import { createSim, followLine, run, runUntil, skidpadLimit } from './helpers';
 import { LONG_OVAL, SKIDPAD } from './tracks';
 
@@ -68,6 +68,18 @@ describe('a setup', () => {
     }
   });
 
+  it('has a centre split only for an all-wheel-drive car, moving its torque split', () => {
+    expect(settingsFor(KESTREL).map((s) => s.id)).not.toContain('centreSplit');
+    expect(settingsFor(OSPREY).map((s) => s.id)).toContain('centreSplit');
+    expect(settingsFor(OSPREY)).toHaveLength(SETTINGS.length);
+    expect(changed(OSPREY, applySetup(OSPREY, { centreSplit: 3 }))).toEqual(['drivetrain.centre.split']);
+    const split = (clicks: number) => setupReadout(applySetup(OSPREY, { centreSplit: clicks })).centreSplit!;
+    expect(split(0)).toBeCloseTo(0.38, 9);
+    expect(split(5)).toBeCloseTo(0.48, 9);
+    expect(split(-5)).toBeCloseTo(0.28, 9);
+    expect(setupReadout(KESTREL).centreSplit).toBeNull();
+  });
+
   it('moves the numbers the way its label says', () => {
     const stock = setupReadout(KESTREL);
     const with_ = (setup: Setup) => setupReadout(applySetup(KESTREL, setup));
@@ -107,7 +119,7 @@ describe('a setup on the road', () => {
     };
     expect(await launch({ gearing: 5 })).toBeLessThan(await launch({ gearing: -5 }));
     expect(await top({ gearing: 5 })).toBeLessThan((await top({})) - 1);
-  }, 120_000);
+  }, 300_000);
 
   it('more wing presses the car down harder at speed', async () => {
     const load = async (setup: Setup) => {

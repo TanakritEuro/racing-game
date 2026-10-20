@@ -8,7 +8,7 @@
 import { TUNING } from '../config';
 import { GRAVITY } from '../constants';
 import { surfaceGrip } from '../track/weather';
-import { gripAt, type CarEnvelope } from './envelope';
+import { fastMu, gripAt, type CarEnvelope } from './envelope';
 import type { RacingLine } from './racingLine';
 
 const G = -GRAVITY;
@@ -36,8 +36,11 @@ export function speedProfile(line: RacingLine, env: CarEnvelope, { pace = 1, max
   // Grip at sample i and speed s: less in standing water, the less the faster.
   const muAt = (i: number, s: number, mu: number) => (water?.[i] ? mu * waterShare(s) : mu);
 
+  const F = TUNING.ai.envelope.fast;
   for (let i = 0; i < n; i++) {
     v[i] = corneringLimit(line, env, i, lateralMu, maxSpeed);
+    // Less of the grip in fast corners: settle on a speed the reduced grip can hold.
+    for (let k = 0; k < 3 && v[i] > F.from; k++) v[i] = corneringLimit(line, env, i, fastMu(lateralMu, v[i]), maxSpeed);
     if (!water?.[i]) continue;
     // In water the grip depends on the speed: settle on a speed the water's grip can hold, and lift.
     for (let k = 0; k < 4; k++) v[i] = corneringLimit(line, env, i, muAt(i, v[i], lateralMu), maxSpeed);
@@ -52,7 +55,7 @@ export function speedProfile(line: RacingLine, env: CarEnvelope, { pace = 1, max
   // Grip left for accelerating or braking at speed s at sample i, with the cornering it's
   // doing; `taper` gives up more of it the harder the car corners.
   const spare = (i: number, s: number, mu: number, taper = 0) => {
-    const grip = gripAt(env, muAt(i, s, mu), s, G + s * s * line.vertical[i]);
+    const grip = gripAt(env, fastMu(muAt(i, s, mu), s), s, G + s * s * line.vertical[i]);
     const load = Math.min(1, (s * s * Math.abs(line.curvature[i])) / Math.max(grip, 1e-6));
     return grip * Math.sqrt(1 - load * load) * (1 - taper * load);
   };
@@ -93,7 +96,7 @@ export function corneringLimit(line: RacingLine, env: CarEnvelope, i: number, mu
   const cosB = Math.sqrt(1 - sinB * sinB);
   const kv = line.vertical[i];
   // sideways: v²·k·cosB − g·sinB ≤ μ·(g·cosB + v²·k·sinB + v²·kv + downforce·v²)
-  const coeff = k * cosB - mu * (k * sinB + kv + env.downforce);
+  const coeff = k * cosB - mu * (k * sinB + kv + env.corneringDownforce);
   const rhs = G * (sinB + mu * cosB);
   let limit = coeff > 1e-9 ? Math.sqrt(rhs / coeff) : maxSpeed;
   // Over a crest, not so fast that the car leaves the road.
