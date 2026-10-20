@@ -37,6 +37,8 @@ export const WHEEL_QUERY_GROUPS = groups(ALL, GROUND);
 
 export const BARRIER_HEIGHT = 1.0;
 export const BARRIER_THICKNESS = 0.6;
+/** Barrier boxes have their edges rounded this much (m), so a car scraping along a barrier slides over the joint between two boxes instead of catching on the next one's end. */
+const BARRIER_ROUNDING = 0.25;
 
 /**
  * A kinematic car body (the other player's car, moved to where it is reported to be): it
@@ -103,7 +105,7 @@ export function createPhysics(track: Track, water = false): Physics {
     const q = uprightAlong(b.dir);
     add(
       'barrier',
-      RAPIER.ColliderDesc.cuboid(BARRIER_THICKNESS / 2, BARRIER_HEIGHT / 2, b.length / 2)
+      RAPIER.ColliderDesc.roundCuboid(BARRIER_THICKNESS / 2 - BARRIER_ROUNDING, BARRIER_HEIGHT / 2 - BARRIER_ROUNDING, b.length / 2 - BARRIER_ROUNDING, BARRIER_ROUNDING)
         .setTranslation(b.centre.x, b.centre.y + BARRIER_HEIGHT / 2, b.centre.z)
         .setRotation(q)
         .setRestitution(0.2)

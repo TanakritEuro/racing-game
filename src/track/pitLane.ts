@@ -106,7 +106,11 @@ export function laneSweep(track: Track, lane: PitLane): Sweep {
   });
 }
 
-/** The pit wall between the road and the lane, along its full-width part. */
+/**
+ * The pit wall between the road and the lane, along its full-width part, and its nose: a run
+ * sloping out from near the road edge to the wall over the end of the entry taper, inside the
+ * lane's inner edge, so a car running wide out of the last corner is turned back to the track.
+ */
 export function pitWall(track: Track, lane: PitLane, step = 3): BarrierSegment[] {
   const P = TUNING.pits;
   const { samples } = track;
@@ -115,11 +119,16 @@ export function pitWall(track: Track, lane: PitLane, step = 3): BarrierSegment[]
   const out: BarrierSegment[] = [];
   const from = (lane.first + Math.round(lane.taper / spacing)) % n;
   const count = Math.round((lane.length - 2 * lane.taper) / spacing);
-  for (let k = 0; k + step <= count; k += step) {
-    const pa = samples[(from + k) % n];
-    const pb = samples[(from + k + step) % n];
-    const a = crossSection(pa, lane.sign * (pa.halfWidth + P.wall));
-    const b = crossSection(pb, lane.sign * (pb.halfWidth + P.wall));
+  // The nose's length in samples (whole steps), and the wall's offset k samples from its full-width part.
+  const nose = Math.round(Math.min(P.nose, lane.taper / 2) / spacing / step) * step;
+  const offset = (k: number) => (k >= 0 ? P.wall : P.wall + ((P.noseTip - P.wall) * -k) / nose);
+  const point = (k: number) => {
+    const p = samples[(from + k + n) % n];
+    return crossSection(p, lane.sign * (p.halfWidth + offset(k)));
+  };
+  for (let k = -nose; k + step <= count; k += step) {
+    const a = point(k);
+    const b = point(k + step);
     const d = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z };
     out.push({ centre: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 }, dir: normalize(d), length: Math.hypot(d.x, d.y, d.z) + 0.3 });
   }

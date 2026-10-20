@@ -71,12 +71,25 @@ describe.each(CIRCUITS.map((def) => [def.name, def] as const))('%s', (_, def) =>
     for (let k = 1; k < lane.boxes.length; k++) {
       expect(laneAlong(track, lane, lane.boxes[k]) - laneAlong(track, lane, lane.boxes[k - 1])).toBeGreaterThan(P.boxSpacing - 3);
     }
-    for (const w of pitWall(track, lane)) {
-      // The wall's road-side face is beyond the road edge.
-      const i = nearestSample(track, w.centre.x, w.centre.z);
-      const off = Math.abs(lateralOffset(track, i, w.centre.x, w.centre.z));
-      expect(off - BARRIER_THICKNESS / 2).toBeGreaterThan(samples[i].halfWidth + 0.5);
-      expect(off + BARRIER_THICKNESS / 2).toBeLessThan(samples[i].halfWidth + P.inner);
+    const wall = pitWall(track, lane);
+    let tip = Infinity;
+    for (const w of wall) {
+      // Along each segment, ends included: its road-side face beyond the road edge (well beyond
+      // it along the full-width part), its lane-side face inside the lane's inner edge.
+      for (const t of [-0.5, -0.25, 0, 0.25, 0.5]) {
+        const x = w.centre.x + w.dir.x * w.length * t;
+        const z = w.centre.z + w.dir.z * w.length * t;
+        const i = nearestSample(track, x, z);
+        const off = Math.abs(lateralOffset(track, i, x, z)) - samples[i].halfWidth;
+        const u = laneAlong(track, lane, i);
+        expect(u).toBeGreaterThan(0);
+        expect(off - BARRIER_THICKNESS / 2).toBeGreaterThan(u >= lane.taper ? 0.5 : 0);
+        expect(off + BARRIER_THICKNESS / 2).toBeLessThan(laneEdges(track, lane, i)![0]);
+        tip = Math.min(tip, off);
+      }
     }
+    // It has a nose, from near the road edge.
+    expect(tip).toBeLessThan(P.noseTip + 0.1);
+    expect(wall.length).toBeGreaterThan(5);
   });
 });

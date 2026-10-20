@@ -118,6 +118,14 @@ export const TUNING = {
     width: 9,
     boxDepth: 4.5,
     clearance: 3,
+    /**
+     * The pit wall's nose: over this far (m, at most half the entry taper) before its full-width
+     * part it slopes out from `noseTip` (m beyond the road edge, its middle: its road-side face
+     * flush with the edge, so only a car already off the road can meet its tip) to `wall`, so a car
+     * running wide glances off it back toward the track rather than hitting a blunt end.
+     */
+    nose: 30,
+    noseTip: 0.35,
     /** The entry and exit tapers (m) and how far the run-off widening blends in beyond them (m). */
     taper: 120,
     blend: 30,

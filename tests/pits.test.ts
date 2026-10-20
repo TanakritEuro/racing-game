@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { TUNING } from '../src/config';
+import { PHYSICS_STEP } from '../src/constants';
+import { BARRIER_THICKNESS } from '../src/physics';
 import type { Simulation } from '../src/sim';
-import { HARROWMERE } from '../src/track/circuits';
+import { HARROWMERE, SALTMARSH } from '../src/track/circuits';
 import { boxOffset, fastLaneOffset, laneAlong, pitLane, type PitLane } from '../src/track/pitLane';
+import { lateralOffset, nearestSample } from '../src/track/track';
 import { controls, NO_CONTROLS, poseOnTrack } from '../src/vehicle/car';
+import { KESTREL } from '../src/vehicle/cars';
 import { createSim, followLine, run, runUntil } from './helpers';
 
 /** Put the car `beyond` metres past the road edge into the lane, `u` metres along it, at rest. */
@@ -80,5 +84,52 @@ describe('pit stops', () => {
     run(sim, NO_CONTROLS, 2);
     expect(st.stops).toBe(1);
     expect(st.servicing).toBeNull();
+  });
+});
+
+describe('the pit wall', () => {
+  // Past the nose's tip, the car's pit-side flank on the road edge, running wide out toward the
+  // lane at 25 m/s: against a blunt wall it would meet the wall's end almost head-on and stop dead.
+  it.each([3, 6])('turns a car running wide at %s° along its nose, rather than stopping it dead', async (degrees) => {
+    const sim = await createSim(SALTMARSH);
+    const { track } = sim;
+    const lane = pitLane(track)!;
+    const P = TUNING.pits;
+    placeInLane(sim, lane, lane.taper - Math.min(P.nose, lane.taper / 2) + 2, -0.95);
+    const pose = { position: sim.car.body.translation(), rotation: sim.car.body.rotation() };
+    // Turned out toward the lane, about up (+Y): q_turn × q.
+    const half = (lane.sign * degrees * Math.PI) / 180 / 2;
+    const q = pose.rotation;
+    const t = { y: Math.sin(half), w: Math.cos(half) };
+    pose.rotation = { w: t.w * q.w - t.y * q.y, x: t.w * q.x + t.y * q.z, y: t.w * q.y + t.y * q.w, z: t.w * q.z - t.y * q.x };
+    sim.car.reset(pose);
+    const f = sim.car.forward;
+    sim.car.body.setLinvel({ x: f.x * 25, y: 0, z: f.z * 25 }, true);
+
+    let hits = 0;
+    let worstLoss = 0;
+    let speed = 25;
+    for (let k = 0; k < 2.5 / PHYSICS_STEP; k++) {
+      sim.step(NO_CONTROLS);
+      hits += sim.contacts.filter((c) => c.against === 'barrier').length;
+      const v = sim.car.body.linvel();
+      const now = Math.hypot(v.x, v.z);
+      worstLoss = Math.max(worstLoss, speed - now);
+      speed = now;
+    }
+    // It met the wall, never lost more than a little speed in one step, and is well past the
+    // wall's full-width start, still going.
+    expect(hits).toBeGreaterThan(0);
+    expect(worstLoss).toBeLessThan(2);
+    expect(speed).toBeGreaterThan(18);
+    const p = sim.car.body.translation();
+    const i = nearestSample(track, p.x, p.z);
+    const s = track.samples[i];
+    expect(laneAlong(track, lane, i)).toBeGreaterThan(lane.taper + 20);
+    // On the road side of the wall, not heading out toward the lane.
+    const beyond = lane.sign * lateralOffset(track, i, p.x, p.z) - s.halfWidth;
+    expect(beyond).toBeLessThan(P.wall - BARRIER_THICKNESS / 2 - KESTREL.halfExtents.x + 0.1);
+    const v = sim.car.body.linvel();
+    expect(lane.sign * (v.x * s.lx + v.z * s.lz)).toBeLessThan(0.5);
   });
 });
