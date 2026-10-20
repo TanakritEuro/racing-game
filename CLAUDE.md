@@ -26,7 +26,7 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 Milestones 1–15 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing, car setup, weather, tyre
 wear and pit stops, a track editor, touch controls, career mode, front- and all-wheel drive) are
-done; **Milestone 16 (race replays) is planned** (`docs/milestone-16.md`).
+done; **Milestone 16 (race replays) is built and in playtesting** (`docs/milestone-16.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -53,6 +53,13 @@ circuit and car in IndexedDB (`storage/bests.ts`, dropped if the layout's finger
 changes; in memory if IndexedDB refuses). Replays of the last or best lap play from
 trackside TV cameras placed with terrain line of sight (`track/cameras.ts`), at 0.25×–2×,
 paused or skipped; live driving waits meanwhile.
+
+Race replays: every race records each car at 30 Hz and its moments (`race/raceRecording.ts`,
+`race/raceMoments.ts`: passes, stops, spins, contacts, fastest laps, finishes). P in a race (or
+the pause menu, or the championship standings) plays it back: a director (`replay/director.ts`)
+follows moments and battles across the TV cameras, chase and onboard shots, or you pick the car
+(the tower, ↑/↓) and camera (C); Q/E jump between moments on the timeline (`ui/replayHud.ts`).
+Not online yet.
 
 Race mode (`?mode=race`, or Tab): up to seven AI opponents (`ai/`) on a staggered grid,
 five red lights, positions, gaps and results (`race/race.ts`). Each circuit gets a
@@ -276,7 +283,9 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/storage/bests.ts` — each circuit and car's best lap in IndexedDB (memory fallback), with
   the setup it was set with; `setups.ts` — each car's setup per circuit in localStorage;
   `customTracks.ts` — the custom circuits.
-- `src/replay/replay.ts` — the replay player (speed, pause, skip, hand back to live).
+- `src/replay/replay.ts` — the replay player (a lap or a race: speed, pause, skip, moments, hand back
+  to live); `director.ts` — the race replay's shots. `src/race/raceRecording.ts` — every car
+  through a race, standings at any time; `raceMoments.ts` — the moments as they happen.
 - `src/vehicle/pose.ts` — `CarPose` and interpolation between physics steps.
 - `src/render/` — `scene.ts` (renderer, sky, sun), `trackView.ts`, `carView.ts`
   (placeholder car), `cameras.ts` (chase, bumper, hood), `tvCameras.ts` (replay camera),

@@ -1,6 +1,35 @@
 # Milestone 16 plan: race replays
 
-## Status: planned, waiting for your approval
+## Status: built, in playtesting
+
+Approved as written: the race just run kept in memory, whole-race replays (no highlights reel).
+
+Measured (headless): a recording keeps each car within a frame of where the simulation had it
+(under 5 cm); its standings match the race's own at every check and at the flag, gaps within
+0.1 s. A car-minute costs ~180 KB (doubling buffers: at most twice that). In a real race the
+watcher records passes as they hold (a slow car on pole is passed by the field, each pass on
+the car it was made on), stops, spins, contacts, fastest laps and every finish in result order.
+
+Checked in the browser: a 1-lap race at the Proving Ground with three AI cars, run to the flag
+by the autopilot; P played the whole race. The standings tower changed with the playhead; the
+timeline showed the moments; the director followed a battle from a TV camera. E jumped to just
+before the winner's finish (a chase shot); clicking a car in the tower followed it ("your
+choice"), and C switched it to a chase camera. Esc, then the pause menu's Watch replay, started
+it again. No console errors. The onboard camera wasn't caught on screen: the in-app browser
+draws too slowly to time a screenshot.
+
+Where the build differs from the plan below:
+
+- **Online races have no replay yet.** An online race (`OnlineRace`) keeps the other
+  player's cars as proxies under their own numbering, outside the `Race` that records;
+  recording them is a piece of its own. Left for later.
+- **Picking a car:** click it in the tower, or ↑/↓ for the car ahead or behind (keys 1–4
+  stay the playback speed); C cycles TV, chase and onboard for it; D hands back to the
+  director. Skips are 5 s (the lap replay keeps 2 s).
+- **In a race, P plays the race so far** (Shift+P still the best lap). The results' keys line
+  says so; the championship standings have a *Watch the race* button, and come back after.
+- **Gaps against the time before the recording began** (the grid) are extrapolated from the
+  leader's first frames, so the start doesn't read as an eight-car battle.
 
 Today a replay is one lap of one car: the time trial records your laps and plays the last
 or best back from the trackside TV cameras. A race leaves nothing behind. When the flag
