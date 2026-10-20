@@ -318,6 +318,8 @@ export const TUNING = {
     brakeBias: { step: 0.02, min: 0.45, max: 0.8 },
     /** Differential preload (fraction) and ramp (absolute) per click. */
     diff: { preload: 0.2, ramp: 0.04 },
+    /** All-wheel drive: the front axle's share of the drive torque, a click, and its range. */
+    centreSplit: { step: 0.02, min: 0.2, max: 0.6 },
     /** Final drive per click (fraction): up is shorter. */
     gearing: 0.05,
   },
@@ -361,9 +363,9 @@ export const TUNING = {
        */
       trailBraking: 0.6,
       /**
-       * Accelerating: only the driven (rear) tyres push, so only their share of the grip left
-       * over from cornering is there for it: the rear axle's static share, plus this much for
-       * the load that moves onto it under acceleration.
+       * Accelerating: only the driven tyres push, so only their share of the grip left over
+       * from cornering is there for it: their axle's static share, plus (rear) or minus (front)
+       * this much for the load that moves onto the rear under acceleration (`tractionShare`).
        */
       tractionTransfer: 0.08,
       /** Share of the engine's ideal acceleration the car really gets: gearshifts cut the drive, and the automatic shifts late. Measured on the long oval. */

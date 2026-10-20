@@ -4,7 +4,7 @@
 
 import { TUNING } from '../config';
 import { AIR_DENSITY, GRAVITY } from '../constants';
-import type { CarDef, SuspensionDef } from './carDef';
+import { drivenTyre, type CarDef, type SuspensionDef } from './carDef';
 import { fullThrottleTorque, RPM_PER_RAD_S } from './engine';
 
 export type SettingId =
@@ -18,6 +18,7 @@ export type SettingId =
   | 'wingRear'
   | 'brakeBias'
   | 'diff'
+  | 'centreSplit'
   | 'gearing';
 
 /** Clicks from the car's own value for each setting (−5..5); a missing setting is 0. */
@@ -34,6 +35,13 @@ export interface SettingDef {
   high: string;
   /** Change `def` (a copy) by `clicks`. */
   apply(def: CarDef, clicks: number): void;
+  /** Only for some cars (the centre split: all-wheel drive); every car if not given. */
+  only?(def: CarDef): boolean;
+}
+
+/** The settings `def` has (the centre split only on an all-wheel-drive car). */
+export function settingsFor(def: CarDef): SettingDef[] {
+  return SETTINGS.filter((s) => !s.only || s.only(def));
 }
 
 /** Springs at one end: the rate, with the dampers scaled to keep the same damping ratio. */
@@ -162,6 +170,21 @@ export const SETTINGS: readonly SettingDef[] = [
     },
   },
   {
+    id: 'centreSplit',
+    label: 'Centre split',
+    group: 'Brakes and drivetrain',
+    more: 'more drive to the front: stable on the power, more understeer',
+    low: 'rear',
+    high: 'front',
+    only: (def) => def.drivetrain.layout === 'awd' && def.drivetrain.centre !== undefined,
+    apply: (def, c) => {
+      const centre = def.drivetrain.centre;
+      if (def.drivetrain.layout !== 'awd' || !centre) return;
+      const S = TUNING.setup.centreSplit;
+      centre.split = Math.min(S.max, Math.max(S.min, centre.split + S.step * c));
+    },
+  },
+  {
     id: 'gearing',
     label: 'Gearing',
     group: 'Brakes and drivetrain',
@@ -210,6 +233,8 @@ export interface SetupReadout {
   topSpeed: number;
   /** The front axle's share of the brake torque. */
   brakeBias: number;
+  /** All-wheel drive: the front axle's share of the drive torque (null for two-wheel drive). */
+  centreSplit: number | null;
 }
 
 export function setupReadout(def: CarDef): SetupReadout {
@@ -224,13 +249,14 @@ export function setupReadout(def: CarDef): SetupReadout {
     downforceFront: area > 0 ? -def.aero.lift.front / area : 0.5,
     topSpeed: topSpeed(def),
     brakeBias: def.brakes.frontBias,
+    centreSplit: def.drivetrain.layout === 'awd' ? (def.drivetrain.centre?.split ?? 0.5) : null,
   };
 }
 
 /** The highest speed some gear can hold at full throttle, below the limiter (m/s). */
 function topSpeed(def: CarDef): number {
   const { gearbox, engine, aero } = def;
-  const radius = def.tyres.rear.radius;
+  const radius = drivenTyre(def).radius;
   const weight = def.mass * -GRAVITY;
   const rolling = def.tyres.rear.rollingResistance;
   const area = -(aero.lift.front + aero.lift.rear);

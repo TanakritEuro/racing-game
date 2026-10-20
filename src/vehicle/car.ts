@@ -13,8 +13,8 @@
 //      slip (first-order relaxation: the slip builds up over a distance rolled).
 //   3. The substeps' average tyre forces are applied at the contact points, plus aero drag.
 //
-// The rear wheels are driven through the drivetrain (`drivetrain.ts`): engine, clutch,
-// gearbox and differential.
+// The driven wheels (rear, front or all four, `CarDef.drivetrain`) turn with the engine through
+// the drivetrain (`drivetrain.ts`): engine, clutch, gearbox and differentials.
 
 import RAPIER from '@dimforge/rapier3d-compat';
 import { TUNING } from '../config';
@@ -156,6 +156,9 @@ export class Car {
 
   private readonly world: RAPIER.World;
   private readonly driveOut: DriveOut = { left: 0, right: 0 };
+  private readonly driveRear: DriveOut = { left: 0, right: 0 };
+  /** Indices of the driven wheels (0, 1 front; 2, 3 rear). */
+  private readonly drivenWheels: readonly number[];
   private readonly tags: Map<number, SurfaceTag>;
   private readonly work: WheelWork[];
   // Scratch, so the per-step maths allocates nothing of its own.
@@ -224,12 +227,14 @@ export class Car {
     const rear = prepareTyre(def.tyres.rear);
     this.wheels = [];
     this.work = [];
+    const layout = def.drivetrain.layout;
+    this.drivenWheels = layout === 'rwd' ? [2, 3] : layout === 'fwd' ? [0, 1] : [0, 1, 2, 3];
     for (const isFront of [true, false]) {
       for (const side of [-1, 1]) {
         const tyre = isFront ? front : rear;
         this.wheels.push({
           front: isFront,
-          driven: !isFront, // rear-wheel drive
+          driven: layout === 'awd' || isFront === (layout === 'fwd'),
           mount: wheelMount(def, isFront, side),
           tyre,
           suspensionLength: (isFront ? def.suspension.front : def.suspension.rear).restLength,
@@ -397,7 +402,8 @@ export class Car {
     }
     const drivetrain = this.drivetrain;
     drivetrain.tractionControl = this.aids.tc;
-    drivetrain.update(controls, (this.work[2].spin.omega + this.work[3].spin.omega) / 2, speed, dt);
+    const wk = this.work;
+    drivetrain.update(controls, drivetrain.outputOmega(wk[0].spin.omega, wk[1].spin.omega, wk[2].spin.omega, wk[3].spin.omega), speed, dt);
     // Fuel: burned with the engine's output; the car lightens as it goes.
     if (this.fuel > 0) {
       const output = Math.max(0, engineTorque(this.def.engine, drivetrain.rpm, drivetrain.throttle)) * drivetrain.engineOmega * dt;
@@ -624,11 +630,12 @@ export class Car {
 
       // Traction control eases the throttle while a driven wheel spins past its target slip.
       if (this.aids.tc) {
-        const left = this.wheels[2];
+        const driven = this.drivenWheels;
         // Drive slip, signed with the direction of travel so reversing counts too.
         let slip = 0;
         let slipSpeed = 0;
-        for (const i of [2, 3]) {
+        for (let k = 0; k < driven.length; k++) {
+          const i = driven[k];
           const sign = this.work[i].vLong < 0 ? -1 : 1;
           const w = this.wheels[i];
           if (w.slipRatio * sign > slip) {
@@ -636,16 +643,28 @@ export class Car {
             slipSpeed = (this.work[i].spin.omega * w.tyre.radius - this.work[i].vLong) * sign;
           }
         }
-        drivetrain.tcFactor = tcStep(aids.tc, drivetrain.tcFactor, slip, slipSpeed, left.tyre.peakSlipRatio, h);
+        drivetrain.tcFactor = tcStep(aids.tc, drivetrain.tcFactor, slip, slipSpeed, this.wheels[driven[0]].tyre.peakSlipRatio, h);
         if (drivetrain.tcFactor < 1) this.tcActive = true;
       } else drivetrain.tcFactor = 1;
 
       // Wheel spin: the driven wheels with the engine through the drivetrain, the others free.
-      spinFree(this.work[0].spin, h);
-      spinFree(this.work[1].spin, h);
-      drivetrain.substep(h, this.work[2].spin, this.work[3].spin, this.driveOut);
-      this.work[2].driveSum += this.driveOut.left;
-      this.work[3].driveSum += this.driveOut.right;
+      const w = this.work;
+      const layout = this.def.drivetrain.layout;
+      if (layout === 'awd') {
+        drivetrain.substepAwd(h, w[0].spin, w[1].spin, w[2].spin, w[3].spin, this.driveOut, this.driveRear);
+        w[0].driveSum += this.driveOut.left;
+        w[1].driveSum += this.driveOut.right;
+        w[2].driveSum += this.driveRear.left;
+        w[3].driveSum += this.driveRear.right;
+      } else {
+        const d = layout === 'fwd' ? 0 : 2;
+        const f = 2 - d;
+        spinFree(w[f].spin, h);
+        spinFree(w[f + 1].spin, h);
+        drivetrain.substep(h, w[d].spin, w[d + 1].spin, this.driveOut);
+        w[d].driveSum += this.driveOut.left;
+        w[d + 1].driveSum += this.driveOut.right;
+      }
 
       // Relax the slip towards its new value (implicit in the |v| term, so it's stable at any speed).
       for (let i = 0; i < 4; i++) {

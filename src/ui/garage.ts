@@ -5,7 +5,7 @@
 
 import { TUNING } from '../config';
 import type { CarDef } from '../vehicle/carDef';
-import { applySetup, cleanSetup, SETTINGS, setupReadout, type Setup, type SetupReadout } from '../vehicle/setup';
+import { applySetup, cleanSetup, settingsFor, setupReadout, type Setup, type SetupReadout } from '../vehicle/setup';
 import { button, div } from './menu';
 
 export interface GarageOpen {
@@ -89,10 +89,13 @@ export class Garage {
     figure('Downforce at 200 km/h', (r) => r.downforce200, (v) => `${Math.round(v)} N`, 'Grip in fast corners, paid for in drag.');
     figure('Top speed', (r) => r.topSpeed, (v) => `${Math.round(v * 3.6)} km/h`, 'On a long straight, from the power, drag and gearing.');
     figure('Brake bias', (r) => r.brakeBias, (v) => `${Math.round(v * 100)} % front`, 'The front brakes’ share: rearward rotates the car, and can spin it.');
+    if (stock.centreSplit !== null) {
+      figure('Drive split', (r) => r.centreSplit ?? 0, (v) => `${Math.round(v * 100)} : ${Math.round((1 - v) * 100)}`, 'Front : rear share of the drive. More to the rear turns the car on the power.');
+    }
 
     // A row per setting, in groups.
     let group = '';
-    for (const s of SETTINGS) {
+    for (const s of settingsFor(o.car)) {
       if (s.group !== group) {
         group = s.group;
         div(this.panel, 'garage-group', group);

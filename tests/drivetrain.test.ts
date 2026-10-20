@@ -154,3 +154,78 @@ describe('differential', () => {
     expect(worstSplit).toBeGreaterThan(2 * lsd.preload);
   });
 });
+
+describe('all-wheel drive', () => {
+  const OPEN: DifferentialDef = { type: 'open', preload: 0, ramp: 0 };
+  const LOCKED: DifferentialDef = { type: 'locked', preload: 0, ramp: 0 };
+  const awd = (centre: DifferentialDef, rear: DifferentialDef = OPEN, front: DifferentialDef = OPEN, split = 0.4) =>
+    new Drivetrain({ ...KESTREL, differential: rear, drivetrain: { layout: 'awd', centre: { split, diff: centre }, front } });
+  const mean = (a: SpinBody, b: SpinBody) => (a.omega + b.omega) / 2;
+
+  /**
+   * Engine at 3000 rpm in first, clutch fully in, for 0.1 s, each wheel's tyre pushing back
+   * with `reaction` (N·m, front left, front right, rear left, rear right). Returns the
+   * wheels and their drive torques at the end.
+   */
+  function drive(dt: Drivetrain, reaction: [number, number, number, number]) {
+    dt.engineOmega = 3000 / RPM_PER_RAD_S;
+    const axle = dt.engineOmega / dt.gearbox.ratio();
+    const wheels = [wheel(axle), wheel(axle), wheel(axle), wheel(axle)];
+    const front: DriveOut = { left: 0, right: 0 };
+    const rear: DriveOut = { left: 0, right: 0 };
+    for (let i = 0; i < 12 * SUBSTEPS; i++) {
+      dt.clutch = 1;
+      dt.throttle = 1;
+      wheels.forEach((w, k) => (w.torque = reaction[k]));
+      dt.substepAwd(STEP / SUBSTEPS, wheels[0], wheels[1], wheels[2], wheels[3], front, rear);
+    }
+    return { wheels, front, rear, frontAxle: front.left + front.right, rearAxle: rear.left + rear.right };
+  }
+
+  it('open centre: the drive divides by the split', () => {
+    const { frontAxle, rearAxle } = drive(awd(OPEN), [-300, -300, -300, -300]);
+    expect(frontAxle / (frontAxle + rearAxle)).toBeCloseTo(0.4, 6);
+    expect(frontAxle).toBeGreaterThan(100);
+  });
+
+  it('locked centre: the axles turn together, the gripping one taking more', () => {
+    const { wheels, frontAxle, rearAxle } = drive(awd(LOCKED), [-100, -100, -600, -600]);
+    const f = (wheels[0].omega + wheels[1].omega) / 2;
+    const r = (wheels[2].omega + wheels[3].omega) / 2;
+    expect(f).toBeCloseTo(r, 3);
+    expect(rearAxle).toBeGreaterThan(frontAxle + 400);
+  });
+
+  it('open everywhere: a wheel in the air runs away, taking its axle with it; limited-slip holds it', () => {
+    const open = drive(awd(OPEN), [0, -600, -600, -600]);
+    const w = open.wheels;
+    expect(w[0].omega).toBeGreaterThan(w[1].omega + 5);
+    expect(open.front.right).toBeCloseTo(open.front.left, 3);
+    expect(mean(w[0], w[1])).toBeGreaterThan(mean(w[2], w[3]) + 5);
+    // Limited-slip centre and front: the axles turn together and the free wheel is held back.
+    const lsd: DifferentialDef = { type: 'lsd', preload: 80, ramp: 0.4 };
+    const held = drive(awd(lsd, OPEN, lsd), [0, -600, -600, -600]).wheels;
+    expect(Math.abs(mean(held[0], held[1]) - mean(held[2], held[3]))).toBeLessThan(0.5);
+    expect(held[0].omega - held[1].omega).toBeLessThan(w[0].omega - w[1].omega - 5);
+  });
+
+  it('creates no energy: coupled wheels with the clutch out only lose it', () => {
+    const dt = awd(LOCKED, LOCKED, LOCKED);
+    dt.clutch = 0;
+    const wheels = [wheel(10), wheel(30), wheel(-5), wheel(50)];
+    const energy = () => wheels.reduce((e, w) => e + 0.5 * w.inertia * w.omega * w.omega, 0);
+    const before = energy();
+    const front: DriveOut = { left: 0, right: 0 };
+    const rear: DriveOut = { left: 0, right: 0 };
+    for (let i = 0; i < 4 * SUBSTEPS; i++) dt.substepAwd(STEP / SUBSTEPS, wheels[0], wheels[1], wheels[2], wheels[3], front, rear);
+    expect(energy()).toBeLessThan(before);
+    // Everything locked: all four at one speed, momentum kept.
+    for (const w of wheels) expect(w.omega).toBeCloseTo(21.25, 3);
+  });
+
+  it('gears the engine to the carrier: the split-weighted mean of the axles', () => {
+    expect(awd(OPEN, OPEN, OPEN, 0.4).outputOmega(10, 10, 20, 20)).toBeCloseTo(16, 9);
+    expect(new Drivetrain(KESTREL).outputOmega(10, 10, 20, 30)).toBeCloseTo(25, 9);
+    expect(new Drivetrain({ ...KESTREL, drivetrain: { layout: 'fwd' } }).outputOmega(10, 20, 30, 30)).toBeCloseTo(15, 9);
+  });
+});

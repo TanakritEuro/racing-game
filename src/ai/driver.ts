@@ -138,8 +138,9 @@ export class AiDriver {
     if (accel >= 0) {
       const available = Math.max(0.5, this.env.driveAccel(v));
       throttle = clamp(D.cruiseThrottle + accel / available, 0, 1);
-      // Cornering, only as much power as the rear tyres have grip to spare: past it a powerful
-      // car slides its rear out before the wheels spin enough for traction control to notice.
+      // Cornering, only as much power as the driven tyres have grip to spare: past it a powerful
+      // car slides its rear out (or a front-driven one runs wide) before the wheels spin enough
+      // for traction control to notice.
       const env = this.env;
       const grip = gripAt(env, env.lateralMu, v);
       const lateral = v * v * Math.abs(line.curvature[this.index]);

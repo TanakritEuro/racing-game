@@ -88,6 +88,7 @@ export const KESTREL: CarDef = {
     upshiftRpm: { light: 3200, full: 7200 },
     downshiftRpm: { coast: 2200, full: 4000 },
   },
+  drivetrain: { layout: 'rwd' },
   differential: { type: 'lsd', preload: 50, ramp: 0.3 },
   brakes: {
     maxTorque: 5000,
@@ -164,6 +165,7 @@ export const WREN: CarDef = {
     upshiftRpm: { light: 3200, full: 7300 },
     downshiftRpm: { coast: 2200, full: 4200 },
   },
+  drivetrain: { layout: 'rwd' },
   differential: { type: 'lsd', preload: 40, ramp: 0.3 },
   brakes: { maxTorque: 3800, frontBias: 0.62, handbrakeTorque: 1200 },
   aids: KESTREL.aids,
@@ -234,6 +236,7 @@ export const HARRIER: CarDef = {
     upshiftRpm: { light: 3000, full: 6700 },
     downshiftRpm: { coast: 2000, full: 3800 },
   },
+  drivetrain: { layout: 'rwd' },
   differential: { type: 'lsd', preload: 60, ramp: 0.28 },
   brakes: { maxTorque: 7500, frontBias: 0.62, handbrakeTorque: 1800 },
   aids: KESTREL.aids,

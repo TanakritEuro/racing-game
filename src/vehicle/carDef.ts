@@ -53,6 +53,20 @@ export interface BrakesDef {
   handbrakeTorque: number;
 }
 
+/** Which wheels the engine drives. */
+export type DrivetrainLayout = 'rwd' | 'fwd' | 'awd';
+
+export interface DrivetrainLayoutDef {
+  layout: DrivetrainLayout;
+  /**
+   * All-wheel drive: the centre differential between the axles. `split` is the front axle's
+   * share of the drive torque; its locking resists the axles turning at different speeds.
+   */
+  centre?: { split: number; diff: DifferentialDef };
+  /** All-wheel drive: the front axle's differential (`CarDef.differential` is the rear's). Open if not given. */
+  front?: DifferentialDef;
+}
+
 export interface CarDef {
   name: string;
   mass: number; // kg
@@ -70,6 +84,9 @@ export interface CarDef {
   engine: EngineDef;
   clutch: ClutchDef;
   gearbox: GearboxDef;
+  /** Which wheels are driven, and how all-wheel drive splits the torque. */
+  drivetrain: DrivetrainLayoutDef;
+  /** The driven axle's differential (on all-wheel drive, the rear one). */
   differential: DifferentialDef;
   brakes: BrakesDef;
   aids: AidsDef;
@@ -89,4 +106,9 @@ export interface CarDef {
   };
   /** Where the bumper and hood cameras sit, in car local space (they look along -Z). */
   cameras: { bumper: Vec3; hood: Vec3 };
+}
+
+/** The tyres the engine's speed is geared to: the driven ones (the rear on all-wheel drive). */
+export function drivenTyre(def: CarDef): TyreDef {
+  return def.drivetrain.layout === 'fwd' ? def.tyres.front : def.tyres.rear;
 }

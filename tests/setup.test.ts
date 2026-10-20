@@ -38,6 +38,8 @@ const TOUCHES: Record<SettingId, string[]> = {
   wingRear: ['aero.dragArea', 'aero.lift.rear'],
   brakeBias: ['brakes.frontBias'],
   diff: ['differential.preload', 'differential.ramp'],
+  // Only an all-wheel-drive car has one (the Kestrel doesn't).
+  centreSplit: [],
   gearing: ['gearbox.finalDrive'],
 };
 

@@ -1,4 +1,5 @@
-// The drivetrain: engine → clutch → gearbox → differential → the two driven wheels.
+// The drivetrain: engine → clutch → gearbox → differential → the driven wheels (the rear or
+// front pair, or all four through a centre differential: `CarDef.drivetrain`).
 //
 // Once per physics step `update` makes the decisions: the automatic's gear choice or the
 // driver's shift requests, the automatic reverse, how far the automatic clutch is in,
@@ -8,6 +9,8 @@
 //   clutch:       engine speed = gearbox input speed, up to the clutch's torque capacity
 //   differential: left wheel speed = right wheel speed, up to its locking torque
 //   brakes:       wheel speed = 0, up to the brake (and rolling resistance) torque
+// (All-wheel drive adds a fourth, the centre differential: front axle speed = rear axle speed,
+// up to its locking torque.)
 // So a locked clutch is rigid (the engine's inertia joins the wheels'), a slipping one
 // passes exactly its capacity, and brakes stop wheels without ever reversing them.
 
@@ -34,7 +37,7 @@ export interface DriveOut {
   right: number;
 }
 
-type DrivetrainCar = Pick<CarDef, 'engine' | 'gearbox' | 'clutch' | 'differential'>;
+type DrivetrainCar = Pick<CarDef, 'engine' | 'gearbox' | 'clutch' | 'differential' | 'drivetrain'>;
 
 export class Drivetrain {
   readonly gearbox: Gearbox;
@@ -276,4 +279,125 @@ export class Drivetrain {
     out.left = (-clutch * half + diff) / h;
     out.right = (-clutch * half - diff) / h;
   }
+
+  /**
+   * All-wheel drive: as `substep`, with the engine driving all four wheels through a centre
+   * differential. Its carrier turns at `split·front + (1 − split)·rear` (each axle's mean
+   * speed), so the clutch's torque divides `split : 1 − split` between the axles, and its
+   * locking resists the axles turning at different speeds. Each axle then has its own
+   * differential, as a two-wheel-drive car's.
+   */
+  substepAwd(h: number, fl: SpinBody, fr: SpinBody, rl: SpinBody, rr: SpinBody, front: DriveOut, rear: DriveOut): void {
+    const E = this.def.engine;
+    const centre = this.def.drivetrain.centre;
+    const split = centre ? centre.split : 0.5;
+    const ratio = this.gearbox.ratio();
+    const capClutch = ratio === 0 ? 0 : this.clutch * this.def.clutch.maxTorque * h;
+
+    let torque = engineTorque(E, this.rpm, this.throttle);
+    if (torque > 0) torque *= this.tcFactor;
+    if (torque > 0) torque *= 1 - (1 - this.def.gearbox.efficiency) * this.clutch;
+    let we = this.engineOmega + (h * torque) / E.inertia;
+    const wheels = this.awd;
+    wheels[0] = fl;
+    wheels[1] = fr;
+    wheels[2] = rl;
+    wheels[3] = rr;
+    const w = this.awdOmega;
+    const inv = this.awdInverse;
+    for (let i = 0; i < 4; i++) {
+      const b = wheels[i];
+      w[i] = b.omega + (h * b.torque) / b.inertia;
+      inv[i] = 1 / b.inertia;
+    }
+
+    const iE = 1 / E.inertia;
+    // The clutch's lever on each wheel: half its axle's share of the gearbox output.
+    const jF = (ratio * split) / 2;
+    const jR = (ratio * (1 - split)) / 2;
+    const massClutch = 1 / (iE + jF * jF * (inv[0] + inv[1]) + jR * jR * (inv[2] + inv[3]));
+    const massCentre = 4 / (inv[0] + inv[1] + inv[2] + inv[3]);
+    const massFront = 1 / (inv[0] + inv[1]);
+    const massRear = 1 / (inv[2] + inv[3]);
+    const input = this.clutchTorque * ratio;
+    const capCentre = centre ? lockingTorque(centre.diff, input) * h : 0;
+    const capFront = this.def.drivetrain.front ? lockingTorque(this.def.drivetrain.front, input * split) * h : 0;
+    const capRear = lockingTorque(this.def.differential, input * (1 - split)) * h;
+    const cap = this.awdBrakeCap;
+    const brake = this.awdBrake;
+    for (let i = 0; i < 4; i++) {
+      cap[i] = wheels[i].friction * h;
+      brake[i] = 0;
+    }
+
+    let clutch = 0;
+    let mid = 0;
+    let diffF = 0;
+    let diffR = 0;
+    for (let k = 0; k < TUNING.drivetrain.solverIterations; k++) {
+      if (capClutch > 0) {
+        const previous = clutch;
+        clutch = clamp(clutch - massClutch * (we - jF * (w[0] + w[1]) - jR * (w[2] + w[3])), -capClutch, capClutch);
+        const d = clutch - previous;
+        we += d * iE;
+        w[0] -= d * jF * inv[0];
+        w[1] -= d * jF * inv[1];
+        w[2] -= d * jR * inv[2];
+        w[3] -= d * jR * inv[3];
+      }
+      if (capCentre > 0) {
+        const previous = mid;
+        mid = clamp(mid - massCentre * ((w[0] + w[1] - w[2] - w[3]) / 2), -capCentre, capCentre);
+        const d = (mid - previous) / 2;
+        w[0] += d * inv[0];
+        w[1] += d * inv[1];
+        w[2] -= d * inv[2];
+        w[3] -= d * inv[3];
+      }
+      if (capFront > 0) {
+        const previous = diffF;
+        diffF = clamp(diffF - massFront * (w[0] - w[1]), -capFront, capFront);
+        const d = diffF - previous;
+        w[0] += d * inv[0];
+        w[1] -= d * inv[1];
+      }
+      if (capRear > 0) {
+        const previous = diffR;
+        diffR = clamp(diffR - massRear * (w[2] - w[3]), -capRear, capRear);
+        const d = diffR - previous;
+        w[2] += d * inv[2];
+        w[3] -= d * inv[3];
+      }
+      for (let i = 0; i < 4; i++) {
+        if (cap[i] <= 0) continue;
+        const previous = brake[i];
+        brake[i] = clamp(brake[i] - wheels[i].inertia * w[i], -cap[i], cap[i]);
+        w[i] += (brake[i] - previous) * inv[i];
+      }
+    }
+
+    this.engineOmega = Math.max(0, we);
+    for (let i = 0; i < 4; i++) wheels[i].omega = w[i];
+    this.clutchTorque = -clutch / h;
+    front.left = (-clutch * jF + mid / 2 + diffF) / h;
+    front.right = (-clutch * jF + mid / 2 - diffF) / h;
+    rear.left = (-clutch * jR - mid / 2 + diffR) / h;
+    rear.right = (-clutch * jR - mid / 2 - diffR) / h;
+  }
+
+  /** The speed the gearbox's output turns at (rad/s), from the driven wheels'. */
+  outputOmega(fl: number, fr: number, rl: number, rr: number): number {
+    const D = this.def.drivetrain;
+    if (D.layout === 'rwd') return (rl + rr) / 2;
+    if (D.layout === 'fwd') return (fl + fr) / 2;
+    const split = D.centre ? D.centre.split : 0.5;
+    return (split * (fl + fr) + (1 - split) * (rl + rr)) / 2;
+  }
+
+  // All-wheel drive's scratch, so the substep allocates nothing.
+  private readonly awd: SpinBody[] = [];
+  private readonly awdOmega = new Float64Array(4);
+  private readonly awdInverse = new Float64Array(4);
+  private readonly awdBrakeCap = new Float64Array(4);
+  private readonly awdBrake = new Float64Array(4);
 }

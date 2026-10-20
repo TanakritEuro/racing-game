@@ -4,7 +4,7 @@
 
 import { TUNING } from '../config';
 import { AIR_DENSITY, GRAVITY } from '../constants';
-import type { CarDef } from '../vehicle/carDef';
+import { drivenTyre, type CarDef } from '../vehicle/carDef';
 import { fullThrottleTorque } from '../vehicle/engine';
 import { frictionCoefficient } from '../vehicle/tyre';
 import { surfaceGrip } from '../track/weather';
@@ -19,7 +19,7 @@ export interface CarEnvelope {
   /** Drag per unit of speed squared, over mass (1/m), and rolling resistance (fraction of g). */
   drag: number;
   rolling: number;
-  /** Share of the grip the driven wheels have for accelerating (the rear axle's load share). */
+  /** Share of the grip the driven wheels have for accelerating (their axle's load share; all of it for all-wheel drive). */
   traction: number;
   /** Highest drive force at the wheels at speed v (N), in the best gear. */
   driveForce(v: number): number;
@@ -44,7 +44,7 @@ export function carEnvelope(def: CarDef, wet = 0): CarEnvelope {
   const mu = (frontMu * frontShare + rearMu * (1 - frontShare)) * surfaceGrip('asphalt', wet, 0).grip;
   const lift = -(def.aero.lift.front + def.aero.lift.rear);
   const { engine, gearbox, clutch } = def;
-  const radius = def.tyres.rear.radius;
+  const radius = drivenTyre(def).radius;
   const rpmPerSpeed = 60 / (2 * Math.PI * radius);
   const wheelInertia = 2 * (def.tyres.front.inertia + def.tyres.rear.inertia);
   // Best gear at speed v: its drive force and the mass it accelerates.
@@ -70,10 +70,28 @@ export function carEnvelope(def: CarDef, wet = 0): CarEnvelope {
     downforce: (0.5 * AIR_DENSITY * lift) / def.mass,
     drag: (0.5 * AIR_DENSITY * def.aero.dragArea) / def.mass,
     rolling: def.tyres.rear.rollingResistance,
-    traction: 1 - frontShare + E.tractionTransfer,
+    traction: tractionShare(def, frontShare),
     driveForce: (v) => best(v).force,
     driveAccel: (v) => best(v).accel * E.power,
   };
+}
+
+/**
+ * Share of the car's grip its driven wheels can use to accelerate: their axle's static
+ * share of the weight, plus (rear) or minus (front) what moves back onto the rear under
+ * acceleration. All-wheel drive uses all of it if its centre differential locks, and with
+ * an open one only as much as the axle with the least grip for its share of the torque.
+ */
+export function tractionShare(def: CarDef, frontShare: number): number {
+  const transfer = TUNING.ai.envelope.tractionTransfer;
+  const front = frontShare - transfer;
+  const rear = 1 - front;
+  const D = def.drivetrain;
+  if (D.layout === 'rwd') return rear;
+  if (D.layout === 'fwd') return front;
+  if (D.centre && D.centre.diff.type !== 'open') return 1;
+  const split = D.centre ? D.centre.split : 0.5;
+  return Math.min(1, front / split, rear / (1 - split));
 }
 
 /**
