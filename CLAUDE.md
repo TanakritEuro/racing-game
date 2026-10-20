@@ -23,10 +23,10 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 ## Current state
 
-Milestones 1–12 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
+Milestones 1–13 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing, car setup, weather, tyre
-wear and pit stops, a track editor) are done; **Milestone 13 (touch controls) is built and in
-playtesting** (`docs/milestone-13.md`).
+wear and pit stops, a track editor, touch controls) are done; **Milestone 14 (career mode) is
+planned** (`docs/milestone-14.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -379,3 +379,6 @@ structures, tests) and check it with me.
     placed for you; saved in the browser, driven and raced, shared as a link, online.
 13. **Touch controls.** Phones and tablets: thumb or tilt steering through the assist,
     analogue pedals, buttons, landscape and full screen, a small-screen layout, Low graphics.
+14. **Career mode.** A ladder of three series (Wren, Kestrel, Harrier; easy, medium, hard
+    rivals; longer races with weather and wear), promotion for the top three, prize money
+    and upgrades for your cars.

@@ -1,6 +1,9 @@
 # Milestone 13 plan: touch controls (phones and tablets)
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (a clean lap by thumb, the pedals, anything under
+the thumbs, the frame rate on a phone, tilt against thumb) stay open for a session on a phone.
 
 Approved as written: thumb steering by default with tilt as a setting, analogue pedals, Low
 graphics chosen automatically on a phone. (Question 4, what could follow, is still open.)
