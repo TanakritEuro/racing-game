@@ -23,10 +23,10 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 ## Current state
 
-Milestones 1–14 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
+Milestones 1–15 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing, car setup, weather, tyre
-wear and pit stops, a track editor, touch controls, career mode) are done; **Milestone 15 (front-
-and all-wheel drive) is built and in playtesting** (`docs/milestone-15.md`).
+wear and pit stops, a track editor, touch controls, career mode, front- and all-wheel drive) are
+done; **Milestone 16 (race replays) is planned** (`docs/milestone-16.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -400,3 +400,7 @@ structures, tests) and check it with me.
 15. **Front- and all-wheel drive.** The drivetrain's layout in a car's data (a centre
     differential with a torque split for AWD), two new cars (a FWD hot hatch and an AWD
     coupe), traction control, the gearbox and the AI's envelope following the layout.
+16. **Race replays.** Every car recorded through the whole race with its moments (passes,
+    stops, spins, finishes), played back as television: a director following the battles
+    across the TV cameras and onboards, or driven by hand, with a timeline to jump between
+    moments.

@@ -1,6 +1,9 @@
 # Milestone 15 plan: front- and all-wheel drive
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (the Finch on and off the power, the Osprey's
+launch and stability, the wet, the centre split, the placeholder models) stay open.
 
 Approved as written: two new cars, the career unchanged.
 
@@ -44,10 +47,23 @@ Where the build differs from the plan below:
   TC is cutting. TC-on launches spin less (Wren 4.8 → 3.3 m/s, Harrier 4.9 → 4.0), but
   not zero: the Finch's light front still spins ~8 m/s for a moment. The test asks for less
   than half the TC-off wheelspin, not none.
-- **Not fixed: the Harrier at Harrowmere.** The hard AI still loses the Harrier's rear in
-  that bend: its throttle hunts on and off at 225 km/h. This was already happening before
-  this milestone; the Harrier's soak test only runs the Proving Ground. Worth its own look,
-  since the Grand Championship opens at Harrowmere in the Harrier.
+- **The Harrier at Harrowmere: the AI steered from its nose, not its path.** In the 400 m
+  bend at ~228 km/h the Harrier corners with its nose ~3° into the turn, and the Stanley
+  steering's heading term counted that as an error: it settled ~1 m wide of its line, and
+  where the line runs out towards the edge the loaded outside rear dropped onto the grass
+  (sample ~823) and the rear let go. At speed the heading error is now measured less the body
+  slip the car has been cornering with (averaged over 0.6 s, at most 0.04 rad, faded in from
+  40 to 55 m/s: `TUNING.ai.driver.slipTime`, `slipMax`, `slipSpeed`), so it holds the line; in
+  a slide the average is forgotten and the slip counts in full. Both limits matter: at 0.08 the
+  Harrier, drifting ~6° on the power out of the Proving Ground's fast corner, lost the
+  counter-steer it needed and washed its fronts past their peak; and in slow S-bends the
+  average from one corner lingered into the next and the Kestrels weaved and spun in the race
+  test. The throttle's on/off hunting (0 ↔ 0.45 at the profile speed, coasting between `accel`
+  = 0 and drag) was real but not the cause: smoothing it didn't stop the spin, and it made the
+  hard field at the Proving Ground spin more often in traffic, so it stays as it was. The
+  Harrier now laps every circuit cleanly (Harrowmere 96.1 s, Saltmarsh 86.9, Ridgeback 98.0,
+  Proving Ground 49.0) and is in the soak tests with the Finch and Osprey; seven hard-skill
+  Harriers lap Harrowmere with no recoveries (before: eight, and ten invalid laps).
 - **The high-wear soak's own car is put back on the track** like the AI's, inside the same
   allowance of two. It spun on worn tyres at Saltmarsh's last corner and sat against the
   wall, since nothing recovered it.
