@@ -7,6 +7,7 @@ import { fieldSkills, type Difficulty, type Skill } from '../ai/skill';
 import { TUNING } from '../config';
 import { createRng } from '../math';
 import type { Conditions } from '../track/weather';
+import { WEAR_RATES, type WearRate } from '../vehicle/wear';
 import { AI_NAMES, type RaceOptions, type Standing } from './race';
 
 /** The rounds, shortest first. */
@@ -34,6 +35,16 @@ export interface Season {
   rounds: { track: string; laps: number }[];
   /** Each finished round's finishing order: entry numbers, winner first. */
   results: number[][];
+  /** Weather drawn per round (default yes), or always dry; how fast tyres wear (default normal). */
+  weather?: boolean;
+  wear?: WearRate;
+}
+
+/** A season's own rounds and conditions (a career series), instead of the championship's. */
+export interface SeasonOptions {
+  rounds?: readonly { track: string; laps: number }[];
+  weather?: boolean;
+  wear?: WearRate;
 }
 
 export interface SeasonStanding {
@@ -45,9 +56,12 @@ export interface SeasonStanding {
   finishes: number[];
 }
 
-export function newSeason(seed: number, difficulty: Difficulty, car: string): Season {
+export function newSeason(seed: number, difficulty: Difficulty, car: string, options: SeasonOptions = {}): Season {
   const skills = fieldSkills(difficulty, ENTRIES - 1, createRng(seed));
-  return { version: 1, seed, difficulty, car, skills: [null, ...skills], rounds: ROUNDS.map((r) => ({ ...r })), results: [] };
+  const season: Season = { version: 1, seed, difficulty, car, skills: [null, ...skills], rounds: (options.rounds ?? ROUNDS).map((r) => ({ ...r })), results: [] };
+  if (options.weather !== undefined) season.weather = options.weather;
+  if (options.wear !== undefined) season.wear = options.wear;
+  return season;
 }
 
 /** The round to run next (0-based), or the number of rounds once the season is over. */
@@ -126,6 +140,7 @@ export function roundSeed(season: Season, r: number): number {
 /** The next round's race: its circuit, and the options that build it from the season. */
 /** Round r's weather, drawn from the season's seed: some rounds wet, some damp. */
 export function roundConditions(season: Season, r: number): Conditions {
+  if (season.weather === false) return 'dry';
   const W = TUNING.race.seasonWeather;
   const x = createRng(roundSeed(season, r) * 7 + 3)();
   return x < W.wet ? 'wet' : x < W.wet + W.damp ? 'damp' : 'dry';
@@ -138,8 +153,9 @@ export function roundRace(season: Season): { track: string; options: RaceOptions
     track: round.track,
     options: {
       conditions: roundConditions(season, r),
-      // Tyres wear as normal; the rounds stay sprints, so a stop only pays if you ruin a set.
-      wear: 'normal',
+      // The championship's tyres wear as normal (its rounds are sprints: a stop only pays if you
+      // ruin a set); a career series sets its own.
+      wear: season.wear ?? 'normal',
       opponents: ENTRIES - 1,
       laps: round.laps,
       difficulty: season.difficulty,
@@ -173,7 +189,9 @@ export function parseSeason(raw: unknown): Season | null {
     !s.rounds.every((r) => typeof r?.track === 'string' && Number.isInteger(r?.laps)) ||
     !Array.isArray(s.results) ||
     s.results.length > s.rounds.length ||
-    !s.results.every(isOrder)
+    !s.results.every(isOrder) ||
+    (s.weather !== undefined && typeof s.weather !== 'boolean') ||
+    (s.wear !== undefined && !WEAR_RATES.includes(s.wear))
   ) {
     return null;
   }

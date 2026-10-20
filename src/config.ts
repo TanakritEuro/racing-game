@@ -87,6 +87,17 @@ export const TUNING = {
     cliff: 0.8,
     beyond: 1.6,
   },
+  /** Career upgrades (`vehicle/upgrades.ts`): levels, what a level adds (fractions; kg for weight), and a first level's price (each level costs that many times more). */
+  upgrades: {
+    levels: 3,
+    engine: 0.04,
+    tyres: 0.02,
+    weight: 25,
+    brakes: 0.08,
+    price: { engine: 1500, tyres: 1200, weight: 1000, brakes: 800 },
+  },
+  /** The career (`race/career.ts`): a series' top this many open the next. */
+  career: { promotion: 3 },
   /** Touch controls (`input/touch.ts`). */
   touch: {
     /** The thumb: travel (px) ignored, and travel to full steering. */
