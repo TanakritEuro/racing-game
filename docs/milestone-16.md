@@ -1,6 +1,10 @@
 # Milestone 16 plan: race replays
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (the director's choices, passes on the timeline,
+the onboard and chase shots, the tower, watching mid-race) stay open. Online race replays are
+being added in a session of their own.
 
 Approved as written: the race just run kept in memory, whole-race replays (no highlights reel).
 
