@@ -48,6 +48,8 @@ export class AiDriver {
   private mistake: { until: number; speed: number; wide: number } | null = null;
   /** Ready to judge the next corner (it has finished the last). */
   private armed = true;
+  /** The body slip it has been cornering with (rad, averaged): its steady drift, not a slide. */
+  private slip = 0;
 
   constructor(
     readonly track: Track,
@@ -107,6 +109,12 @@ export class AiDriver {
     const across = ((ax - lx) * tz - (az - lz) * tx) / tl;
     const k = line.curvature[(i + Math.round((D.feedForward * v) / spacing)) % n];
     const yawRate = -car.body.angvel().y; // positive turning right
+    // At speed, its steady body slip, so the heading error is from where it travels when
+    // cornering steadily (and from its nose in a slide).
+    const beta = car.bodySlipAngle;
+    const sliding = Math.abs(beta) > D.slideAngle && v > 5;
+    this.slip = sliding || v < 5 ? 0 : clamp(this.slip + ((beta - this.slip) * dt) / D.slipTime, -D.slipMax, D.slipMax);
+    const steady = this.slip * clamp((v - D.slipSpeed.from) / (D.slipSpeed.to - D.slipSpeed.from), 0, 1);
     // Gentle at walking pace (joining the line from the grid), full strength at speed.
     // (Or when far off it: back on the road after a spin.)
     const crossTrackMax =
@@ -115,12 +123,11 @@ export class AiDriver {
         : D.crossTrackMax.slow + (D.crossTrackMax.fast - D.crossTrackMax.slow) * clamp(v / D.crossTrackMax.speed, 0, 1);
     const wheelAngle =
       Math.atan(wheelbase * k) +
-      D.headingGain * heading +
+      D.headingGain * (heading - steady) +
       clamp(Math.atan((D.crossTrackGain * across) / (v + D.crossTrackSoftening)), -crossTrackMax, crossTrackMax) +
       D.yawDamping * (v * k - yawRate);
     // No more lock than the front tyres can use at this speed: past their peak slip angle
     // they only scrub, and the car ploughs straight on. Catching a slide needs all of it.
-    const sliding = Math.abs(car.bodySlipAngle) > D.slideAngle && v > 5;
     const lock = sliding ? 1 : usableLock(car, v);
     let steer = clamp(wheelAngle / car.def.steering.lock, -lock, lock);
     // Pointing the wrong way (after a spin): full lock round towards the line's direction.
@@ -262,6 +269,7 @@ export class AiDriver {
     this.stuck = false;
     this.mistake = null;
     this.wander = 0;
+    this.slip = 0;
   }
 
   /** The skill at work: the line wanders, and entering a corner it may make a mistake. */

@@ -10,7 +10,7 @@ import { Simulation } from '../src/sim';
 import { CIRCUITS } from '../src/track/circuits';
 import { barrierOffset } from '../src/track/geometry';
 import { buildTrack, lateralOffset } from '../src/track/track';
-import { FINCH, KESTREL, OSPREY } from '../src/vehicle/cars';
+import { FINCH, HARRIER, KESTREL, OSPREY } from '../src/vehicle/cars';
 import type { CarDef } from '../src/vehicle/carDef';
 import { customDef, ovalTemplate } from '../src/track/custom';
 import { validateTrack } from '../src/track/validate';
@@ -87,10 +87,11 @@ describe.each(CIRCUITS.map((c) => [c.name, c] as const))('AI at %s', (_, def) =>
   }, 300_000);
 });
 
-/** Flying laps for a hard AI in the front- and all-wheel-drive cars (s): measured, ±4 %. */
+/** Flying laps for a hard AI in the front- and all-wheel-drive cars and the Harrier (s): measured, ±4 %. */
 const LAYOUT_LAPS: [CarDef, Record<string, number>][] = [
   [FINCH, { harrowmere: 102.1, saltmarsh: 90.5, ridgeback: 102.7, 'proving-ground': 51.0 }],
   [OSPREY, { harrowmere: 95.9, saltmarsh: 85.9, ridgeback: 97.5, 'proving-ground': 48.7 }],
+  [HARRIER, { harrowmere: 96.1, saltmarsh: 86.9, ridgeback: 98.0, 'proving-ground': 49.0 }],
 ];
 
 describe.each(LAYOUT_LAPS.flatMap(([car, laps]) => CIRCUITS.map((c) => [`${car.name} at ${c.name}`, car, c, laps[c.id]] as const)))('AI in the %s', (_, car, def, target) => {

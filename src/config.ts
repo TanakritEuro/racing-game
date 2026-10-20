@@ -488,6 +488,21 @@ export const TUNING = {
       crossTrackSoftening: 6,
       crossTrackMax: { slow: 0.12, fast: 0.35, speed: 20, far: 6 },
       yawDamping: 0.08,
+      /**
+       * At speed, the heading error is measured from the car's direction of travel as far as its
+       * steady body slip goes: the slip it has been cornering with, averaged over `slipTime` (s),
+       * at most `slipMax` (rad), counted in full from `slipSpeed.to` (m/s) and not at all below
+       * `slipSpeed.from`. Measured from its nose alone, a car cornering hard with its nose a few
+       * degrees into the turn settles that many degrees' worth (~1 m at 230 km/h, growing with
+       * speed) wide of the line, onto the grass where the line runs out to the edge. A slide
+       * counts in full (the average is forgotten). Capped at a normal cornering slip (~2°): a car
+       * drifting on the power (the Harrier, ~6°) needs the rest as counter-steer, or its fronts go
+       * past their peak and it washes wide. Not in slow corners: through an S-bend the average
+       * from one corner lingers into the next and the car weaves.
+       */
+      slipTime: 0.6,
+      slipMax: 0.04,
+      slipSpeed: { from: 40, to: 55 },
       /** Speed control: how far ahead it reads the profile (s), and how hard it corrects an error in speed (1/s). */
       speedLead: 0.25,
       speedGain: 2,
