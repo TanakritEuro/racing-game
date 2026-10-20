@@ -10,6 +10,7 @@ import {
   recordRound,
   roundConditions,
   roundRace,
+  roundTime,
   ROUNDS,
   seasonOver,
   standings,
@@ -87,6 +88,29 @@ describe('championship', () => {
     expect(counts.wet / 1600).toBeLessThan(0.3);
     expect(counts.damp / 1600).toBeGreaterThan(0.2);
     expect(counts.damp / 1600).toBeLessThan(0.3);
+  });
+
+  it('draws each round’s time of day: the same every time, now and then at dusk or night, or always by day', () => {
+    const a = newSeason(42, 'hard', 'Kestrel');
+    expect(a.rounds.map((_, r) => roundTime(a, r))).toEqual(newSeason(42, 'hard', 'Kestrel').rounds.map((_, r) => roundTime(a, r)));
+    expect(roundRace(a).options.time).toBe(roundTime(a, 0));
+    const counts = { day: 0, dusk: 0, night: 0, duskToNight: 0 };
+    for (let seed = 1; seed <= 400; seed++) {
+      const s = newSeason(seed, 'medium', 'Kestrel');
+      s.rounds.forEach((_, r) => counts[roundTime(s, r)]++);
+    }
+    expect(counts.night / 1600).toBeGreaterThan(0.15);
+    expect(counts.night / 1600).toBeLessThan(0.25);
+    expect(counts.dusk / 1600).toBeGreaterThan(0.15);
+    expect(counts.dusk / 1600).toBeLessThan(0.25);
+    expect(counts.duskToNight).toBe(0);
+    const daylight = newSeason(3, 'easy', 'Wren', { times: false });
+    expect(daylight.rounds.map((_, r) => roundTime(daylight, r))).toEqual(['day', 'day', 'day', 'day']);
+    const finale = newSeason(3, 'hard', 'Harrier', { times: false, nightFinal: true });
+    expect(finale.rounds.map((_, r) => roundTime(finale, r))).toEqual(['day', 'day', 'day', 'night']);
+    // Kept through saving and loading; a broken setting refused.
+    expect(parseSeason(JSON.parse(JSON.stringify(finale)))).toEqual(finale);
+    expect(parseSeason({ ...finale, nightFinal: 'yes' })).toBeNull();
   });
 
   it('ends after four rounds and takes no more results', () => {

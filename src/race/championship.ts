@@ -7,6 +7,7 @@ import { fieldSkills, type Difficulty, type Skill } from '../ai/skill';
 import { TUNING } from '../config';
 import { createRng } from '../math';
 import type { Conditions } from '../track/weather';
+import type { TimeOfDay } from '../track/timeOfDay';
 import { WEAR_RATES, type WearRate } from '../vehicle/wear';
 import { AI_NAMES, type RaceOptions, type Standing } from './race';
 
@@ -38,6 +39,9 @@ export interface Season {
   /** Weather drawn per round (default yes), or always dry; how fast tyres wear (default normal). */
   weather?: boolean;
   wear?: WearRate;
+  /** Dusk and night drawn per round (default yes), or always by day; the last round under lights. */
+  times?: boolean;
+  nightFinal?: boolean;
 }
 
 /** A season's own rounds and conditions (a career series), instead of the championship's. */
@@ -45,6 +49,8 @@ export interface SeasonOptions {
   rounds?: readonly { track: string; laps: number }[];
   weather?: boolean;
   wear?: WearRate;
+  times?: boolean;
+  nightFinal?: boolean;
 }
 
 export interface SeasonStanding {
@@ -61,6 +67,8 @@ export function newSeason(seed: number, difficulty: Difficulty, car: string, opt
   const season: Season = { version: 1, seed, difficulty, car, skills: [null, ...skills], rounds: (options.rounds ?? ROUNDS).map((r) => ({ ...r })), results: [] };
   if (options.weather !== undefined) season.weather = options.weather;
   if (options.wear !== undefined) season.wear = options.wear;
+  if (options.times !== undefined) season.times = options.times;
+  if (options.nightFinal) season.nightFinal = true;
   return season;
 }
 
@@ -146,6 +154,15 @@ export function roundConditions(season: Season, r: number): Conditions {
   return x < W.wet ? 'wet' : x < W.wet + W.damp ? 'damp' : 'dry';
 }
 
+/** Round r's time of day, drawn from the season's seed: now and then at dusk or night (the last round under lights, if the season says). */
+export function roundTime(season: Season, r: number): TimeOfDay {
+  if (season.nightFinal && r === season.rounds.length - 1) return 'night';
+  if (season.times === false) return 'day';
+  const T = TUNING.night.seasonTime;
+  const x = createRng(roundSeed(season, r) * 13 + 5)();
+  return x < T.night ? 'night' : x < T.night + T.dusk ? 'dusk' : 'day';
+}
+
 export function roundRace(season: Season): { track: string; options: RaceOptions } {
   const r = Math.min(nextRound(season), season.rounds.length - 1);
   const round = season.rounds[r];
@@ -153,6 +170,7 @@ export function roundRace(season: Season): { track: string; options: RaceOptions
     track: round.track,
     options: {
       conditions: roundConditions(season, r),
+      time: roundTime(season, r),
       // The championship's tyres wear as normal (its rounds are sprints: a stop only pays if you
       // ruin a set); a career series sets its own.
       wear: season.wear ?? 'normal',
@@ -191,7 +209,9 @@ export function parseSeason(raw: unknown): Season | null {
     s.results.length > s.rounds.length ||
     !s.results.every(isOrder) ||
     (s.weather !== undefined && typeof s.weather !== 'boolean') ||
-    (s.wear !== undefined && !WEAR_RATES.includes(s.wear))
+    (s.wear !== undefined && !WEAR_RATES.includes(s.wear)) ||
+    (s.times !== undefined && typeof s.times !== 'boolean') ||
+    (s.nightFinal !== undefined && typeof s.nightFinal !== 'boolean')
   ) {
     return null;
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buyUpgrade, careerRound, newCareer, parseCareer, recordCareerRound, SERIES, startSeries, type Career } from '../src/race/career';
-import { ENTRIES } from '../src/race/championship';
+import { ENTRIES, roundTime } from '../src/race/championship';
 import { upgradePrice } from '../src/vehicle/upgrades';
 
 /** A finishing order with you (entry 0) in `position`, the AI in entry order around you. */
@@ -34,6 +34,8 @@ describe('a career', () => {
     expect(round.options.difficulty).toBe('easy');
     expect(round.options.conditions).toBe('dry');
     expect(round.options.wear).toBe('off');
+    // The Club Cup races by day.
+    expect(c.season.rounds.map((_, r) => roundTime(c.season, r))).toEqual(['day', 'day', 'day', 'day']);
   });
 
   it('pays every round by position', () => {
@@ -84,6 +86,8 @@ describe('a career', () => {
     expect(grand.car).toBe('Harrier');
     expect(grand.options.difficulty).toBe('hard');
     expect(grand.options.wear).toBe('high');
+    // The Grand Championship's finale is under the lights.
+    expect(roundTime(c.season, c.season.rounds.length - 1)).toBe('night');
     const second = runSeason(c, 2);
     expect(second.career.complete).toBe(false);
     const won = runSeason(startSeries(second.career, 2), 1);

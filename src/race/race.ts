@@ -14,6 +14,7 @@ import { controls, type Controls } from '../vehicle/car';
 import type { CarDef } from '../vehicle/carDef';
 import { KESTREL } from '../vehicle/cars';
 import type { Conditions } from '../track/weather';
+import type { TimeOfDay } from '../track/timeOfDay';
 import type { WearRate } from '../vehicle/wear';
 import { PitCalls } from './pitCalls';
 import { MomentWatcher } from './raceMoments';
@@ -34,6 +35,8 @@ export interface RaceOptions {
   skills?: readonly (Skill | null)[];
   /** The weather (default dry). */
   conditions?: Conditions;
+  /** The time of day (default day): nothing in the simulation, what the race looks like. */
+  time?: TimeOfDay;
   /** How fast tyres wear (default off). */
   wear?: WearRate;
 }

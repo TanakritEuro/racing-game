@@ -20,6 +20,9 @@ export interface SeriesDef {
   /** Weather drawn per round (or always dry), and how fast tyres wear. */
   weather: boolean;
   wear: WearRate;
+  /** Dusk and night drawn per round (or always by day); the season's last round under lights. */
+  times: boolean;
+  nightFinal: boolean;
   /** Prize money per round by position (1st first), and the bonus for the season's top three. */
   prize: readonly number[];
   bonus: readonly number[];
@@ -43,6 +46,8 @@ export const SERIES: readonly SeriesDef[] = [
     ],
     weather: false,
     wear: 'off',
+    times: false,
+    nightFinal: false,
     prize: ROUND_PRIZE,
     bonus: SEASON_BONUS,
   },
@@ -59,6 +64,8 @@ export const SERIES: readonly SeriesDef[] = [
     ],
     weather: true,
     wear: 'normal',
+    times: true,
+    nightFinal: false,
     prize: scale(ROUND_PRIZE, 2),
     bonus: scale(SEASON_BONUS, 2),
   },
@@ -75,6 +82,9 @@ export const SERIES: readonly SeriesDef[] = [
     ],
     weather: true,
     wear: 'high',
+    times: true,
+    // The finale at the Proving Ground: twelve laps under the lights.
+    nightFinal: true,
     prize: scale(ROUND_PRIZE, 3.5),
     bonus: scale(SEASON_BONUS, 3),
   },
@@ -108,7 +118,7 @@ export interface RoundResult {
 
 function seasonFor(series: number, seed: number): Season {
   const s = SERIES[series];
-  return newSeason(seed, s.difficulty, s.car, { rounds: s.rounds, weather: s.weather, wear: s.wear });
+  return newSeason(seed, s.difficulty, s.car, { rounds: s.rounds, weather: s.weather, wear: s.wear, times: s.times, nightFinal: s.nightFinal });
 }
 
 export function newCareer(seed: number): Career {

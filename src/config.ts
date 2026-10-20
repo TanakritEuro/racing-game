@@ -310,6 +310,32 @@ export const TUNING = {
     /** A championship round's chance of being wet, and of being damp. */
     seasonWeather: { wet: 0.25, damp: 0.25 },
   },
+  /** Time of day and night racing (`track/timeOfDay.ts`, `track/floodlights.ts`, `render/lighting.ts`). */
+  night: {
+    /** The light level of each time of day: 1 full day … 0 full night. */
+    levels: { day: 1, dusk: 0.45, night: 0 },
+    /** Dusk to night: the light falls from dusk's to night's over this share of the race. */
+    fade: 0.8,
+    /** Floodlights and headlights come on below this light level. */
+    lightsOn: 0.55,
+    /** A championship round's chance of being run at dusk, and at night. */
+    seasonTime: { dusk: 0.2, night: 0.2 },
+    floodlights: {
+      /** A tower stands this far beyond the barrier (m); its lamps are this high (m) and reach this far (m). */
+      setback: 6,
+      height: 18,
+      reach: 75,
+      /** Every point of the road gets at least this much light; corners and the grid `corner`. Light from towers adds up, to at most `max`. */
+      min: 0.55,
+      corner: 0.8,
+      max: 1.6,
+      /** A corner for the lighting: curvature past this (1/m). The grid: this far behind the line (m). */
+      cornerCurvature: 1 / 120,
+      grid: 120,
+      /** Towers tried this far ahead of the first dark sample (m). */
+      ahead: [0, 15, 30, 45],
+    },
+  },
   /** Race replays: the race's moments (`race/raceMoments.ts`) and the director (`replay/director.ts`). */
   replay: {
     moments: {
