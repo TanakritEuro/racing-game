@@ -1,6 +1,10 @@
 # Milestone 14 plan: career mode
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (whether the climb feels earned, the pace of
+money and upgrades, the upgrades on the road, the Grand Championship as a finale, the career
+screen) stay open.
 
 Approved as written: three series, promotion for a top-three finish, prize money and upgrades,
 unlocks only inside the career.
