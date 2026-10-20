@@ -2,13 +2,13 @@
 // the host decides the circuit, the laps and when the lights go out. What arrives is only as
 // good as the other browser's code, so every message is checked before it is used.
 //
-// Bump PROTOCOL whenever a message changes: mismatched versions refuse to race.
+// Bump PROTOCOL whenever a message (or the list of cars) changes: mismatched versions refuse to race.
 
 import { CONDITIONS, type Conditions } from '../track/weather';
 import { WEAR_RATES, type WearRate } from '../vehicle/wear';
 import { cleanCustom, customId, type CustomCircuit } from '../track/custom';
 
-export const PROTOCOL = 5;
+export const PROTOCOL = 6;
 
 export type Message =
   /** Guest → host on connecting: its version and the car it will drive. */

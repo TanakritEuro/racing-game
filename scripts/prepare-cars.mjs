@@ -10,7 +10,7 @@ import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** The kit's models the game uses (see src/render/carModels.ts for which car gets which). */
-const MODELS = ['hatchback-sports', 'sedan', 'sedan-sports'];
+const MODELS = ['hatchback-sports', 'sedan', 'sedan-sports', 'suv', 'race-future'];
 
 const from = process.argv[2];
 if (!from || !existsSync(join(from, 'sedan.glb'))) {

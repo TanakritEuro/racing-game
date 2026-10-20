@@ -165,6 +165,8 @@ export class Telemetry {
         `Fx ${num(w.longForce)} N`,
         `Fy ${num(w.latForce)} N`,
         `ω  ${num(w.omega, 1)} r/s`,
+        // Drive torque on the driven wheels (rear, front or all four).
+        w.driven ? `Td ${num(w.driveTorque, 0, 6)}` : 'Td      —',
         `Tb ${w.brakeTorque.toFixed(0).padStart(5)}${w.absFactor < 1 ? ` abs ${w.absFactor.toFixed(2)}` : ''}`,
         w.contact ? (w.surface ?? '') : 'airborne',
       ].join('\n');

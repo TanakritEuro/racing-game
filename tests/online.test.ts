@@ -10,7 +10,7 @@ import { TEST_CIRCUIT } from '../src/track/circuits';
 import { buildTrack, type Track } from '../src/track/track';
 import { NO_CONTROLS, type Controls } from '../src/vehicle/car';
 import type { CarDef } from '../src/vehicle/carDef';
-import { CARS, KESTREL, WREN } from '../src/vehicle/cars';
+import { CARS, FINCH, KESTREL, OSPREY, WREN } from '../src/vehicle/cars';
 import type { Conditions } from '../src/track/weather';
 
 const NAMES = CARS.map((c) => c.name);
@@ -23,25 +23,25 @@ const FRAME = 0.002;
 let track: Track | null = null;
 
 /** A host and a guest over a loopback with 50 ± 20 ms each way, on a shared virtual clock. */
-async function pair(laps = 1, opponents = 0, conditions: Conditions = 'dry') {
+async function pair(laps = 1, opponents = 0, conditions: Conditions = 'dry', hostCar: CarDef = KESTREL, guestCar: CarDef = WREN) {
   await initPhysics();
   track ??= buildTrack(TEST_CIRCUIT);
   const line = loopback({ delay: 0.05, jitter: 0.02, seed: 3 });
   const clock = { now: 0 };
-  const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps, car: 'Kestrel', opponents, conditions, wear: 'normal', custom: null }, NAMES);
-  const guest = guestHandshake(line.b, 'Wren', TRACKS, NAMES);
+  const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps, car: hostCar.name, opponents, conditions, wear: 'normal', custom: null }, NAMES);
+  const guest = guestHandshake(line.b, guestCar.name, TRACKS, NAMES);
   await pump(line, clock, 0.3);
   const [hs, gs] = await Promise.all([host, guest]);
-  expect(hs.theirs).toBe('Wren');
+  expect(hs.theirs).toBe(guestCar.name);
   expect(gs.track).toBe(TEST_CIRCUIT.id);
   expect(gs.laps).toBe(laps);
   expect(gs.opponents).toBe(opponents);
   expect(gs.conditions).toBe(conditions);
   expect(gs.wear).toBe('normal');
-  const h = new OnlineRace(line.a, hs, track, KESTREL, WREN, { clock: () => clock.now + AHEAD, seed: 5, difficulty: 'hard' });
+  const h = new OnlineRace(line.a, hs, track, hostCar, guestCar, { clock: () => clock.now + AHEAD, seed: 5, difficulty: 'hard' });
   // The guest takes a little longer to build its world.
   await pump(line, clock, 0.4);
-  const g = new OnlineRace(line.b, gs, track, WREN, KESTREL, { clock: () => clock.now });
+  const g = new OnlineRace(line.b, gs, track, guestCar, hostCar, { clock: () => clock.now });
   return { line, clock, h, g };
 }
 
@@ -222,6 +222,34 @@ describe('an online race', () => {
       expect(g.closed).not.toBeNull();
     }
   }, 60_000);
+
+  it('races an all-wheel-drive Osprey against a front-wheel-drive Finch, each shown where it is', async () => {
+    const { line, clock, h, g } = await pair(1, 0, 'dry', OSPREY, FINCH);
+    expect(h.sim.car.def.drivetrain.layout).toBe('awd');
+    expect(g.sim.car.def.drivetrain.layout).toBe('fwd');
+    const hDrive = aiFor(h, OSPREY);
+    const gDrive = aiFor(g, FINCH);
+    let worst = 0;
+    while (clock.now < 30) {
+      clock.now += FRAME;
+      line.advance(clock.now);
+      h.advance(hDrive);
+      g.advance(gDrive);
+      if (h.phase === 'racing' && Math.abs(h.now - g.now) < 1e-4) {
+        for (const [shown, real] of [
+          [h.sim.proxies[0].current.position, g.sim.current.position],
+          [g.sim.proxies[0].current.position, h.sim.current.position],
+        ]) worst = Math.max(worst, Math.hypot(shown.x - real.x, shown.y - real.y, shown.z - real.z));
+      }
+    }
+    expect(h.closed).toBeNull();
+    expect(h.phase).toBe('racing');
+    // Both away and lapping: the Osprey ahead after its launch.
+    expect(h.sim.car.speed).toBeGreaterThan(20);
+    expect(g.sim.car.speed).toBeGreaterThan(20);
+    expect(h.standings()[0].car).toBe(0);
+    expect(worst).toBeLessThan(1);
+  }, 240_000);
 
   it('races in the host’s weather on both sides', async () => {
     const { h, g } = await pair(1, 2, 'wet');

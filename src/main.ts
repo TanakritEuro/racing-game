@@ -374,7 +374,9 @@ const BLURBS: Record<string, string> = {
 };
 const CAR_BLURBS: Record<string, string> = {
   Wren: 'Light roadster: forgiving, slower',
+  Finch: 'Hot hatch: pushes on the power',
   Kestrel: 'Balanced coupé',
+  Osprey: 'All-wheel drive: launches hardest',
   Harrier: 'Heavy GT: fast, a handful',
 };
 const builtCircuits = ALL_CIRCUITS.map((c) => (c.id === circuit.id ? track : buildTrack(c)));
@@ -454,6 +456,7 @@ const menu = new Menu(
   CARS.map((c) => ({
     name: c.name,
     blurb: CAR_BLURBS[c.name] ?? '',
+    layout: c.drivetrain.layout.toUpperCase(),
     power: Math.max(...c.engine.torqueCurve.map(([rpm, nm]) => (rpm * nm * Math.PI) / 30)) / 1000,
     mass: c.mass,
   })),

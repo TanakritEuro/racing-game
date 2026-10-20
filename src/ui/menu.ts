@@ -54,6 +54,8 @@ export interface CircuitInfo {
 export interface CarInfo {
   name: string;
   blurb: string;
+  /** Which wheels it drives: RWD, FWD or AWD. */
+  layout: string;
   /** Peak power (kW), mass (kg). */
   power: number;
   mass: number;
@@ -196,7 +198,7 @@ export class Menu {
       b.classList.add('menu-card');
       div(b, 'menu-card-name', car.name);
       div(b, 'menu-card-sub', car.blurb);
-      div(b, 'menu-card-sub', `${Math.round(car.power)} kW · ${car.mass} kg`);
+      div(b, 'menu-card-sub', `${car.layout} · ${Math.round(car.power)} kW · ${car.mass} kg`);
     }
 
     // The weather: a championship draws its own each round; a guest online gets the host's.

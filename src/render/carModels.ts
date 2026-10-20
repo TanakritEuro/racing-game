@@ -15,7 +15,12 @@ const MODEL_FOR: Record<string, string> = {
   Wren: 'hatchback-sports',
   Kestrel: 'sedan',
   Harrier: 'sedan-sports',
+  Finch: 'suv',
+  Osprey: 'race-future',
 };
+
+/** Parts left off: the spare wheel on the suv's tailgate (the Finch is a hot hatch). */
+const LEFT_OFF = ['wheel-back'];
 
 /** Wheel node names in the order of `Car.wheels`: front left, front right, rear left, rear right. */
 const WHEEL_NODES = ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right'];
@@ -61,7 +66,7 @@ function fit(scene: THREE.Object3D, def: CarDef, colour: number): CarModel {
   source.rotation.y = Math.PI;
   source.updateMatrixWorld(true);
   const wheelNodes = WHEEL_NODES.map((n) => source.getObjectByName(n));
-  const bodyParts = source.children.filter((c) => !WHEEL_NODES.includes(c.name));
+  const bodyParts = source.children.filter((c) => !WHEEL_NODES.includes(c.name) && !LEFT_OFF.includes(c.name));
   if (wheelNodes.some((w) => !w) || bodyParts.length === 0) throw new Error('unexpected model layout');
 
   // Wheel centres in the turned model, and the body's extent.
