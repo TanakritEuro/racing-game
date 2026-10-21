@@ -26,7 +26,8 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 Milestones 1–16 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing, car setup, weather, tyre
 wear and pit stops, a track editor, touch controls, career mode, front- and all-wheel drive, race
-replays) are done; **Milestone 17 (night racing) is planned** (`docs/milestone-17.md`).
+replays) are done; **Milestone 17 (night racing) is built and in playtesting**
+(`docs/milestone-17.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -59,7 +60,15 @@ Race replays: every race records each car at 30 Hz and its moments (`race/raceRe
 the pause menu, or the championship standings) plays it back: a director (`replay/director.ts`)
 follows moments and battles across the TV cameras, chase and onboard shots, or you pick the car
 (the tower, ↑/↓) and camera (C); Q/E jump between moments on the timeline (`ui/replayHud.ts`).
-Not online yet.
+Online too, once the race is over (each screen records every car by id).
+
+Time of day (`track/timeOfDay.ts`): day, dusk, night, or dusk to night over a race, as a light
+level; nothing in the simulation changes. Floodlight towers round every circuit
+(`track/floodlights.ts`: every stretch lit to a minimum, more at corners and the grid), their
+light baked into the track, terrain and scenery (`render/nightLight.ts`); the sky, sun and
+fog (`render/lighting.ts`); towers (`render/floodlightView.ts`); every car's head, tail and
+brake lights, and real headlights on the four cars nearest the camera (`render/carLights.ts`).
+The start menu's Time row or `?time=`; championships draw it per round; online the host's.
 
 Race mode (`?mode=race`, or Tab): up to seven AI opponents (`ai/`) on a staggered grid,
 five red lights, positions, gaps and results (`race/race.ts`). Each circuit gets a
@@ -316,7 +325,7 @@ layouts must not cross over themselves. `tests/circuits.test.ts` checks every ci
 - `src/main.ts` — entry point and frame loop; `?track=<id>`, `?telemetry`, `?debug`
   (exposes `sim`, `race`, `online`, `session()`, `step(controls)`, `replay()`, `autopilot`,
   `effects`, `sound()` and `stage` in the console), `?line`, `?autopilot`, `?mode=race` and
-  its options, `?season`, `?online`, `?setup=default`, `?weather=dry|damp|wet`, `?wear=off|normal|high`, `?editor` (`=<id>` to edit one), `?share=`, `?career` (the next career round), `?menu=career`.
+  its options, `?season`, `?online`, `?setup=default`, `?weather=dry|damp|wet`, `?time=day|dusk|night|duskToNight`, `?wear=off|normal|high`, `?editor` (`=<id>` to edit one), `?share=`, `?career` (the next career round), `?menu=career`.
 - `tests/` — Vitest; `helpers.ts` makes a headless `Simulation`, runs it and has a
   line-following test driver (offset, curvature speed profile); `tracks.ts` has test-only
   layouts (skidpads, long oval, hill, kerbed oval, grass and gravel pads).

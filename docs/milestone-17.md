@@ -1,6 +1,31 @@
 # Milestone 17 plan: night racing
 
-## Status: planned, waiting for your approval
+## Status: built, in playtesting
+
+Approved as written: night racing, the AI unaffected by the dark, dusk to night as a race option.
+
+Measured: 15–17 towers per km (Harrowmere 80, Saltmarsh 46, Ridgeback 66, the Proving Ground
+25), every sample's darker edge lit to its minimum (corners and the grid more), placed in
+under 25 ms. Checked in the browser: dusk and night at Harrowmere with eight cars (the sky,
+the towers lit, the floodlit grid, head and tail lights, the car ahead in your headlights),
+a frame drawn in 2.2 ms with four headlights lit; night at the Proving Ground with four cars.
+No console errors. (The in-app browser's frame rate is no guide: it draws at about 1.5 fps
+whatever the scene, so these are timings of the drawing itself.)
+
+Where the build differs from the plan below:
+
+- **The floodlight's light is baked into vertex attributes** and added by a small patch to
+  the track's, terrain's and scenery's materials (`render/nightLight.ts`): emitted light in
+  the surface's own colour on lit materials, and on unlit ones (painted lines, decals) a
+  dimming in the dark that the floodlight brings back up. Cars, which move, get a little
+  extra sky fill light where the camera's car stands under the lights, rather than baked light.
+- **Headlights fall off gently** (linear with distance, not as the square): at first a car
+  just ahead on the grid was blown out to white while the road beyond was dark.
+- **The headlight spot lights stay in the scene all session** (off is a strength of 0):
+  switching lights in and out makes three.js rebuild every shader.
+- **Online:** the time of day goes in the welcome (`PROTOCOL` 8; the online replays took 7).
+- **Online race replays** were added alongside, in a session of their own (see
+  `docs/milestone-16.md`, *Online*).
 
 Every race today runs at noon under the same sun. This milestone adds the time of day: dusk,
 with the sun low and long shadows, and night, with the circuits lit by floodlight towers and
