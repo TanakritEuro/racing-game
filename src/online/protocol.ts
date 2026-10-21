@@ -8,7 +8,7 @@ import { CONDITIONS, type Conditions } from '../track/weather';
 import { WEAR_RATES, type WearRate } from '../vehicle/wear';
 import { cleanCustom, customId, type CustomCircuit } from '../track/custom';
 
-export const PROTOCOL = 6;
+export const PROTOCOL = 7;
 
 export type Message =
   /** Guest → host on connecting: its version and the car it will drive. */

@@ -18,6 +18,11 @@
 // Cars have the same ids on both screens' standings: 0 is this player's, 1 the other
 // player's, 2 and up the AI's. On the wire, 0 is the host's and 1 the guest's.
 //
+// Each side records the race for its replay by car id, from the lights to the end: its own
+// cars as simulated, the other side's as they are drawn here (the proxies) with the readouts
+// their states carry, and the moments it can see (its own cars' contacts; everything else
+// from the states too). The finishes come from the agreed finishing times.
+//
 // The clock is passed in (seconds), so tests run two of these over a loopback on a virtual one.
 
 import { TUNING } from '../config';
@@ -44,6 +49,12 @@ import { buildTrack } from '../track/track';
 import { validateTrack } from '../track/validate';
 import { raceFuel } from '../race/race';
 import { PitCalls } from '../race/pitCalls';
+import { MomentWatcher, watchSimCar, type WatchedCar } from '../race/raceMoments';
+import { RaceRecorder, type RaceRecording } from '../race/raceRecording';
+import { createRecordedState, type RecordedState } from '../race/recording';
+import { copyPose } from '../vehicle/pose';
+import { dot, rotate } from '../math';
+import { MAX_EXTRAPOLATION } from './remoteCar';
 
 export type Role = 'host' | 'guest';
 
@@ -162,6 +173,10 @@ const THEM = 1;
 /** An AI car on the grid. */
 const HELD: Controls = makeControls({ brake: 1 });
 
+/** A car's own right and forward (−Z). */
+const RIGHT = { x: 1, y: 0, z: 0 };
+const FORWARD = { x: 0, y: 0, z: -1 };
+
 /** A simulated car (index into `sim.cars`) or a proxy (index into `sim.proxies`). */
 type Where = { car: number; proxy?: undefined } | { proxy: number; car?: undefined };
 
@@ -186,6 +201,12 @@ export class OnlineRace {
   outAt: number | null = null;
   /** The simulated cars' controls on the last step (this player's first, held on the grid). */
   controls: Controls[] = [];
+  /** Every car through the race by id, and its moments, for the replay (cleared by a rematch). */
+  readonly recorder: RaceRecorder;
+  private readonly watcher: MomentWatcher;
+  private readonly recorded: RecordedState[];
+  private readonly progressNow: number[];
+  private readonly knocksNow: { car: number; impulse: number }[] = [];
 
   private readonly traffic: Traffic | null = null;
   /** The pit wall's BOX calls for this side's cars (its AI act on their own). */
@@ -263,6 +284,11 @@ export class OnlineRace {
     this.lastKey = Array.from({ length: this.count }, () => -Infinity);
     this.crossings = this.sim.cars.map(() => []);
     this.lapsBefore = this.sim.cars.map(() => 0);
+    const ids = Array.from({ length: this.count }, (_, id) => id);
+    this.recorder = new RaceRecorder(track.def.id, ids.map((id) => this.defOf(id).name), setup.laps);
+    this.watcher = new MomentWatcher(this.recorder, this.count);
+    this.recorded = ids.map(() => createRecordedState());
+    this.progressNow = ids.map(() => 0);
     this.synced = host;
     this.base = options.clock();
     link.onMessage = (raw) => {
@@ -333,6 +359,74 @@ export class OnlineRace {
   }
   idOfProxy(j: number): number {
     return 1 + j;
+  }
+
+  /** Car `id`'s car. */
+  defOf(id: number): CarDef {
+    const where = this.where(id);
+    return where.car === undefined ? this.sim.proxies[where.proxy].def : this.sim.cars[where.car].def;
+  }
+
+  /** The race can be watched again: it is over (the race doesn't wait for anybody) and was recorded. */
+  get replayable(): boolean {
+    return this.phase === 'finished' && this.recorder.frameCount >= 2;
+  }
+
+  /**
+   * The race as recorded here. The finishes are the agreed finishing times in order (each side
+   * hears of the other side's late, so not in the order it heard of them).
+   */
+  recording(): RaceRecording {
+    const rec = this.recorder.recording();
+    const finishers = this.finishTimes
+      .map((time, car) => ({ time, car }))
+      .filter((f): f is { time: number; car: number } => f.time !== null)
+      .sort((a, b) => a.time - b.time);
+    rec.moments = [
+      ...rec.moments.filter((m) => m.kind !== 'finish'),
+      ...finishers.map((f, i) => ({ kind: 'finish' as const, time: f.time, cars: [f.car], lap: this.setup.laps, value: i + 1 })),
+    ].sort((a, b) => a.time - b.time);
+    return rec;
+  }
+
+  /** Car `id` for the race's moments: this side's cars as simulated, the other side's from their states. */
+  watch(id: number, out: WatchedCar): void {
+    const where = this.where(id);
+    if (where.car !== undefined) {
+      watchSimCar(this.sim, where.car, out);
+      return;
+    }
+    const at = this.sim.proxies[where.proxy].current.position;
+    out.x = at.x;
+    out.z = at.z;
+    const s = this.remotes[where.proxy].latest;
+    if (!s) {
+      out.speed = out.slip = out.laps = out.age = 0;
+      out.lastLap = null;
+      out.inLane = out.servicing = false;
+      return;
+    }
+    out.age = Math.max(0, this.now - s.time);
+    // The body slip from the newest state: its velocity against where it points.
+    const v = s.velocity;
+    out.speed = Math.hypot(v.x, v.z);
+    out.slip = Math.atan2(dot(v, rotate(s.pose.rotation, RIGHT)), dot(v, rotate(s.pose.rotation, FORWARD)));
+    out.laps = s.laps;
+    out.lastLap = s.lastLap;
+    out.inLane = s.inLane;
+    out.servicing = s.servicing;
+  }
+
+  /** This step's hard knocks on this side's cars, by car id. */
+  get knocks(): readonly { car: number; impulse: number }[] {
+    this.knocksNow.length = 0;
+    for (const c of this.sim.contacts) this.knocksNow.push({ car: this.idOfCar(c.car), impulse: c.impulse });
+    return this.knocksNow;
+  }
+
+  /** Car `id`'s laps plus the fraction of the current one (the other side's from their states, carried on to now). */
+  progressOf(id: number): number {
+    return this.progress(id);
   }
 
   /**
@@ -459,14 +553,51 @@ export class OnlineRace {
     if (this.phase === 'lights' && this.outAt !== null && now >= this.outAt - 1e-6) this.phase = 'racing';
     // States go out once they can carry the host's time (the guest's after the sync).
     if (sim.steps % TUNING.online.stateEvery === 0 && this.synced && !this.closed) sim.cars.forEach((_, k) => this.sendState(k));
-    if (held) return;
-    this.pitWall.update(sim, this.setup.laps, (k) => this.finishTimes[this.idOfCar(k)] !== null, [null, ...this.drivers]);
-    sim.timers.forEach((t, k) => {
-      if (t.laps > this.lapsBefore[k]) this.crossings[k].push(now);
-      const id = this.idOfCar(k);
-      this.mark(id, this.progress(id), now);
-    });
-    this.score();
+    if (!held) {
+      this.pitWall.update(sim, this.setup.laps, (k) => this.finishTimes[this.idOfCar(k)] !== null, [null, ...this.drivers]);
+      sim.timers.forEach((t, k) => {
+        if (t.laps > this.lapsBefore[k]) this.crossings[k].push(now);
+        const id = this.idOfCar(k);
+        this.mark(id, this.progress(id), now);
+      });
+      this.score();
+    }
+    // From the lights going out (so frame 0 is race time 0) until the race is over.
+    if (this.phase === 'racing') this.record();
+  }
+
+  /** The step into the recording: the moments it brought, and every car's frame. */
+  private record(): void {
+    const { recorder, recorded } = this;
+    const due = recorder.due;
+    this.watcher.afterStep(this, due);
+    if (due) {
+      for (let id = 0; id < this.count; id++) {
+        const s = recorded[id];
+        const where = this.where(id);
+        if (where.car !== undefined) {
+          const k = where.car;
+          const car = this.sim.cars[k];
+          copyPose(this.sim.poses[k].current, s.pose);
+          s.speed = car.speed;
+          s.rpm = car.drivetrain.rpm;
+          s.gear = car.drivetrain.gearbox.nextGear;
+          s.throttle = this.controls[k]?.throttle ?? 0;
+          s.brake = this.controls[k]?.brake ?? 0;
+        } else {
+          // Where it is drawn, with what its newest state says.
+          copyPose(this.sim.proxies[where.proxy].current, s.pose);
+          const latest = this.remotes[where.proxy].latest;
+          s.speed = latest?.speed ?? 0;
+          s.rpm = latest?.rpm ?? 0;
+          s.gear = latest?.gear ?? 0;
+          s.throttle = latest?.throttle ?? 0;
+          s.brake = latest?.brake ?? 0;
+        }
+        this.progressNow[id] = this.progress(id);
+      }
+    }
+    recorder.capture(recorded, this.progressNow);
   }
 
   /** A ghost while its states are stale; solid again once fresh and clear of this side's cars. */
@@ -513,10 +644,17 @@ export class OnlineRace {
     const where = this.where(id);
     if (where.proxy !== undefined) {
       const s = this.remotes[where.proxy].latest;
-      return s ? s.laps + s.distance / this.track.length : 0;
+      if (!s) return 0;
+      // On from the newest state at its speed to now, as the car is drawn (for a moment at most).
+      const ahead = Math.max(0, Math.min(MAX_EXTRAPOLATION, this.now - s.time)) * s.speed;
+      return s.laps + (s.distance + ahead) / this.track.length;
     }
     const timer = this.sim.timers[where.car];
-    const fraction = timer.index / this.track.samples.length;
+    // Along the tangent from the nearest sample, finer than the 2 m samples (as the other side's are, carried on to now).
+    const { samples, length } = this.track;
+    const s = samples[timer.index];
+    const p = this.sim.cars[where.car].position;
+    const fraction = (timer.index * (length / samples.length) + (p.x - s.x) * s.tx + (p.z - s.z) * s.tz) / length;
     if (timer.current(this.sim.time) === null) return fraction > 0.5 ? fraction - 1 : fraction;
     // Just across the line the timer has counted the lap before the position wraps: no jump back.
     return timer.laps + (fraction > 0.9 && timer.index < this.track.samples.length * 0.1 ? 0 : fraction);
@@ -549,6 +687,12 @@ export class OnlineRace {
     state.throttle = this.controls[k]?.throttle ?? 0;
     state.laps = sim.timers[k].laps;
     state.distance = (this.progress(id) - sim.timers[k].laps) * this.track.length;
+    state.gear = car.drivetrain.gearbox.nextGear;
+    state.brake = this.controls[k]?.brake ?? 0;
+    state.lastLap = sim.timers[k].lastLap;
+    const pit = sim.pits?.state[k];
+    state.inLane = pit?.inLane ?? false;
+    state.servicing = pit ? pit.servicing !== null : false;
     this.link.send({ type: 'state', car: this.wire(id), data: packState(state) }, 'frames');
   }
 
@@ -663,6 +807,8 @@ export class OnlineRace {
       this.finishTimes.fill(null);
       this.reportedBest.fill(null);
       this.rematch.fill(false);
+      this.recorder.reset();
+      this.watcher.reset();
     }
     // Shift the steps by under half a step so one falls exactly on the lights going out.
     this.base = outAt - Math.round((outAt - this.base) / PHYSICS_STEP) * PHYSICS_STEP;

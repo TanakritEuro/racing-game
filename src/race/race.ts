@@ -8,7 +8,7 @@ import { createAiDriver, type AiDriver } from '../ai/driver';
 import { fieldSkills, type Difficulty, type Skill } from '../ai/skill';
 import { Traffic } from '../ai/traffic';
 import { createRng } from '../math';
-import { Simulation } from '../sim';
+import { Simulation, type Contact } from '../sim';
 import type { Track } from '../track/track';
 import { controls, type Controls } from '../vehicle/car';
 import type { CarDef } from '../vehicle/carDef';
@@ -17,7 +17,7 @@ import type { Conditions } from '../track/weather';
 import type { TimeOfDay } from '../track/timeOfDay';
 import type { WearRate } from '../vehicle/wear';
 import { PitCalls } from './pitCalls';
-import { MomentWatcher } from './raceMoments';
+import { MomentWatcher, watchSimCar, type WatchedCar } from './raceMoments';
 import { RaceRecorder } from './raceRecording';
 import { createRecordedState, type RecordedState } from './recording';
 import { copyPose } from '../vehicle/pose';
@@ -240,6 +240,16 @@ export class Race {
   }
 
   private readonly progressNow: number[] = [];
+
+  /** Car `k` for the race's moments. */
+  watch(k: number, out: WatchedCar): void {
+    watchSimCar(this.sim, k, out);
+  }
+
+  /** This step's hard knocks (car indices are the race's). */
+  get knocks(): readonly Contact[] {
+    return this.sim.contacts;
+  }
 
   /** Every car's place: finishers in the order they took the flag, then the rest by progress. */
   standings(): Standing[] {

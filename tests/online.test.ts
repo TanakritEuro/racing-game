@@ -12,6 +12,8 @@ import { NO_CONTROLS, type Controls } from '../src/vehicle/car';
 import type { CarDef } from '../src/vehicle/carDef';
 import { CARS, FINCH, KESTREL, OSPREY, WREN } from '../src/vehicle/cars';
 import type { Conditions } from '../src/track/weather';
+import { progressAt, sampleCar, standingsAt, type RaceMoment, type RaceRecording } from '../src/race/raceRecording';
+import { createRecordedState } from '../src/race/recording';
 
 const NAMES = CARS.map((c) => c.name);
 const TRACKS = [TEST_CIRCUIT.id];
@@ -125,12 +127,15 @@ describe('an online race', () => {
       expect(r.phase).toBe('lights');
       expect(r.sim.timer.laps).toBe(0);
       expect(r.finishTimes).toEqual([null, null]);
+      // The last race's recording is gone with it.
+      expect(r.recorder.frameCount).toBe(0);
+      expect(r.replayable).toBe(false);
     }
     expect(h.outAt).toBe(g.outAt);
   }, 240_000);
 
-  it('runs AI opponents on the host, seen by the guest where the host has them, with one result', async () => {
-    const { line, clock, h, g } = await pair(1, 3);
+  it('runs AI opponents on the host, seen by the guest where the host has them, with one result and one recording', async () => {
+    const { line, clock, h, g } = await pair(2, 3);
     expect(h.count).toBe(5);
     expect(g.count).toBe(5);
     expect(h.drivers.length).toBe(3);
@@ -164,6 +169,62 @@ describe('an online race', () => {
     expect(g.finishTimes).toEqual(h.finishTimes.map((_, id) => h.finishTimes[swap(id)]));
     expect(h.finishTimes.every((t) => t !== null)).toBe(true);
     expect(g.standings().map((r) => swap(r.car))).toEqual(h.standings().map((r) => r.car));
+
+    // Both sides recorded the race by car id from the lights (frame 0 at race time 0 on both)
+    // until it was over, with every car's car.
+    const hr = h.recording();
+    const gr = g.recording();
+    expect(h.replayable && g.replayable).toBe(true);
+    expect(gr.cars).toEqual(hr.cars.map((_, id) => hr.cars[swap(id)]));
+    expect(Math.abs(hr.count - gr.count)).toBeLessThan(30);
+    // The same finishes, in the order of the result.
+    const moments = (rec: RaceRecording, kind: RaceMoment['kind'], id: (car: number) => number) => rec.moments.filter((m) => m.kind === kind).map((m) => ({ ...m, cars: m.cars.map(id) }));
+    const mine = (c: number) => c;
+    expect(moments(gr, 'finish', swap)).toEqual(moments(hr, 'finish', mine));
+    expect(moments(hr, 'finish', mine).map((m) => m.cars[0])).toEqual(h.standings().map((r) => r.car));
+    // The same fastest laps, within a frame or two; the same passes, from much the same moment
+    // (a pass is timed from when the places first changed, which side by side can be a few frames apart).
+    for (const [kind, within] of [
+      ['fastestLap', 2.5 * hr.frameDt],
+      ['pass', 0.2],
+    ] as const) {
+      const ours = moments(hr, kind, mine);
+      const theirs = moments(gr, kind, swap);
+      expect(theirs.map((m) => m.cars)).toEqual(ours.map((m) => m.cars));
+      theirs.forEach((m, i) => expect(Math.abs(m.time - ours[i].time)).toBeLessThan(within));
+    }
+    expect(moments(hr, 'pass', mine).length).toBeGreaterThan(0);
+    expect(moments(hr, 'fastestLap', mine).length).toBeGreaterThan(0);
+    // The places all through the race: the same at every frame, or within a frame or two of it
+    // (bar cars side by side, within a metre: the other side knows a car to a few tenths).
+    const order = (rec: RaceRecording, t: number, id: (car: number) => number) => standingsAt(rec, t).map((r) => id(r.car));
+    const same = (x: number[], y: number[]) => x.join() === y.join();
+    const frames = Math.min(hr.count, gr.count);
+    let differ = 0;
+    for (let k = 0; k < frames; k++) {
+      const t = k * hr.frameDt;
+      const ours = order(hr, t, mine);
+      const theirs = order(gr, t, swap);
+      if (same(ours, theirs)) continue;
+      differ++;
+      if ([-2, -1, 1, 2].some((d) => same(order(gr, t + d * gr.frameDt, swap), ours))) continue;
+      for (let i = 0; i < theirs.length; i++)
+        for (let j = i + 1; j < theirs.length; j++)
+          if (ours.indexOf(theirs[i]) > ours.indexOf(theirs[j])) expect(Math.abs(progressAt(hr, theirs[i], t) - progressAt(hr, theirs[j], t)) * track!.length).toBeLessThan(1);
+    }
+    expect(differ).toBeLessThan(frames * 0.01);
+    // Every car where the other side has it too.
+    const a = createRecordedState();
+    const b = createRecordedState();
+    const apart: number[] = [];
+    for (let k = 0; k < frames; k += 3)
+      for (let id = 0; id < hr.cars.length; id++) {
+        sampleCar(hr, id, k * hr.frameDt, a);
+        sampleCar(gr, swap(id), k * gr.frameDt, b);
+        apart.push(Math.hypot(a.pose.position.x - b.pose.position.x, a.pose.position.z - b.pose.position.z));
+      }
+    apart.sort((x, y) => x - y);
+    expect(apart[Math.floor(apart.length * 0.99)]).toBeLessThan(0.5);
   }, 300_000);
 
   it('makes the other car a ghost while its states are stale, and solid again once clear', async () => {

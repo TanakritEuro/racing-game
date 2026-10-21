@@ -7,9 +7,8 @@ import { TUNING } from '../src/config';
 import { PHYSICS_STEP } from '../src/constants';
 import { initPhysics } from '../src/physics';
 import { Race } from '../src/race/race';
-import { MomentWatcher, type WatchedRace } from '../src/race/raceMoments';
+import { MomentWatcher, type WatchedCar, type WatchedRace } from '../src/race/raceMoments';
 import { RaceRecorder, type RaceMoment } from '../src/race/raceRecording';
-import type { Simulation } from '../src/sim';
 import { TEST_CIRCUIT } from '../src/track/circuits';
 import { buildTrack } from '../src/track/track';
 import { controls } from '../src/vehicle/car';
@@ -21,18 +20,29 @@ function scripted(n: number, laps = 3) {
     position: { x: -10 * k, y: 0, z: 0 },
     bodySlipAngle: 0,
     velocity: { x: 30, y: 0, z: 0 },
-    body: { linvel: () => cars[k].velocity },
   }));
   const timers = cars.map(() => ({ laps: 0, lastLap: null as number | null }));
   const pits = { state: cars.map(() => ({ servicing: null as number | null, inLane: false })) };
   const contacts: { car: number; impulse: number }[] = [];
   const progress = cars.map((_, k) => -0.01 * k);
   const race = {
-    sim: { cars, timers, pits, contacts } as unknown as Simulation,
     finishTimes: cars.map(() => null as number | null),
     time: 0 as number | null,
     laps,
     progressOf: (k: number) => progress[k],
+    watch(k: number, out: WatchedCar) {
+      const car = cars[k];
+      out.x = car.position.x;
+      out.z = car.position.z;
+      out.speed = Math.hypot(car.velocity.x, car.velocity.z);
+      out.slip = car.bodySlipAngle;
+      out.laps = timers[k].laps;
+      out.lastLap = timers[k].lastLap;
+      out.inLane = pits.state[k].inLane;
+      out.servicing = pits.state[k].servicing !== null;
+      out.age = 0;
+    },
+    knocks: contacts,
   } satisfies WatchedRace;
   const recorder = new RaceRecorder('test', cars.map(() => 'Kestrel'), laps);
   const watcher = new MomentWatcher(recorder, n);

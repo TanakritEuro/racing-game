@@ -3,8 +3,8 @@
 ## Status: done
 
 Closed without playtest answers; the questions (the director's choices, passes on the timeline,
-the onboard and chase shots, the tower, watching mid-race) stay open. Online race replays are
-being added in a session of their own.
+the onboard and chase shots, the tower, watching mid-race) stay open. Online races have
+replays too (added afterwards; see *Online* below).
 
 Approved as written: the race just run kept in memory, whole-race replays (no highlights reel).
 
@@ -24,9 +24,22 @@ draws too slowly to time a screenshot.
 
 Where the build differs from the plan below:
 
-- **Online races have no replay yet.** An online race (`OnlineRace`) keeps the other
-  player's cars as proxies under their own numbering, outside the `Race` that records;
-  recording them is a piece of its own. Left for later.
+- **Online** (added after the rest): `OnlineRace` records the race on each screen by car id
+  (0 you, 1 the other player, 2+ the AI), from the lights to the end: its own cars as
+  simulated, the other side's from their proxies as drawn, with the readouts their states
+  carry. The state now also carries gear, brake, the last lap and the pit lane (`PROTOCOL` 7),
+  so passes, fastest laps, stops and spins are seen for every car; contacts only for your own
+  side's cars. The watcher reads each car through a `WatchedCar` (the other side's with the
+  age of its state, so a lap or a stop is timed when it happened, not when heard of). The
+  finishes come from the agreed finishing times in order. Progress is measured along the
+  tangent from the nearest sample on both sides (not the 2 m sample index) and carried on to
+  now for the other side's cars, so both screens agree on the places. P (or the pause menu's
+  *Watch replay*, or the hint on the results) plays it once the race is over; the race goes on
+  underneath (your car left alone), and a rematch ends the replay and clears the recording.
+  Measured over the loopback (50 ± 20 ms each way, a 2-lap race with three AI): the same
+  finishes, passes and fastest laps on both sides (fastest laps within a frame, passes within
+  0.2 s); the places the same at all but one frame in 1900 (two cars side by side, 0.3 m
+  apart); 99 % of every car's frames within about 0.1 m of where the other side recorded it.
 - **Picking a car:** click it in the tower, or ↑/↓ for the car ahead or behind (keys 1–4
   stay the playback speed); C cycles TV, chase and onboard for it; D hands back to the
   director. Skips are 5 s (the lap replay keeps 2 s).

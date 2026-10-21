@@ -10,7 +10,7 @@ import { createState, type CarState } from './state';
 
 /** States kept, and how far past the newest it will guess (s) before holding still. */
 const KEEP = 12;
-const MAX_EXTRAPOLATION = 0.35;
+export const MAX_EXTRAPOLATION = 0.35;
 /** How quickly a correction is eased out (s, time constant). */
 const EASE = 0.12;
 /** A state this far (m) from where the car was thought to be is a teleport (put back on the track, a restart): shown at once. */
@@ -140,6 +140,11 @@ function clone(s: CarState): CarState {
   c.throttle = s.throttle;
   c.laps = s.laps;
   c.distance = s.distance;
+  c.gear = s.gear;
+  c.brake = s.brake;
+  c.lastLap = s.lastLap;
+  c.inLane = s.inLane;
+  c.servicing = s.servicing;
   return c;
 }
 
