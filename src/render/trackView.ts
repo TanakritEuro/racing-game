@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { uprightAlong } from '../math';
 import { BARRIER_HEIGHT, BARRIER_THICKNESS } from '../physics';
-import { barriers, crossSection, KERB_STRIPE, kerbs, road, runoff, strip, sweep, type Offset, type Ribbon, type Sweep } from '../track/geometry';
+import { barriers, crossSection, KERB_STRIPE, kerbs, road, runoff, runs, strip, sweep, type Offset, type Ribbon, type Sweep } from '../track/geometry';
+import { finishSample } from '../race/timing';
 import type { Terrain } from '../track/terrain';
 import type { Track, TrackSample } from '../track/track';
 import { puddleSweeps } from '../track/puddles';
@@ -28,9 +29,21 @@ export function createTrackView(track: Track, terrain: Terrain, wet = 0): THREE.
     m.color.multiplyScalar(1 - (1 - W.road.darken) * wet);
     return m;
   };
-  const surface = mesh(road(track), wetLook(new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92 })), 6);
-  surface.receiveShadow = true;
-  group.add(surface);
+  // The road: asphalt, and on a rally stage gravel where it is.
+  const asphalt = wetLook(new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92 }));
+  const dirt = wetLook(new THREE.MeshStandardMaterial({ map: gravelRoadTexture(), roughness: 1 }));
+  if (track.samples.every((p) => p.surface === 'asphalt')) group.add(shaded(mesh(road(track), asphalt, 6)));
+  else if (track.samples.every((p) => p.surface === 'gravel')) group.add(shaded(mesh(road(track), dirt, 6)));
+  else {
+    for (const [surface, material] of [
+      ['asphalt', asphalt],
+      ['gravel', dirt],
+    ] as const) {
+      for (const [first, last] of runs(track, (p) => p.surface === surface)) {
+        group.add(shaded(sweepMesh(sweep(track, first, last, 1, (p) => [[-p.halfWidth, 0], [p.halfWidth, 0]]), material, 6)));
+      }
+    }
+  }
   const lane = pitLane(track);
   if (lane) {
     const pits = sweepMesh(laneSweep(track, lane), wetLook(new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.92 })), 6);
@@ -85,8 +98,9 @@ export function createTrackView(track: Track, terrain: Terrain, wet = 0): THREE.
           lift,
         );
 
+  // Painted edge lines on a circuit (a stage's road has none).
   const lineMat = new THREE.MeshBasicMaterial({ color: 0xf2f2f2, ...decal });
-  for (const s of [1, -1]) group.add(mesh(side(s, (p) => p.halfWidth - 0.45, (p) => p.halfWidth - 0.3, 0.01), lineMat));
+  if (track.closed) for (const s of [1, -1]) group.add(mesh(side(s, (p) => p.halfWidth - 0.45, (p) => p.halfWidth - 0.3, 0.01), lineMat));
 
   // Kerbs: one paint stripe per KERB_STRIPE, red over the ridges.
   const kerbMat = wetLook(new THREE.MeshStandardMaterial({ map: kerbTexture(), roughness: 0.8 }));
@@ -96,9 +110,41 @@ export function createTrackView(track: Track, terrain: Terrain, wet = 0): THREE.
   for (const r of runoff(track, 'grass')) group.add(sweepMesh(r, grassMat, 10));
   for (const r of runoff(track, 'gravel')) group.add(sweepMesh(r, gravelMat, 4));
 
-  group.add(createStartLine(track));
+  // The start line; a stage's start where the car stands, and its flying finish.
+  if (track.closed) group.add(createStartLine(track, 0));
+  else {
+    group.add(createStartLine(track, TUNING.stage.startSample + 1));
+    group.add(createStartLine(track, finishSample(track)));
+  }
   group.add(createBarriers(track));
   return group;
+}
+
+function shaded(m: THREE.Mesh): THREE.Mesh {
+  m.receiveShadow = true;
+  return m;
+}
+
+/** A graded gravel road: brown-grey, stones, and two darker wheel tracks along it. */
+function gravelRoadTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#8a7a63';
+  ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 12000; i++) {
+    const g = 95 + Math.floor(Math.random() * 70);
+    ctx.fillStyle = `rgb(${g + 10},${g},${g - 18})`;
+    ctx.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 2, 1 + Math.random() * 2);
+  }
+  // Wheel tracks, worn darker and smoother, where cars drive (u runs across the road).
+  ctx.fillStyle = 'rgba(70, 60, 48, 0.35)';
+  for (const u of [0.28, 0.72]) ctx.fillRect(u * 256 - 14, 0, 28, 256);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 8;
+  return tex;
 }
 
 /** A mesh from a sweep, its texture repeating every `repeat` metres along. */
@@ -201,8 +247,8 @@ function kerbTexture(): THREE.Texture {
   return tex;
 }
 
-/** Chequered start line across the road at sample 0, laid on the road's surface. */
-function createStartLine(track: Track): THREE.Mesh {
+/** A chequered line across the road at sample `at` (the start line: 0), laid on the road's surface. */
+function createStartLine(track: Track, at: number): THREE.Mesh {
   const canvas = document.createElement('canvas');
   canvas.width = 24;
   canvas.height = 2;
@@ -216,7 +262,7 @@ function createStartLine(track: Track): THREE.Mesh {
   const tex = new THREE.CanvasTexture(canvas);
   tex.magFilter = THREE.NearestFilter;
   tex.colorSpace = THREE.SRGBColorSpace;
-  const p = track.samples[0];
+  const p = track.samples[at];
   // A quad 1 m long, the road's width across, in the sample's cross-section frame.
   const corner = (across: Offset, along: number) => {
     const c = crossSection(p, typeof across === 'number' ? across : across(p), 0.012);
@@ -239,8 +285,9 @@ function createBarriers(track: Track): THREE.InstancedMesh {
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.7 });
   const inst = new THREE.InstancedMesh(geo, mat, segs.length);
   const m = new THREE.Matrix4();
-  const red = new THREE.Color(0xc0302a);
-  const white = new THREE.Color(0xeeeeee);
+  // A stage's edges are earth banks, not tyre walls.
+  const red = new THREE.Color(track.closed ? 0xc0302a : 0x5b4a36);
+  const white = new THREE.Color(track.closed ? 0xeeeeee : 0x66553e);
   segs.forEach((b, i) => {
     const r = uprightAlong(b.dir);
     const q = new THREE.Quaternion(r.x, r.y, r.z, r.w);

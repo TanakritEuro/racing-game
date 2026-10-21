@@ -24,7 +24,8 @@ export class TimingHud {
   private shown: ({ time: number; colour: Colour } | null)[] = [null, null, null];
   private holdUntil = -Infinity;
 
-  constructor(root: HTMLElement) {
+  /** `stage`: a rally stage (one timed run, not laps). */
+  constructor(root: HTMLElement, private readonly stage = false) {
     const el = (cls: string, parent: HTMLElement = root) => {
       const d = document.createElement('div');
       d.className = cls;
@@ -65,7 +66,8 @@ export class TimingHud {
     }
     if (this.lapStarted) timer.sectors.forEach((t, k) => t !== null && k < 2 && !this.shown[k] && this.judge(k, t));
 
-    this.lap.textContent = timed ? `LAP ${timer.laps + 1}  ${formatLapTime(elapsed)}${timer.invalid ? '  INVALID' : ''}` : 'OUT LAP';
+    if (this.stage) this.lap.textContent = timed ? `STAGE  ${formatLapTime(elapsed)}` : timer.laps > 0 ? 'FINISHED' : 'START';
+    else this.lap.textContent = timed ? `LAP ${timer.laps + 1}  ${formatLapTime(elapsed)}${timer.invalid ? '  INVALID' : ''}` : 'OUT LAP';
     this.lap.classList.toggle('invalid', timer.invalid);
     const delta = timer.delta(time);
     this.delta.textContent = delta === null ? '' : formatDelta(delta);

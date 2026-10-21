@@ -41,7 +41,7 @@ export class Minimap {
         if (i === 0) ctx.moveTo(u, v);
         else ctx.lineTo(u, v);
       });
-      ctx.closePath();
+      if (track.closed) ctx.closePath();
       ctx.lineWidth = width * ratio;
       ctx.strokeStyle = colour;
       ctx.stroke();

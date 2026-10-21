@@ -17,6 +17,8 @@ export interface Settings {
   gearbox: GearboxMode;
   camera: CameraMode;
   ghost: boolean;
+  /** Rally: the co-driver reads the pace notes out (the browser's speech voice). */
+  coDriverVoice: boolean;
   /** Sound: master volume (0–1) and mute. */
   volume: number;
   muted: boolean;
@@ -33,6 +35,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   gearbox: 'auto',
   camera: 'chase',
   ghost: true,
+  coDriverVoice: false,
   volume: 0.8,
   muted: false,
   start: { mode: 'trial', track: 'harrowmere', car: 'Kestrel', difficulty: 'medium', opponents: 7, laps: 3, weather: 'dry', time: 'day', wear: 'normal', online: 'host', code: '' },

@@ -93,6 +93,76 @@ body {
   background: rgba(10, 14, 20, 0.85);
 }
 
+/* A rally stage: the countdown, the clock, the co-driver's notes. */
+.stage-countdown {
+  display: none;
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 90px;
+  padding: 8px 20px;
+  border-radius: 10px;
+  background: rgba(10, 14, 20, 0.85);
+  font-size: 44px;
+  font-weight: 800;
+  text-align: center;
+  color: #ffd54a;
+}
+
+.stage-countdown.go {
+  color: #2fe05a;
+}
+
+.stage-clock {
+  display: none;
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: rgba(10, 14, 20, 0.7);
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+body.rally .stage-clock {
+  display: block;
+}
+
+.pace-notes {
+  display: none;
+  position: absolute;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  font-weight: 700;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.pace-note {
+  font-size: 17px;
+  opacity: 0.75;
+  min-height: 1.3em;
+}
+
+.pace-note.now {
+  font-size: 26px;
+  opacity: 1;
+}
+
+.pace-note.hairpin {
+  color: #ffd54a;
+}
+
+body.replaying .stage-countdown,
+body.replaying .pace-notes,
+body.replaying .stage-clock {
+  display: none !important;
+}
+
 .bulb {
   width: 34px;
   height: 34px;

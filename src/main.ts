@@ -21,6 +21,12 @@ import { createRecordedState, duration, sampleRecording, type LapRecording } fro
 import { sampleCar, standingsAt, type RaceRecording } from './race/raceRecording';
 import { Director, type Shot, type ShotCamera } from './replay/director';
 import { ReplayHud } from './ui/replayHud';
+import { STAGES } from './track/stages';
+import { StageRun } from './race/stage';
+import { rivalTimes } from './ai/stageTimes';
+import { paceNotes } from './track/paceNotes';
+import { StageHud } from './ui/stageHud';
+import { PaceNotesHud } from './ui/paceNotesHud';
 import { lightLevel, parseTimeOfDay, type TimeOfDay } from './track/timeOfDay';
 import { FloodlightField, placeFloodlights } from './track/floodlights';
 import { terrainHeight } from './track/terrain';
@@ -107,12 +113,12 @@ if (params.has('editor') || params.has('share')) {
 }
 // Circuits drawn in the editor, kept in this browser.
 const customTracks = new CustomTrackStore();
-/** Every circuit on offer: the built-in ones, then the custom ones. */
-const ALL_CIRCUITS: TrackDef[] = [...CIRCUITS, ...customTracks.list().map(customDef)];
-/** A circuit by id: built-in, or one of the custom circuits kept here. */
+/** Every circuit on offer: the built-in ones, then the custom ones; then the rally stages. */
+const ALL_CIRCUITS: TrackDef[] = [...CIRCUITS, ...customTracks.list().map(customDef), ...STAGES];
+/** A circuit (or stage) by id: built-in, or one of the custom circuits kept here. */
 function findCircuit(id: string | null): TrackDef | null {
   if (!id) return null;
-  const builtIn = CIRCUITS.find((c) => c.id === id);
+  const builtIn = CIRCUITS.find((c) => c.id === id) ?? STAGES.find((c) => c.id === id);
   if (builtIn) return builtIn;
   const custom = customTracks.get(id);
   return custom ? customDef(custom) : null;
@@ -152,7 +158,9 @@ const wet = wetness(conditions);
 // The time of day: the round's in a championship, else ?time=day|dusk|night|duskToNight.
 // Online, the host's.
 const timeOfDay: TimeOfDay = connected ? connected.setup.time : seasonRound ? (seasonRound.options.time ?? 'day') : (parseTimeOfDay(params.get('time')) ?? 'day');
-const race = connected
+// A rally stage (?mode=rally, or any stage's id): run alone against the clock.
+const rally = !track.closed;
+const race = connected || rally
   ? null
   : seasonRound
     ? new Race(track, { ...seasonRound.options, conditions }, carDef, playerDef)
@@ -294,6 +302,12 @@ const darkens = ((race?.laps ?? connected?.setup.laps ?? 0) * track.length) / TU
 const driverName = online ? (k: number) => (k === 0 ? 'You' : k === 1 ? `Opponent (${online.setup.theirs})` : AI_NAMES[k - 2]) : carName;
 const colourOf = (entry: number) =>
   `#${(entry === 0 ? 0xe0b020 : online && entry === 1 ? OPPONENT_COLOUR : AI_COLOURS[(entry - (online ? 2 : 1)) % AI_COLOURS.length]).toString(16).padStart(6, '0')}`;
+// A rally stage: the run, its HUD with the rivals' times, and the co-driver's notes.
+const stageRun = rally ? new StageRun(sim) : null;
+const rivals = rally ? rivalTimes(track, carDef, raceOptions(params).difficulty, conditions, raceOptions(params).seed, sim.timer.finish) : [];
+const stageHud = rally ? new StageHud(document.querySelector<HTMLDivElement>('#hud')!, (k) => AI_NAMES[k], '⌫ run again &nbsp; Esc menu') : null;
+const notesHud = rally ? new PaceNotesHud(document.querySelector<HTMLDivElement>('#hud')!, paceNotes(track)) : null;
+if (rally) document.body.classList.add('rally');
 const raceHud =
   race || online
     ? new RaceHud(
@@ -372,7 +386,7 @@ const touchControls = new TouchControls(document.body, input.touch);
 const steering = input.steering;
 let controls = NO_CONTROLS;
 const telemetry = new Telemetry(document.body);
-const timing = new TimingHud(document.querySelector<HTMLDivElement>('#timing')!);
+const timing = new TimingHud(document.querySelector<HTMLDivElement>('#timing')!, !track.closed);
 const minimap = new Minimap(document.querySelector<HTMLDivElement>('#hud')!, track);
 const tyresHud = new TyresHud(document.querySelector<HTMLDivElement>('#hud')!);
 telemetry.visible = params.has('telemetry');
@@ -443,6 +457,8 @@ const BLURBS: Record<string, string> = {
   saltmarsh: 'tight, gravel at the hairpins',
   ridgeback: 'hilly, a banked carousel',
   'proving-ground': 'the flat test track',
+  'kettle-wood': 'fast forest gravel, crests',
+  'hightor-pass': 'tarmac hairpins up, gravel down',
 };
 const CAR_BLURBS: Record<string, string> = {
   Wren: 'Light roadster: forgiving, slower',
@@ -481,6 +497,10 @@ const menu = new Menu(
       p.set('car', choice.car.toLowerCase());
       if (choice.weather !== 'dry') p.set('weather', choice.weather);
       if (choice.time !== 'day') p.set('time', choice.time);
+      if (choice.mode === 'rally') {
+        p.set('mode', 'rally');
+        p.set('difficulty', choice.difficulty);
+      }
       if (choice.mode === 'race') {
         p.set('mode', 'race');
         p.set('difficulty', choice.difficulty);
@@ -530,7 +550,8 @@ const menu = new Menu(
     length: builtCircuits[i].length / 1000,
     blurb: BLURBS[c.id] ?? 'your own',
     outline: builtCircuits[i].samples.filter((_, k) => k % 8 === 0).map((s) => ({ x: s.x, z: s.z })),
-    custom: i >= CIRCUITS.length,
+    custom: i >= CIRCUITS.length && c.closed !== false,
+    stage: c.closed === false,
   })),
   CARS.map((c) => ({
     name: c.name,
@@ -721,6 +742,7 @@ window.addEventListener('keydown', (e) => {
 /** One physics step and what follows it. */
 function step(c: Controls): void {
   if (race) race.step(c);
+  else if (stageRun) stageRun.step(c);
   else sim.step(c);
   afterStep(c);
 }
@@ -951,6 +973,10 @@ function restart(): void {
   if (race) {
     race.restart();
     session.forgetLap();
+  } else if (stageRun) {
+    stageRun.restart();
+    session.forgetLap();
+    notesHud?.reset();
   } else session.restart();
   effects.break();
   input.reset();
@@ -964,7 +990,9 @@ function pauseGame(): void {
 }
 
 function recover(): void {
-  sim.recover();
+  // On a stage, back on the road costs time (not the run).
+  if (stageRun) stageRun.recover();
+  else sim.recover();
   effects.break();
   input.reset();
   cameras.snap();
@@ -989,6 +1017,11 @@ function updateHud(dt: number): void {
     dt,
   );
   timing.update(sim.timer, sim.time);
+  if (stageRun && stageHud && notesHud) {
+    stageHud.update(stageRun, rivals);
+    notesHud.voice = settings.coDriverVoice;
+    notesHud.update(track.samples[sim.timer.index].s, sim.car.speed, stageRun.phase === 'running');
+  }
   touchControls.update(settings.gearbox === 'manual');
   // BOX: the same call the AI acts on.
   tyresHud.update(sim.car, sim.pits?.state[0] ?? null, race?.boxCalls[0] ?? online?.boxCall ?? false);
@@ -1108,7 +1141,8 @@ function frame(now: number): void {
   while (!online && accumulator >= PHYSICS_STEP) {
     if (autopilot) {
       race?.traffic.advise(0, autopilot, PHYSICS_STEP, sim.timer.laps < 1);
-      step(autopilot.drive(sim.car, PHYSICS_STEP));
+      // (Held on a stage's start line, it waits rather than counting itself stuck.)
+      step(stageRun?.phase === 'countdown' ? NO_CONTROLS : autopilot.drive(sim.car, PHYSICS_STEP));
       if (autopilot.stuck) {
         recover();
         autopilot.recovered();

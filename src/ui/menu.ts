@@ -10,7 +10,7 @@ import { CONDITIONS, type Conditions } from '../track/weather';
 import { TIMES_OF_DAY, type TimeOfDay } from '../track/timeOfDay';
 import { WEAR_RATES, type WearRate } from '../vehicle/wear';
 
-export type Mode = 'trial' | 'race' | 'season' | 'online' | 'career';
+export type Mode = 'trial' | 'race' | 'rally' | 'season' | 'online' | 'career';
 
 /** A championship in progress, for the start menu. */
 export interface SeasonInfo {
@@ -52,6 +52,8 @@ export interface CircuitInfo {
   outline: { x: number; z: number }[];
   /** Drawn in the editor (it can be edited and deleted). */
   custom?: boolean;
+  /** A rally stage (offered in Rally, not as a circuit). */
+  stage?: boolean;
 }
 
 export interface CarInfo {
@@ -124,6 +126,7 @@ export class Menu {
     div(this.start, 'menu-title', 'RACING');
     const modeRow = this.row(this.start, 'Mode');
     this.choiceButton(modeRow, 'Time trial', () => choice.mode === 'trial', () => (choice.mode = 'trial'));
+    this.choiceButton(modeRow, 'Rally', () => choice.mode === 'rally', () => (choice.mode = 'rally'));
     this.choiceButton(modeRow, 'Race', () => choice.mode === 'race', () => (choice.mode = 'race'));
     this.choiceButton(modeRow, 'Championship', () => choice.mode === 'season', () => (choice.mode = 'season'));
     this.choiceButton(modeRow, 'Online', () => choice.mode === 'online', () => (choice.mode = 'online'));
@@ -162,9 +165,18 @@ export class Menu {
 
     const circuitRow = this.row(this.start, 'Circuit');
     circuitRow.classList.add('menu-cards');
+    // Rally offers the stages; everything else the circuits. A pick that doesn't fit the mode moves to the first that does.
+    const fits = (c: CircuitInfo) => (choice.mode === 'rally') === (c.stage === true);
+    this.refresh.push(() => {
+      const picked = circuits.find((c) => c.id === choice.track);
+      if (!picked || !fits(picked)) choice.track = circuits.find(fits)?.id ?? choice.track;
+      const label = circuitRow.parentElement!.firstElementChild;
+      if (label) label.textContent = choice.mode === 'rally' ? 'Stage' : 'Circuit';
+    });
     for (const c of circuits) {
       const b = this.choiceButton(circuitRow, '', () => choice.track === c.id, () => (choice.track = c.id));
       b.classList.add('menu-card');
+      this.refresh.push(() => b.classList.toggle('hidden', !fits(c)));
       b.appendChild(outline(c.outline));
       div(b, 'menu-card-name', c.name);
       div(b, 'menu-card-sub', `${c.length.toFixed(1)} km · ${c.blurb}`);
@@ -216,10 +228,10 @@ export class Menu {
     const TIME_NAMES: Record<TimeOfDay, string> = { day: 'Day', dusk: 'Dusk', night: 'Night', duskToNight: 'Dusk to night' };
     for (const t of TIMES_OF_DAY) {
       const b = this.choiceButton(timeRow, TIME_NAMES[t], () => choice.time === t, () => (choice.time = t));
-      if (t === 'duskToNight') this.refresh.push(() => b.classList.toggle('hidden', choice.mode === 'trial'));
+      if (t === 'duskToNight') this.refresh.push(() => b.classList.toggle('hidden', choice.mode === 'trial' || choice.mode === 'rally'));
     }
     this.refresh.push(() => {
-      if (choice.mode === 'trial' && choice.time === 'duskToNight') choice.time = 'dusk';
+      if ((choice.mode === 'trial' || choice.mode === 'rally') && choice.time === 'duskToNight') choice.time = 'dusk';
       timeRow.parentElement!.classList.toggle('hidden', choice.mode === 'season' || choice.mode === 'career' || (choice.mode === 'online' && choice.online === 'join'));
     });
 
@@ -237,7 +249,7 @@ export class Menu {
     for (const w of WEAR_RATES) this.choiceButton(wearRow, cap(w), () => choice.wear === w, () => (choice.wear = w));
     this.refresh.push(() => {
       const hosting = choice.mode === 'online' && choice.online === 'host';
-      raceRows.classList.toggle('hidden', choice.mode === 'trial' || (choice.mode === 'online' && !hosting));
+      raceRows.classList.toggle('hidden', choice.mode === 'trial' || choice.mode === 'rally' || (choice.mode === 'online' && !hosting));
       // A championship sets its own field and laps; online the host sets them.
       oppRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race' && !hosting);
       lapRow.parentElement!.classList.toggle('hidden', choice.mode !== 'race' && !hosting);
@@ -312,6 +324,9 @@ export class Menu {
     ] as const) {
       this.choiceButton(graphicsRow, label, () => settings.graphics === g, () => (settings.graphics = g), true);
     }
+    const voiceRow = this.row(this.settingsPanel, 'Co-driver voice');
+    this.choiceButton(voiceRow, 'Off', () => !settings.coDriverVoice, () => (settings.coDriverVoice = false), true);
+    this.choiceButton(voiceRow, 'On', () => settings.coDriverVoice, () => (settings.coDriverVoice = true), true);
     const touchRow = this.row(this.settingsPanel, 'Touch steering');
     this.choiceButton(touchRow, 'Thumb', () => settings.touchSteer === 'thumb', () => (settings.touchSteer = 'thumb'), true);
     this.choiceButton(touchRow, 'Tilt', () => settings.touchSteer === 'tilt', () => (settings.touchSteer = 'tilt'), true);
