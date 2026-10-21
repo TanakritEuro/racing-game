@@ -314,8 +314,9 @@ export const TUNING = {
   night: {
     /** The light level of each time of day: 1 full day … 0 full night. */
     levels: { day: 1, dusk: 0.45, night: 0 },
-    /** Dusk to night: the light falls from dusk's to night's over this share of the race. */
+    /** Dusk to night: the light falls from dusk's to night's over this share of the race (its length reckoned at this average speed, m/s). */
     fade: 0.8,
+    raceSpeed: 40,
     /** Floodlights and headlights come on below this light level. */
     lightsOn: 0.55,
     /** A championship round's chance of being run at dusk, and at night. */
@@ -334,6 +335,44 @@ export const TUNING = {
       grid: 120,
       /** Towers tried this far ahead of the first dark sample (m). */
       ahead: [0, 15, 30, 45],
+    },
+    /** How it looks (`render/lighting.ts`): each value at dusk and at night (the day's is the weather's own). */
+    look: {
+      sky: { dusk: 0xe39a6e, night: 0x0a1222 },
+      /** The sun (the moon at night): colour, strength as a share of the day's, height above the horizon (rad). */
+      sun: { dusk: { colour: 0xffa45c, share: 0.55, elevation: 0.16 }, night: { colour: 0x8ea6ff, share: 0.07, elevation: 0.7 } },
+      /** The sky's fill light, as a share of the day's. */
+      fill: { dusk: 0.55, night: 0.09 },
+      /** The fog: near and far (m). */
+      fog: { dusk: [200, 760], night: [70, 520] },
+      /** Floodlit road: how bright the baked light shows (emissive share of the surface's colour). */
+      flood: 0.55,
+      /** Unlit things (painted lines, decals) at night: their brightness, plus the floodlight's. */
+      unlit: 0.12,
+      /** Cars under the lights: extra fill light near the camera's car, per unit of floodlight. */
+      carFill: 0.35,
+    },
+    /** Car lamps: real spot lights for this many cars nearest the camera (Low graphics: one). */
+    headlights: {
+      pool: 4,
+      poolLow: 1,
+      /**
+       * Spot light: strength, how it falls off with distance (1: gently, so a car just ahead isn't
+       * blown out while the road 40 m on is still lit), reach (m), half-angle (rad), soft edge (0–1),
+       * aimed this far ahead (m) and down (m).
+       */
+      intensity: 20,
+      decay: 1,
+      distance: 90,
+      angle: 0.42,
+      penumbra: 0.55,
+      aim: 30,
+      drop: 2.2,
+      /** Lamp glow: headlamps, tail lights, and the brake lights' extra with the pedal. */
+      lampColour: 0xfff1cf,
+      tailColour: 0xff2a1a,
+      tail: 0.35,
+      brake: 1,
     },
   },
   /** Race replays: the race's moments (`race/raceMoments.ts`) and the director (`replay/director.ts`). */

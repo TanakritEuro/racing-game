@@ -30,7 +30,7 @@ async function pair(laps = 1, opponents = 0, conditions: Conditions = 'dry', hos
   track ??= buildTrack(TEST_CIRCUIT);
   const line = loopback({ delay: 0.05, jitter: 0.02, seed: 3 });
   const clock = { now: 0 };
-  const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps, car: hostCar.name, opponents, conditions, wear: 'normal', custom: null }, NAMES);
+  const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps, car: hostCar.name, opponents, conditions, time: 'night', wear: 'normal', custom: null }, NAMES);
   const guest = guestHandshake(line.b, guestCar.name, TRACKS, NAMES);
   await pump(line, clock, 0.3);
   const [hs, gs] = await Promise.all([host, guest]);
@@ -39,6 +39,8 @@ async function pair(laps = 1, opponents = 0, conditions: Conditions = 'dry', hos
   expect(gs.laps).toBe(laps);
   expect(gs.opponents).toBe(opponents);
   expect(gs.conditions).toBe(conditions);
+  // The host's time of day too.
+  expect(gs.time).toBe('night');
   expect(gs.wear).toBe('normal');
   const h = new OnlineRace(line.a, hs, track, hostCar, guestCar, { clock: () => clock.now + AHEAD, seed: 5, difficulty: 'hard' });
   // The guest takes a little longer to build its world.
@@ -329,7 +331,7 @@ describe('an online race', () => {
       const line = loopback({ delay: 0.02 });
       const clock = { now: 0 };
       const id = customId(custom);
-      const host = hostHandshake(line.a, { track: id, laps: 2, car: 'Kestrel', opponents: 0, conditions: 'dry', wear: 'off', custom }, NAMES);
+      const host = hostHandshake(line.a, { track: id, laps: 2, car: 'Kestrel', opponents: 0, conditions: 'dry', time: 'day', wear: 'off', custom }, NAMES);
       // The guest knows only the built-in circuits.
       const guest = guestHandshake(line.b, 'Wren', TRACKS, NAMES).then(
         (s) => s,
@@ -351,7 +353,7 @@ describe('an online race', () => {
   it('turns away a guest with another version', async () => {
     const line = loopback({ delay: 0.02 });
     const clock = { now: 0 };
-    const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps: 3, car: 'Kestrel', opponents: 0, conditions: 'dry', wear: 'off', custom: null }, NAMES);
+    const host = hostHandshake(line.a, { track: TEST_CIRCUIT.id, laps: 3, car: 'Kestrel', opponents: 0, conditions: 'dry', time: 'day', wear: 'off', custom: null }, NAMES);
     const heard: (Message | null)[] = [];
     line.b.onMessage = (raw) => heard.push(parseMessage(raw));
     line.b.send({ type: 'hello', version: 0, car: 'Wren' });

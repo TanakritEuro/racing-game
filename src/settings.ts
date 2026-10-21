@@ -35,7 +35,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   ghost: true,
   volume: 0.8,
   muted: false,
-  start: { mode: 'trial', track: 'harrowmere', car: 'Kestrel', difficulty: 'medium', opponents: 7, laps: 3, weather: 'dry', wear: 'normal', online: 'host', code: '' },
+  start: { mode: 'trial', track: 'harrowmere', car: 'Kestrel', difficulty: 'medium', opponents: 7, laps: 3, weather: 'dry', time: 'day', wear: 'normal', online: 'host', code: '' },
 };
 
 const KEY = 'racing.settings.v1';

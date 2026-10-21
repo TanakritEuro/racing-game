@@ -43,6 +43,7 @@ import { parseMessage, PROTOCOL, type Message } from './protocol';
 import { RemoteCar } from './remoteCar';
 import { createState, packState, unpackState, type CarState } from './state';
 import type { Conditions } from '../track/weather';
+import type { TimeOfDay } from '../track/timeOfDay';
 import type { WearRate } from '../vehicle/wear';
 import { customDef, type CustomCircuit } from '../track/custom';
 import { buildTrack } from '../track/track';
@@ -65,8 +66,9 @@ export interface OnlineSetup {
   track: string;
   laps: number;
   opponents: number;
-  /** The weather and tyre wear (the host's choice). */
+  /** The weather, the time of day and tyre wear (the host's choice). */
   conditions: Conditions;
+  time: TimeOfDay;
   wear: WearRate;
   /** The circuit itself when it's a custom one (the guest may not have it). */
   custom: CustomCircuit | null;
@@ -99,7 +101,7 @@ function buffered(link: Link, setup: Omit<OnlineSetup, 'inbox'>): OnlineSetup {
  */
 export function hostHandshake(
   link: Link,
-  race: { track: string; laps: number; car: string; opponents: number; conditions: Conditions; wear: WearRate; custom: CustomCircuit | null },
+  race: { track: string; laps: number; car: string; opponents: number; conditions: Conditions; time: TimeOfDay; wear: WearRate; custom: CustomCircuit | null },
   cars: readonly string[],
 ): Promise<OnlineSetup> {
   return new Promise((resolve, reject) => {
@@ -120,8 +122,8 @@ export function hostHandshake(
         return;
       }
       const opponents = Math.max(0, Math.min(MAX_OPPONENTS, race.opponents));
-      link.send({ type: 'welcome', track: race.track, laps: race.laps, car: race.car, opponents, conditions: race.conditions, wear: race.wear, custom: race.custom });
-      resolve(buffered(link, { role: 'host', track: race.track, laps: race.laps, opponents, conditions: race.conditions, wear: race.wear, custom: race.custom, mine: race.car, theirs: m.car }));
+      link.send({ type: 'welcome', track: race.track, laps: race.laps, car: race.car, opponents, conditions: race.conditions, time: race.time, wear: race.wear, custom: race.custom });
+      resolve(buffered(link, { role: 'host', track: race.track, laps: race.laps, opponents, conditions: race.conditions, time: race.time, wear: race.wear, custom: race.custom, mine: race.car, theirs: m.car }));
     };
   });
 }
@@ -145,7 +147,7 @@ export function guestHandshake(link: Link, car: string, tracks: readonly string[
           reject(new OnlineError(reason));
           return;
         }
-        resolve(buffered(link, { role: 'guest', track: m.track, laps: m.laps, opponents: m.opponents, conditions: m.conditions, wear: m.wear, custom, mine: car, theirs: m.car }));
+        resolve(buffered(link, { role: 'guest', track: m.track, laps: m.laps, opponents: m.opponents, conditions: m.conditions, time: m.time, wear: m.wear, custom, mine: car, theirs: m.car }));
       }
     };
     link.send({ type: 'hello', version: PROTOCOL, car });

@@ -7,6 +7,7 @@ import { formatLapTime } from '../race/timing';
 import { ROUNDS } from '../race/championship';
 import type { Settings } from '../settings';
 import { CONDITIONS, type Conditions } from '../track/weather';
+import { TIMES_OF_DAY, type TimeOfDay } from '../track/timeOfDay';
 import { WEAR_RATES, type WearRate } from '../vehicle/wear';
 
 export type Mode = 'trial' | 'race' | 'season' | 'online' | 'career';
@@ -32,6 +33,8 @@ export interface StartChoice {
   laps: number;
   /** The weather (time trial, race, hosting online). */
   weather: Conditions;
+  /** The time of day (as the weather). */
+  time: TimeOfDay;
   /** Tyre wear in a race (or hosting online). */
   wear: WearRate;
   /** Online: host a race or join one, and the room code to join. */
@@ -208,6 +211,17 @@ export class Menu {
     const weatherRow = this.row(this.start, 'Weather');
     for (const w of CONDITIONS) this.choiceButton(weatherRow, cap(w), () => choice.weather === w, () => (choice.weather = w));
     this.refresh.push(() => weatherRow.parentElement!.classList.toggle('hidden', choice.mode === 'season' || (choice.mode === 'online' && choice.online === 'join')));
+    // The time of day, the same way; dusk to night only for a race (a time trial has no length to darken over).
+    const timeRow = this.row(this.start, 'Time');
+    const TIME_NAMES: Record<TimeOfDay, string> = { day: 'Day', dusk: 'Dusk', night: 'Night', duskToNight: 'Dusk to night' };
+    for (const t of TIMES_OF_DAY) {
+      const b = this.choiceButton(timeRow, TIME_NAMES[t], () => choice.time === t, () => (choice.time = t));
+      if (t === 'duskToNight') this.refresh.push(() => b.classList.toggle('hidden', choice.mode === 'trial'));
+    }
+    this.refresh.push(() => {
+      if (choice.mode === 'trial' && choice.time === 'duskToNight') choice.time = 'dusk';
+      timeRow.parentElement!.classList.toggle('hidden', choice.mode === 'season' || choice.mode === 'career' || (choice.mode === 'online' && choice.online === 'join'));
+    });
 
     const raceRows = div(this.start, 'menu-group');
     const diffRow = this.row(raceRows, 'Difficulty');

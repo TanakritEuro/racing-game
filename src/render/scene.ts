@@ -7,9 +7,12 @@ export interface Stage {
   camera: THREE.PerspectiveCamera;
   /** The sun. Its shadow box follows the car (call `followSun`). */
   sun: THREE.DirectionalLight;
+  /** The sky's fill light. */
+  fill: THREE.HemisphereLight;
 }
 
-const SUN_OFFSET = new THREE.Vector3(-40, 70, 30);
+/** Where the sun sits by day, relative to what it lights. */
+export const SUN_OFFSET = new THREE.Vector3(-40, 70, 30);
 
 export function createStage(canvas: HTMLCanvasElement, q: Quality): Stage {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: q.antialias });
@@ -26,7 +29,8 @@ export function createStage(canvas: HTMLCanvasElement, q: Quality): Stage {
 
   const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.3, 2000);
 
-  scene.add(new THREE.HemisphereLight(0xe4f0ff, 0x46603a, 1.1));
+  const fill = new THREE.HemisphereLight(0xe4f0ff, 0x46603a, 1.1);
+  scene.add(fill);
   const sun = new THREE.DirectionalLight(0xfff3e0, 2.4);
   sun.castShadow = true;
   sun.shadow.mapSize.set(q.shadowMap, q.shadowMap);
@@ -45,11 +49,11 @@ export function createStage(canvas: HTMLCanvasElement, q: Quality): Stage {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  return { renderer, scene, camera, sun };
+  return { renderer, scene, camera, sun, fill };
 }
 
-/** Keep the sun's (small, sharp) shadow box centred on `focus`. */
-export function followSun(sun: THREE.DirectionalLight, focus: THREE.Vector3): void {
+/** Keep the sun's (small, sharp) shadow box centred on `focus`, the sun `offset` from it (lower at dusk). */
+export function followSun(sun: THREE.DirectionalLight, focus: THREE.Vector3, offset: THREE.Vector3 = SUN_OFFSET): void {
   sun.target.position.copy(focus);
-  sun.position.copy(focus).add(SUN_OFFSET);
+  sun.position.copy(focus).add(offset);
 }

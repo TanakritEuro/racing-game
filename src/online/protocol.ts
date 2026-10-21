@@ -5,16 +5,17 @@
 // Bump PROTOCOL whenever a message (or the list of cars) changes: mismatched versions refuse to race.
 
 import { CONDITIONS, type Conditions } from '../track/weather';
+import { parseTimeOfDay, type TimeOfDay } from '../track/timeOfDay';
 import { WEAR_RATES, type WearRate } from '../vehicle/wear';
 import { cleanCustom, customId, type CustomCircuit } from '../track/custom';
 
-export const PROTOCOL = 7;
+export const PROTOCOL = 8;
 
 export type Message =
   /** Guest → host on connecting: its version and the car it will drive. */
   | { type: 'hello'; version: number; car: string }
   /** Host → guest: the race, the host's car (the AI's too), how many AI opponents, the weather and tyre wear. */
-  | { type: 'welcome'; track: string; laps: number; car: string; opponents: number; conditions: Conditions; wear: WearRate; custom: CustomCircuit | null }
+  | { type: 'welcome'; track: string; laps: number; car: string; opponents: number; conditions: Conditions; time: TimeOfDay; wear: WearRate; custom: CustomCircuit | null }
   | { type: 'reject'; reason: string }
   /** The circuit is built and the car is on the grid. */
   | { type: 'ready' }
@@ -51,6 +52,7 @@ export function parseMessage(raw: unknown): Message | null {
         isString(raw.car, 40) &&
         isCount(raw.opponents, 0, 7) &&
         CONDITIONS.includes(raw.conditions as Conditions) &&
+        parseTimeOfDay(raw.time) !== null &&
         WEAR_RATES.includes(raw.wear as WearRate) &&
         // A custom circuit, in full: it must be one, and the one named.
         (raw.custom === null || cleanCustom(raw.custom) !== null) &&
@@ -62,6 +64,7 @@ export function parseMessage(raw: unknown): Message | null {
             car: raw.car,
             opponents: raw.opponents,
             conditions: raw.conditions as Conditions,
+            time: raw.time as TimeOfDay,
             wear: raw.wear as WearRate,
             custom: raw.custom === null ? null : cleanCustom(raw.custom),
           }

@@ -18,9 +18,17 @@ import { GhostView } from './render/ghostView';
 import { Simulation } from './sim';
 import { TimingHud } from './ui/timingHud';
 import { createRecordedState, duration, sampleRecording, type LapRecording } from './race/recording';
-import { sampleCar, standingsAt } from './race/raceRecording';
+import { sampleCar, standingsAt, type RaceRecording } from './race/raceRecording';
 import { Director, type Shot, type ShotCamera } from './replay/director';
 import { ReplayHud } from './ui/replayHud';
+import { lightLevel, parseTimeOfDay, type TimeOfDay } from './track/timeOfDay';
+import { FloodlightField, placeFloodlights } from './track/floodlights';
+import { terrainHeight } from './track/terrain';
+import { bakeFloodlight } from './render/nightLight';
+import { Lighting } from './render/lighting';
+import { FloodlightView } from './render/floodlightView';
+import { CarLamps, HeadlightPool } from './render/carLights';
+import { SUN_OFFSET } from './render/scene';
 import { formatLapTime } from './race/timing';
 import { Replay, REPLAY_SPEEDS } from './replay/replay';
 import { TvCameraView } from './render/tvCameras';
@@ -141,6 +149,9 @@ const playerDef = applyUpgrades(applySetup(carDef, setup), career?.garage[carDef
 // The weather: the host's online, the round's in a championship, else ?weather=dry|damp|wet.
 const conditions: Conditions = connected ? connected.setup.conditions : seasonRound ? (seasonRound.options.conditions ?? 'dry') : linkConditions(params);
 const wet = wetness(conditions);
+// The time of day: the round's in a championship, else ?time=day|dusk|night|duskToNight.
+// Online, the host's.
+const timeOfDay: TimeOfDay = connected ? connected.setup.time : seasonRound ? (seasonRound.options.time ?? 'day') : (parseTimeOfDay(params.get('time')) ?? 'day');
 const race = connected
   ? null
   : seasonRound
@@ -191,7 +202,7 @@ async function connect(joining: boolean): Promise<{ link: Link; setup: OnlineSet
       const trackId = (findCircuit(params.get('track')) ?? CIRCUITS[0]).id;
       // A custom circuit goes to the guest in full.
       const custom = customTracks.get(trackId);
-      return { link, setup: await hostHandshake(link, { track: trackId, laps, car, opponents, conditions: conditions ?? 'dry', wear: wear ?? 'off', custom }, names) };
+      return { link, setup: await hostHandshake(link, { track: trackId, laps, car, opponents, conditions: conditions ?? 'dry', time: parseTimeOfDay(params.get('time')) ?? 'day', wear: wear ?? 'off', custom }, names) };
     }
     const code = cleanRoomCode(params.get('code') ?? '');
     if (!code) throw new OnlineError('That is not a room code: it is four letters and digits, as the host sees it.');
@@ -233,11 +244,27 @@ function linkConditions(p: URLSearchParams): Conditions {
 const graphics = quality(settings.graphics);
 const graphicsChosen = settings.graphics;
 const stage = createStage(canvas, graphics);
-stage.scene.add(createTrackView(track, sim.physics.terrain, wet));
+const trackView = createTrackView(track, sim.physics.terrain, wet);
+stage.scene.add(trackView);
 const weatherView = new WeatherView(stage, wet, graphics.rain);
-if (circuit.scenery) {
-  const layout = layoutScenery(track, sim.physics.terrain, circuit.scenery);
-  stage.scene.add(createSceneryView({ ...layout, trees: thin(layout.trees, graphics.trees) }));
+const sceneryView = circuit.scenery
+  ? (() => {
+      const layout = layoutScenery(track, sim.physics.terrain, circuit.scenery);
+      return createSceneryView({ ...layout, trees: thin(layout.trees, graphics.trees) });
+    })()
+  : null;
+if (sceneryView) stage.scene.add(sceneryView);
+// The time of day: the sky and light (after the weather has set the day's), and after dark the
+// floodlight towers with their light baked into the track and scenery.
+const lighting = new Lighting(stage, SUN_OFFSET);
+const dark = timeOfDay !== 'day';
+const towers = dark ? placeFloodlights(track, sim.physics.terrain) : [];
+const floodField = dark ? new FloodlightField(towers) : null;
+const floodView = floodField ? new FloodlightView(towers, track, (x, z) => terrainHeight(sim.physics.terrain, x, z)) : null;
+if (floodField && floodView) {
+  bakeFloodlight(trackView, floodField);
+  if (sceneryView) bakeFloodlight(sceneryView, floodField);
+  stage.scene.add(floodView.root);
 }
 const carView = new CarView(
   sim.car.def,
@@ -256,17 +283,25 @@ const others = [
   const colour = online && id === 1 ? OPPONENT_COLOUR : AI_COLOURS[(id - (online ? 2 : 1)) % AI_COLOURS.length];
   const view = new CarView(def, wheelMounts(def), { colour });
   stage.scene.add(view.root);
-  return { def, view, poses, remote, drawn: createPose(), colour: `#${colour.toString(16).padStart(6, '0')}` };
+  return { id, def, view, poses, remote, drawn: createPose(), colour: `#${colour.toString(16).padStart(6, '0')}` };
 });
+// After dark: every car's lamps, and real headlights for the few nearest the camera.
+const lamps = dark ? [new CarLamps(carView, sim.car.def), ...others.map((o) => new CarLamps(o.view, o.def))] : [];
+const headlights = dark ? new HeadlightPool(stage.scene, graphics.level === 'low' ? TUNING.night.headlights.poolLow : TUNING.night.headlights.pool) : null;
+/** How long the race lasts (s), roughly: dusk to night darkens over it. */
+const darkens = ((race?.laps ?? connected?.setup.laps ?? 0) * track.length) / TUNING.night.raceSpeed;
+/** Each car's driver and colour, by its number in the standings. */
+const driverName = online ? (k: number) => (k === 0 ? 'You' : k === 1 ? `Opponent (${online.setup.theirs})` : AI_NAMES[k - 2]) : carName;
+const colourOf = (entry: number) =>
+  `#${(entry === 0 ? 0xe0b020 : online && entry === 1 ? OPPONENT_COLOUR : AI_COLOURS[(entry - (online ? 2 : 1)) % AI_COLOURS.length]).toString(16).padStart(6, '0')}`;
 const raceHud =
   race || online
     ? new RaceHud(
         document.querySelector<HTMLDivElement>('#hud')!,
-        online ? 'Enter rematch &nbsp; Esc leave' : season ? 'The championship standings follow when everyone has finished.' : undefined,
-        online ? (k) => (k === 0 ? 'You' : k === 1 ? `Opponent (${online.setup.theirs})` : AI_NAMES[k - 2]) : undefined,
+        online ? 'Enter rematch &nbsp; P replay &nbsp; Esc leave' : season ? 'The championship standings follow when everyone has finished.' : undefined,
+        online ? driverName : undefined,
       )
     : null;
-const colourOf = (entry: number) => `#${(entry === 0 ? 0xe0b020 : AI_COLOURS[(entry - 1) % AI_COLOURS.length]).toString(16).padStart(6, '0')}`;
 const standingsScreen = new StandingsScreen(
   document.body,
   {
@@ -313,10 +348,12 @@ let director: Director | null = null;
 let following: number | null = null;
 let followCamera: ShotCamera = 'tv';
 let lastFollow = { car: -1, camera: '' };
-const raceStates = (race?.sim.cars ?? []).map(() => createRecordedState());
+const raceStates = Array.from({ length: race?.sim.cars.length ?? online?.count ?? 0 }, createRecordedState);
+/** Each car's car, by its number in the standings. */
+const defOf = (id: number): CarDef => (id === 0 ? sim.car.def : others.find((o) => o.id === id)!.def);
 const replayRigs = new Map<string, CameraRig>();
 const raceReplayHud =
-  race && !online
+  race || online
     ? new ReplayHud(
         document.querySelector<HTMLDivElement>('#hud')!,
         {
@@ -325,7 +362,7 @@ const raceReplayHud =
           },
           seek: (time) => replay.seek(time),
         },
-        carName,
+        driverName,
         colourOf,
       )
     : null;
@@ -354,6 +391,8 @@ const store = await openBestStore();
 const key = bestKey(circuit.id, sim.car.def.name, conditions);
 // The weather beside the circuit's name.
 if (conditions !== 'dry') document.querySelector('#track-name')!.textContent = `${circuit.name.toUpperCase()} · ${conditions.toUpperCase()}`;
+// And the time of day.
+if (timeOfDay !== 'day') document.querySelector('#track-name')!.textContent += ` · ${timeOfDay === 'duskToNight' ? 'DUSK TO NIGHT' : timeOfDay.toUpperCase()}`;
 const stored = await store.load(key, session.fingerprint);
 if (stored) session.loadBest(stored.lap, stored.timeAtSample, stored.bestSectors);
 const NOT_KEPT = 'Bests are not kept in this browser';
@@ -433,7 +472,7 @@ const menu = new Menu(
       if (choice.mode === 'online') {
         const car = choice.car.toLowerCase();
         if (choice.online === 'host')
-          goTo({ online: 'host', track: choice.track, laps: String(choice.laps), opponents: String(choice.opponents), difficulty: choice.difficulty, weather: choice.weather, wear: choice.wear, car });
+          goTo({ online: 'host', track: choice.track, laps: String(choice.laps), opponents: String(choice.opponents), difficulty: choice.difficulty, weather: choice.weather, time: choice.time, wear: choice.wear, car });
         else if (cleanRoomCode(choice.code)) goTo({ online: 'join', code: choice.code, car });
         return;
       }
@@ -441,6 +480,7 @@ const menu = new Menu(
       p.set('track', choice.track);
       p.set('car', choice.car.toLowerCase());
       if (choice.weather !== 'dry') p.set('weather', choice.weather);
+      if (choice.time !== 'day') p.set('time', choice.time);
       if (choice.mode === 'race') {
         p.set('mode', 'race');
         p.set('difficulty', choice.difficulty);
@@ -543,7 +583,7 @@ if (params.get('menu') === 'career') {
 const garage = new Garage(document.body);
 if (online) {
   menu.setOnline();
-  document.querySelector('#keys')!.innerHTML = 'Esc menu (the race goes on) &nbsp; R back on the track &nbsp; C camera &nbsp; Enter rematch';
+  document.querySelector('#keys')!.innerHTML = 'Esc menu (the race goes on) &nbsp; R back on the track &nbsp; C camera &nbsp; P replay (once it is over) &nbsp; Enter rematch';
 }
 // The championship in progress, for Continue.
 {
@@ -627,9 +667,9 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (online) {
-    // Online: no replays, restarts or other modes mid-race; Enter asks for a rematch.
+    // Online: no restarts or other modes, and the race's replay (P) only once it is over; Enter asks for a rematch.
     if (e.code === 'Enter') online.requestRematch();
-    if (['KeyP', 'KeyN', 'Backspace', 'Tab'].includes(e.code)) {
+    if (['KeyN', 'Backspace', 'Tab'].includes(e.code)) {
       e.preventDefault();
       return;
     }
@@ -645,8 +685,8 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.repeat) return;
   if (e.code === 'KeyP') {
-    if (e.shiftKey) startReplay(session.ghost, 'BEST LAP');
-    else if (race) startRaceReplay();
+    if (e.shiftKey && !online) startReplay(session.ghost, 'BEST LAP');
+    else if (race || online) startRaceReplay();
     else startReplay(session.lastLap, 'LAST LAP');
   }
   if (e.code === 'KeyT') telemetry.toggle();
@@ -694,6 +734,25 @@ function afterStep(c: Controls): void {
   if (event) keepBests(event);
 }
 
+/** The light of the time of day at race time `t`, and the lamps lit (`brake(k)`: car k's brake pedal). */
+function updateNight(t: number, brake: (k: number) => number): void {
+  const level = lightLevel(timeOfDay, t, darkens);
+  lighting.set(level);
+  if (!floodField || !headlights) return;
+  const on = Math.min(1, Math.max(0, (TUNING.night.lightsOn - level) / 0.15));
+  floodView?.setOn(on);
+  lamps.forEach((l, k) => l.update(on, brake(k)));
+  headlights.update(lamps, stage.camera.position, on);
+  lighting.setFloodAtCar(floodField.at(stage.camera.position.x, stage.camera.position.z));
+}
+
+/** Car k's brake pedal on the last step (for its brake lights). */
+function brakeOf(k: number): number {
+  if (k >= sim.cars.length) return 0;
+  const all = race ? race.controls : online ? online.controls : [controls];
+  return all[k]?.brake ?? 0;
+}
+
 /** Watch `rec` from the TV cameras; live driving waits until it ends. */
 function startReplay(rec: LapRecording | null, caption: string): void {
   if (!rec) return;
@@ -702,11 +761,19 @@ function startReplay(rec: LapRecording | null, caption: string): void {
   document.body.classList.add('replaying');
 }
 
-/** Watch the race so far (or all of it), every car, as television; the race waits until it ends. */
+/**
+ * Watch the race so far (or all of it), every car, as television; the race waits until it ends.
+ * Online the race waits for nobody: only once it is over, and it goes on underneath.
+ */
 function startRaceReplay(): void {
-  if (!race || online || !raceReplayHud || race.recorder.frameCount < 2) return;
-  const rec = race.recorder.recording();
-  replay.playRace(rec, race.phase === 'finished' ? 'RACE' : 'RACE SO FAR');
+  if (!raceReplayHud) return;
+  let rec: RaceRecording;
+  if (online) {
+    if (!online.replayable) return;
+    rec = online.recording();
+  } else if (race && race.recorder.frameCount >= 2) rec = race.recorder.recording();
+  else return;
+  replay.playRace(rec, !race || race.phase === 'finished' ? 'RACE' : 'RACE SO FAR');
   director = new Director(rec, 0, track.samples.length);
   following = null;
   followCamera = 'tv';
@@ -785,8 +852,8 @@ function drawRaceReplay(t: number, dt: number): void {
   const camera = shot ? shot.camera : followCamera;
   rec.cars.forEach((_, k) => sampleCar(rec, k, t, raceStates[k]));
   carView.update(raceStates[0].pose);
-  others.forEach((o, j) => {
-    const s = raceStates[j + 1];
+  others.forEach((o) => {
+    const s = raceStates[o.id];
     if (!s) return;
     o.view.update(s.pose);
     copyPose(s.pose, o.drawn);
@@ -797,7 +864,7 @@ function drawRaceReplay(t: number, dt: number): void {
     others.map((o) => ({ x: o.drawn.position.x, z: o.drawn.position.z, colour: o.colour })),
   );
   const followed = raceStates[car];
-  const def = race!.sim.cars[car].def;
+  const def = defOf(car);
   const cut = replay.jumped || lastFollow.car !== car || lastFollow.camera !== camera;
   lastFollow = { car, camera };
   if (camera === 'tv') tv.update(followed.pose, dt, cut);
@@ -812,10 +879,11 @@ function drawRaceReplay(t: number, dt: number): void {
   // Every car drawn, but from inside one you see the road, not its own bodywork.
   const inside = camera === 'onboard' ? car : -1;
   carView.root.visible = inside !== 0;
-  others.forEach((o, j) => (o.view.root.visible = raceStates[j + 1] !== undefined && inside !== j + 1));
+  others.forEach((o) => (o.view.root.visible = raceStates[o.id] !== undefined && inside !== o.id));
   replay.jumped = false;
-  followSun(stage.sun, stage.camera.position);
+  followSun(stage.sun, stage.camera.position, lighting.sunOffset);
   weatherView.update(dt, stage.camera.position);
+  updateNight(t, (k) => raceStates[k === 0 ? 0 : others[k - 1].id]?.brake ?? 0);
   const rows = standingsAt(rec, t);
   const lap = Math.min(rec.laps, rows[0].laps + 1);
   replayHud.title.textContent = `REPLAY · ${replay.caption}`;
@@ -851,8 +919,9 @@ function drawReplay(t: number, dt: number): void {
   minimap.update(replayState.pose);
   tv.update(replayState.pose, dt, replay.jumped);
   replay.jumped = false;
-  followSun(stage.sun, carView.root.position);
+  followSun(stage.sun, carView.root.position, lighting.sunOffset);
   weatherView.update(dt, stage.camera.position);
+  updateNight(race?.time ?? 0, (k) => (k === 0 ? replayState.brake : 0));
   const valid = rec.valid ? '' : '  (INVALID)';
   replayHud.title.textContent = `REPLAY · ${replay.caption} ${formatLapTime(rec.lapTime)}${valid}`;
   const state = replay.paused ? 'PAUSED' : `${replay.speed}×`;
@@ -925,7 +994,11 @@ function updateHud(dt: number): void {
   tyresHud.update(sim.car, sim.pits?.state[0] ?? null, race?.boxCalls[0] ?? online?.boxCall ?? false);
   const racing = race ?? online;
   if (racing) raceHud?.update(racing);
-  if (online) onlinePanel?.setStatus(onlineStatus(online));
+  if (online) {
+    onlinePanel?.setStatus(onlineStatus(online));
+    // The pause menu's Watch replay, once the race is over.
+    menu.allowReplay(online.replayable);
+  }
   // A championship (or career) round over: count it, save it, and show the standings.
   if (season && race && race.phase === 'finished' && !recorded) {
     recorded = true;
@@ -991,6 +1064,16 @@ function frame(now: number): void {
   }
   // Paused, or the start menu: no steps (and no catching up afterwards); the scene is still drawn.
   if (menu.open) accumulator = 0;
+  if (replay.active && !menu.open && online) {
+    // Online the race goes on underneath (over, but still on the shared clock), your car left
+    // alone; a rematch starting ends the replay.
+    online.advance(
+      () => NO_CONTROLS,
+      () => afterStep(online.controls[0] ?? NO_CONTROLS),
+    );
+    onlinePanel?.setStatus(onlineStatus(online));
+    if (online.phase !== 'finished') endReplay();
+  }
   if (replay.active && !menu.open) {
     // Live driving waits: no steps, and no catching up afterwards.
     accumulator = 0;
@@ -1059,8 +1142,9 @@ function frame(now: number): void {
     stage.camera,
     stage.renderer.domElement.height,
   );
-  followSun(stage.sun, carView.root.position);
+  followSun(stage.sun, carView.root.position, lighting.sunOffset);
   weatherView.update(dt, stage.camera.position);
+  updateNight((race ?? online)?.time ?? 0, brakeOf);
   // The listener is the camera.
   const cam = stage.camera;
   cam.updateMatrixWorld();

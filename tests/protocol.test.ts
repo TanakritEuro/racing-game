@@ -8,8 +8,8 @@ describe('protocol', () => {
   it('passes every message type through a structured clone unchanged', () => {
     const all: Message[] = [
       { type: 'hello', version: PROTOCOL, car: 'Kestrel' },
-      { type: 'welcome', track: 'saltmarsh', laps: 3, car: 'Wren', opponents: 3, conditions: 'wet', wear: 'high', custom: null },
-      { type: 'welcome', track: customId(cleanCustom(ovalTemplate())!), laps: 3, car: 'Wren', opponents: 0, conditions: 'dry', wear: 'off', custom: cleanCustom(ovalTemplate()) },
+      { type: 'welcome', track: 'saltmarsh', laps: 3, car: 'Wren', opponents: 3, conditions: 'wet', time: 'night', wear: 'high', custom: null },
+      { type: 'welcome', track: customId(cleanCustom(ovalTemplate())!), laps: 3, car: 'Wren', opponents: 0, conditions: 'dry', time: 'day', wear: 'off', custom: cleanCustom(ovalTemplate()) },
       { type: 'reject', reason: 'full' },
       { type: 'ready' },
       { type: 'ping', t: 1.5 },
@@ -36,6 +36,8 @@ describe('protocol', () => {
       { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0 },
       { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0, conditions: 'snow', wear: 'off' },
       { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0, conditions: 'dry', wear: 'extreme', custom: null },
+      { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0, conditions: 'dry', time: 'noon', wear: 'off', custom: null },
+      { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0, conditions: 'dry', wear: 'off', custom: null },
       // A custom circuit that isn't the one named, or isn't one at all.
       { type: 'welcome', track: 'saltmarsh', laps: 2, car: 'Wren', opponents: 0, conditions: 'dry', wear: 'off', custom: ovalTemplate() },
       { type: 'welcome', track: 'custom-x', laps: 2, car: 'Wren', opponents: 0, conditions: 'dry', wear: 'off', custom: { version: 1, points: [] } },
