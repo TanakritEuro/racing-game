@@ -2,7 +2,7 @@
 // corner tighter than a given radius, and on the outside of its exit. Circuits use it so their
 // kerbs follow the layout when the control points move.
 
-import { buildTrack, type Side, type Span, type Track, type TrackDef } from './track';
+import { buildTrack, sampleIndex, type Side, type Span, type Track, type TrackDef } from './track';
 
 export interface Corner {
   /** Where the corner starts and ends (m from the start line) and which way it turns. */
@@ -17,13 +17,16 @@ export interface Corner {
 export function curvature(track: Track, i: number): number {
   const { samples } = track;
   const n = samples.length;
-  const a = samples[(i - 3 + n) % n];
-  const b = samples[(i + 3) % n];
+  const ia = sampleIndex(track, i - 3);
+  const ib = sampleIndex(track, i + 3);
+  const a = samples[ia];
+  const b = samples[ib];
   let d = Math.atan2(b.tz, b.tx) - Math.atan2(a.tz, a.tx);
   while (d > Math.PI) d -= 2 * Math.PI;
   while (d < -Math.PI) d += 2 * Math.PI;
   // With +X right and +Z towards the viewer from above, a right turn increases the heading angle.
-  return d / (6 * (track.length / n));
+  // (At a stage's ends the window is held at the road's end, so it spans fewer samples.)
+  return d / (Math.max(1, track.closed ? 6 : ib - ia) * (track.length / n));
 }
 
 /** The corners tighter than `maxRadius` (m). */

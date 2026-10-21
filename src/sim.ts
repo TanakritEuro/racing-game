@@ -4,6 +4,7 @@
 // Car 0 is the player's; `car`, `timer`, `previous` and `current` are shorthands for it, so
 // a one-car simulation (time trial, the vehicle tests) reads as it always has.
 
+import { TUNING } from './config';
 import { PHYSICS_STEP } from './constants';
 import { addKinematicCar, createPhysics, type Physics } from './physics';
 import type RAPIER from '@dimforge/rapier3d-compat';
@@ -141,6 +142,8 @@ export class Simulation {
   /** Where car `i` starts: a lone car on the centreline; a field on a staggered two-by-two grid. */
   gridPose(i: number): Pose {
     const { samples } = this.track;
+    // A rally stage starts at the start of its road.
+    if (!this.track.closed) return poseOnTrack(samples[TUNING.stage.startSample]);
     if (this.lone) return poseOnTrack(samples[samples.length - GRID.first]);
     return this.slotPose(this.slots[i]);
   }
@@ -214,7 +217,8 @@ export class Simulation {
     this.cars.forEach((car, i) => {
       car.capturePose(this.poses[i].current);
       const p = car.position;
-      this.timers[i].update(p.x, p.z, this.time, this.isOffTrack(i));
+      // A rally stage has no track limits: off the road is only slower.
+      this.timers[i].update(p.x, p.z, this.time, this.track.closed && this.isOffTrack(i));
       this.pits?.after(i, car, PHYSICS_STEP);
     });
   }
@@ -233,9 +237,9 @@ export class Simulation {
     return this.isOffTrack(0);
   }
 
-  /** Put car `i` back on the track at the nearest point, facing the right way, stopped. Voids the lap. */
+  /** Put car `i` back on the track at the nearest point, facing the right way, stopped. Voids the lap (a stage's run takes a time penalty instead: `StageRun`). */
   recover(i = 0): void {
-    this.timers[i].invalidate();
+    if (this.track.closed) this.timers[i].invalidate();
     const p = this.cars[i].position;
     const k = nearestSample(this.track, p.x, p.z, this.timers[i].index);
     this.cars[i].reset(poseOnTrack(this.track.samples[k]));

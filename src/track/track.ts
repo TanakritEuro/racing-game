@@ -1,5 +1,6 @@
 // A circuit is a closed centreline (control points through which a centripetal
-// Catmull–Rom spline passes) with a road width, elevation and banking at each point.
+// Catmull–Rom spline passes) with a road width, elevation and banking at each point. A rally
+// stage is an open one (`closed: false`): the road runs from its first point to its last.
 // This module is pure data and maths: physics (physics.ts) and rendering
 // (render/trackView.ts) both build from the same samples.
 //
@@ -25,6 +26,8 @@ export interface ControlPoint {
 
 export type Side = 'left' | 'right';
 export type RunoffSurface = 'grass' | 'gravel';
+/** What the road itself is made of. */
+export type RoadSurface = 'asphalt' | 'gravel';
 
 /** A stretch of the track by distance from the start line (m), on one side. */
 export interface Span {
@@ -37,8 +40,13 @@ export interface TrackDef {
   /** Short id, used in URLs (`?track=`). */
   id: string;
   name: string;
-  /** Control points in driving order. The loop closes back to the first, which is the start line. */
+  /** Control points in driving order. The loop closes back to the first, which is the start line (a stage: from the first, the start, to the last, the finish). */
   points: readonly ControlPoint[];
+  /** False for a rally stage: an open road from start to finish. Default true (a circuit). */
+  closed?: boolean;
+  /** The road's surface (default asphalt), and stretches of the other one. */
+  surface?: RoadSurface;
+  surfaceSpans?: readonly { from: number; to: number; surface: RoadSurface }[];
   /** Default road width (m). */
   width: number;
   /** Run-off between the road edge (or kerb) and the barrier. */
@@ -80,6 +88,8 @@ export interface TrackSample {
   uz: number;
   bank: number;
   halfWidth: number;
+  /** The road's surface here. */
+  surface: RoadSurface;
   /** What lies beyond each road edge here. */
   left: SideProfile;
   right: SideProfile;
@@ -103,8 +113,16 @@ const GRAVEL_TAPER = 15;
 export interface Track {
   def: TrackDef;
   samples: TrackSample[];
-  /** Centreline length (m). */
+  /** Centreline length (m): round the lap, or start to finish. */
   length: number;
+  /** A circuit (the samples wrap round) or a stage (they run from the start, 0, to the finish, the last). */
+  closed: boolean;
+}
+
+/** Sample index `i` on `track`: wrapped round a circuit, held at the ends of a stage. */
+export function sampleIndex(track: Track, i: number): number {
+  const n = track.samples.length;
+  return track.closed ? ((i % n) + n) % n : Math.max(0, Math.min(n - 1, i));
 }
 
 /** Sample spacing along the centreline (m). */
@@ -119,34 +137,38 @@ interface SplinePoint {
   width: number;
 }
 
-/** Build a track: sample the closed spline evenly by ground distance. Sample 0 is the start line. */
+/** Build a track: sample the spline evenly by ground distance. Sample 0 is the start line. */
 export function buildTrack(def: TrackDef): Track {
+  const closed = def.closed !== false;
   const points = def.points.map((p) => ({ x: p.x, z: p.z, y: p.y ?? 0, bank: p.bank ?? 0, width: p.width ?? def.width }));
   // Dense sampling of the spline first, then resample at even spacing.
   const dense: SplinePoint[] = [];
   const n = points.length;
   const perSegment = 64;
-  for (let i = 0; i < n; i++) {
-    const p0 = points[(i - 1 + n) % n];
-    const p1 = points[i];
-    const p2 = points[(i + 1) % n];
-    const p3 = points[(i + 2) % n];
-    for (let k = 0; k < perSegment; k++) dense.push(splineAt(p0, p1, p2, p3, k / perSegment));
+  // A stage's ends: a phantom point beyond each, carrying on straight, so the road leaves the
+  // start and reaches the finish heading the way its first and last stretches go.
+  const beyond = (a: SplinePoint, b: SplinePoint): SplinePoint => ({ ...a, x: 2 * a.x - b.x, y: 2 * a.y - b.y, z: 2 * a.z - b.z });
+  const point = (i: number) => (closed ? points[(i + n) % n] : i < 0 ? beyond(points[0], points[1]) : i >= n ? beyond(points[n - 1], points[n - 2]) : points[i]);
+  const segments = closed ? n : n - 1;
+  for (let i = 0; i < segments; i++) {
+    for (let k = 0; k < perSegment; k++) dense.push(splineAt(point(i - 1), point(i), point(i + 1), point(i + 2), k / perSegment));
   }
-  dense.push(dense[0]);
+  dense.push(closed ? dense[0] : points[n - 1]);
 
   const cumulative = [0];
   for (let i = 1; i < dense.length; i++) {
     cumulative.push(cumulative[i - 1] + Math.hypot(dense[i].x - dense[i - 1].x, dense[i].z - dense[i - 1].z));
   }
   const length = cumulative[cumulative.length - 1];
-  const count = Math.round(length / SPACING);
+  // A circuit's last sample is one spacing short of the start; a stage's is the finish.
+  const count = Math.round(length / SPACING) + (closed ? 0 : 1);
+  const along = (i: number) => (closed ? (i / count) * length : (i / (count - 1)) * length);
 
   const even: SplinePoint[] = [];
   let j = 0;
   for (let i = 0; i < count; i++) {
-    const s = (i / count) * length;
-    while (cumulative[j + 1] < s) j++;
+    const s = along(i);
+    while (j + 2 < cumulative.length && cumulative[j + 1] < s) j++;
     const f = (s - cumulative[j]) / (cumulative[j + 1] - cumulative[j]);
     const a = dense[j];
     const b = dense[j + 1];
@@ -160,8 +182,8 @@ export function buildTrack(def: TrackDef): Track {
   }
 
   const samples = even.map((p, i): TrackSample => {
-    const a = even[(i - 1 + count) % count];
-    const b = even[(i + 1) % count];
+    const a = closed ? even[(i - 1 + count) % count] : even[Math.max(0, i - 1)];
+    const b = closed ? even[(i + 1) % count] : even[Math.min(count - 1, i + 1)];
     // Ground-plane tangent and left normal, as before.
     const gx = b.x - a.x;
     const gz = b.z - a.z;
@@ -184,7 +206,7 @@ export function buildTrack(def: TrackDef): Track {
       x: p.x,
       y: p.y,
       z: p.z,
-      s: (i / count) * length,
+      s: along(i),
       tx,
       ty,
       tz,
@@ -198,11 +220,18 @@ export function buildTrack(def: TrackDef): Track {
       uz: uz0 * c - nz * sn,
       bank: p.bank,
       halfWidth: p.width / 2,
-      left: sideProfile(def, 'left', (i / count) * length, length),
-      right: sideProfile(def, 'right', (i / count) * length, length),
+      surface: roadSurface(def, along(i)),
+      left: sideProfile(def, 'left', along(i), length),
+      right: sideProfile(def, 'right', along(i), length),
     };
   });
-  return { def, samples, length };
+  return { def, samples, length, closed };
+}
+
+/** The road's surface at distance `s`: the default, or a stretch of the other. */
+function roadSurface(def: TrackDef, s: number): RoadSurface {
+  for (const span of def.surfaceSpans ?? []) if (s >= span.from && s <= span.to) return span.surface;
+  return def.surface ?? 'asphalt';
 }
 
 /** How far into span `span` distance `s` is from its nearer end (m), or −1 outside it. Spans may wrap past the start line. */
@@ -290,7 +319,7 @@ export function nearestSample(track: Track, x: number, z: number, hint?: number,
     }
   };
   if (hint === undefined) for (let i = 0; i < n; i++) check(i);
-  else for (let k = -span; k <= span; k++) check((((hint + k) % n) + n) % n);
+  else for (let k = -span; k <= span; k++) check(sampleIndex(track, hint + k));
   return best;
 }
 
@@ -306,7 +335,9 @@ export function lateralOffset(track: Track, i: number, x: number, z: number): nu
  */
 export function trackFingerprint(track: Track): string {
   const { def } = track;
-  const layout = JSON.stringify([def.points, def.width, def.runoff, def.kerbs ?? [], def.gravel ?? [], track.samples.length]);
+  // (A circuit's fingerprint is as it always was: the stage-only fields join it only when set.)
+  const extra = def.closed === false || def.surface || def.surfaceSpans ? [def.closed ?? true, def.surface ?? 'asphalt', def.surfaceSpans ?? []] : [];
+  const layout = JSON.stringify([def.points, def.width, def.runoff, def.kerbs ?? [], def.gravel ?? [], track.samples.length, ...extra]);
   // FNV-1a, 32 bits.
   let h = 0x811c9dc5;
   for (let i = 0; i < layout.length; i++) {

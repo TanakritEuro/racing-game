@@ -7,7 +7,7 @@
 import { TUNING } from '../config';
 import { createRng } from '../math';
 import { sweep, type Sweep } from './geometry';
-import type { Track, TrackSample } from './track';
+import { sampleIndex, type Track, type TrackSample } from './track';
 
 export interface Puddle {
   /** Samples it covers along the road: first and one past the last. */
@@ -39,7 +39,7 @@ export function puddles(track: Track): Puddle[] {
   const clear = P.startClear / spacing;
   const rng = createRng(seedOf(track.def.id));
   const centres: number[] = [];
-  const at = (i: number) => samples[((i % n) + n) % n];
+  const at = (i: number) => samples[sampleIndex(track, i)];
   const allowed = (i: number) => i >= clear && i <= n - clear;
   for (let i = 0; i < n; i++) {
     if (!allowed(i)) continue;
@@ -81,7 +81,7 @@ export function puddles(track: Track): Puddle[] {
       const count = Math.max(1, Math.floor(run / F.every));
       for (let c = 0; c < count; c++) {
         const k = i + Math.floor(rng() * (j - i));
-        if (allowed(k) && centres.every((m) => Math.min(Math.abs(m - k), n - Math.abs(m - k)) >= apart)) centres.push(k);
+        if (allowed(k) && centres.every((m) => (track.closed ? Math.min(Math.abs(m - k), n - Math.abs(m - k)) : Math.abs(m - k)) >= apart)) centres.push(k);
       }
     }
     i = j;
@@ -94,7 +94,7 @@ export function puddles(track: Track): Puddle[] {
     // Water runs to the low edge of a banked road; a flat one, either edge or right across.
     const side: Puddle['side'] = Math.abs(p.ly) > P.flat ? (p.ly > 0 ? 'right' : 'left') : rng() < P.across ? 'across' : rng() < 0.5 ? 'right' : 'left';
     const width = P.width[0] + (P.width[1] - P.width[0]) * rng();
-    out.push({ first: (i - half + n) % n, last: (i + half) % n, side, width });
+    out.push({ first: sampleIndex(track, i - half), last: sampleIndex(track, i + half), side, width });
   }
   placed.set(track, out);
   return out;

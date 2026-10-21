@@ -5,7 +5,7 @@
 // banked "left" and a lift along the banked "up".
 
 import { normalize, type Vec3 } from '../math';
-import { KERB_WIDTH, type RunoffSurface, type Side, type SideProfile, type Track, type TrackSample } from './track';
+import { KERB_WIDTH, type RoadSurface, type RunoffSurface, type Side, type SideProfile, type Track, type TrackSample } from './track';
 
 /** Kerb height (m) and the extra height of the ridges under its red stripes (m). */
 export const KERB_HEIGHT = 0.04;
@@ -54,8 +54,10 @@ export function strip(track: Track, inner: Offset, outer: Offset, lift: Offset =
     positions.set([o.x, o.y, o.z, c.x, c.y, c.z], i * 6);
     distance[i * 2] = distance[i * 2 + 1] = p.s;
   });
-  const indices = new Uint32Array(n * 6);
-  for (let i = 0; i < n; i++) {
+  // Round a circuit the last sample joins the first; a stage's road stops at its finish.
+  const quads = track.closed ? n : n - 1;
+  const indices = new Uint32Array(quads * 6);
+  for (let i = 0; i < quads; i++) {
     const a = i * 2;
     const b = ((i + 1) % n) * 2;
     // Counter-clockwise seen from above the road, so the faces point up.
@@ -70,6 +72,19 @@ export function road(track: Track): Ribbon {
     track,
     (p) => -p.halfWidth,
     (p) => p.halfWidth,
+  );
+}
+
+/** The road where it is `surface`: all of it as one strip, or the stretches of it (a stage's tarmac and gravel). */
+export function roadOf(track: Track, surface: RoadSurface): { positions: Float32Array; indices: Uint32Array }[] {
+  const { samples } = track;
+  if (samples.every((p) => p.surface === surface)) return [road(track)];
+  if (!samples.some((p) => p.surface === surface)) return [];
+  return runs(track, (p) => p.surface === surface).map(([first, last]) =>
+    sweep(track, first, last, 1, (p) => [
+      [-p.halfWidth, 0],
+      [p.halfWidth, 0],
+    ]),
   );
 }
 
@@ -116,13 +131,14 @@ function blend(a: TrackSample, b: TrackSample, f: number, s: number): TrackSampl
     uz: l(a.uz, b.uz),
     bank: l(a.bank, b.bank),
     halfWidth: l(a.halfWidth, b.halfWidth),
+    surface: a.surface,
     left: side(a.left, b.left),
     right: side(a.right, b.right),
   };
 }
 
 /**
- * Sweep a cross-section along samples `first`…`last` (wrapping past the start line),
+ * Sweep a cross-section along samples `first`…`last` (round a circuit, wrapping past the start line),
  * `steps` stations per sample interval. `columns` gives the cross-section at a station as
  * [offset, lift] pairs, ordered from right to left (increasing offset), so faces point up.
  */
@@ -135,7 +151,7 @@ export function sweep(
 ): Sweep {
   const { samples, length } = track;
   const n = samples.length;
-  const intervals = (last - first + n) % n || n;
+  const intervals = track.closed ? (last - first + n) % n || n : Math.max(0, last - first);
   const stations: TrackSample[] = [];
   for (let k = 0; k < intervals; k++) {
     const a = samples[(first + k) % n];
@@ -174,6 +190,21 @@ export function sweep(
 export function runs(track: Track, test: (p: TrackSample) => boolean): [number, number][] {
   const { samples } = track;
   const n = samples.length;
+  if (!track.closed) {
+    // A stage: start to finish, the last run ending at the finish.
+    const out: [number, number][] = [];
+    let first = -1;
+    for (let i = 0; i < n; i++) {
+      if (test(samples[i])) {
+        if (first < 0) first = i;
+      } else if (first >= 0) {
+        out.push([first, i]);
+        first = -1;
+      }
+    }
+    if (first >= 0 && first < n - 1) out.push([first, n - 1]);
+    return out;
+  }
   if (samples.every(test)) return [[0, 0]];
   // Start scanning just after a sample that fails, so no run is split at the start line.
   const start = samples.findIndex((p) => !test(p));
@@ -203,7 +234,7 @@ export function kerbs(track: Track): Sweep[] {
     const k = sign(side);
     for (const [first, last] of runs(track, (p) => profile(p, side).kerb > 0)) {
       // From one sample before the kerb starts (its taper begins at zero) to one past its end.
-      const from = (first - 1 + track.samples.length) % track.samples.length;
+      const from = track.closed ? (first - 1 + track.samples.length) % track.samples.length : Math.max(0, first - 1);
       out.push(
         sweep(track, from, last, KERB_STEPS, (p) => {
           const w = profile(p, side).kerb;
@@ -260,8 +291,10 @@ export function barriers(track: Track, step = 3): BarrierSegment[] {
   const out: BarrierSegment[] = [];
   for (const side of ['left', 'right'] as const) {
     for (let i = 0; i < n; i += step) {
+      // A stage's barriers stop at its finish.
+      if (!track.closed && i >= n - 1) break;
       const pa = samples[i];
-      const pb = samples[(i + step) % n];
+      const pb = samples[track.closed ? (i + step) % n : Math.min(n - 1, i + step)];
       const a = crossSection(pa, sign(side) * barrierOffset(pa, side));
       const b = crossSection(pb, sign(side) * barrierOffset(pb, side));
       const d = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z };

@@ -113,6 +113,8 @@ interface WheelWork {
   vLong: number;
   vLat: number;
   grip: number;
+  /** The surface's stretch of the tyre's curve along slip (1 on a sealed road). */
+  slip: number;
   rollingDrag: number;
   /** Contact point and tyre frame on the contact plane, in the world. */
   point: Vec3;
@@ -168,7 +170,7 @@ export class Car {
   private readonly normal = vec();
   private readonly carRight = vec();
   /** The surface under the wheel being worked on (reused). */
-  private readonly surface = { grip: 1, drag: 0 };
+  private readonly surface = { grip: 1, drag: 0, slip: 1 };
   /** How wet the track is (0–1, set by the simulation): every surface's grip follows it. */
   wetness = 0;
   /** Tyre wear rate (times the normal; 0 for none). */
@@ -261,6 +263,7 @@ export class Car {
           vLong: 0,
           vLat: 0,
           grip: 0,
+          slip: 1,
           rollingDrag: 0,
           point: vec(),
           fwd: vec(),
@@ -559,6 +562,7 @@ export class Car {
       // A worn tyre has less grip, whatever it's on.
       surface.grip *= wearGrip(wheel.wear);
       work.grip = surface.grip;
+      work.slip = surface.slip;
       work.rollingDrag = (wheel.tyre.rollingResistance + surface.drag) * load * wheel.tyre.radius;
       wheel.gripLimit = gripLimit(wheel.tyre, load, surface.grip);
     }
@@ -598,7 +602,8 @@ export class Car {
         let fx = 0;
         let fy = 0;
         if (wheel.contact) {
-          tyreForces(wheel.tyre, wheel.slipRatio, Math.atan(work.tanSlip), wheel.load, work.grip, this.tyreForce);
+          // On loose gravel the tyre's curve is stretched along slip: it grips best further into a slide.
+          tyreForces(wheel.tyre, wheel.slipRatio / work.slip, Math.atan(work.tanSlip) / work.slip, wheel.load, work.grip, this.tyreForce);
           fx = this.tyreForce.fx;
           fy = this.tyreForce.fy;
           // Low-speed damping of the slip velocity, fading out with speed.
@@ -618,7 +623,7 @@ export class Car {
         work.spin.torque = -fx * r;
         // ABS eases the foot brake on a wheel that slips too much; the handbrake bypasses it.
         if (this.aids.abs && work.footBrake > 0 && wheel.contact) {
-          wheel.absFactor = absStep(aids.abs, wheel.absFactor, wheel.slipRatio, wheel.tyre.peakSlipRatio, work.vLong, h);
+          wheel.absFactor = absStep(aids.abs, wheel.absFactor, wheel.slipRatio, wheel.tyre.peakSlipRatio * work.slip, work.vLong, h);
           if (wheel.absFactor < 1) this.absActive = true;
         } else wheel.absFactor = 1;
         const brake = work.footBrake * wheel.absFactor + work.handbrake;
@@ -643,7 +648,7 @@ export class Car {
             slipSpeed = (this.work[i].spin.omega * w.tyre.radius - this.work[i].vLong) * sign;
           }
         }
-        drivetrain.tcFactor = tcStep(aids.tc, drivetrain.tcFactor, slip, slipSpeed, this.wheels[driven[0]].tyre.peakSlipRatio, h);
+        drivetrain.tcFactor = tcStep(aids.tc, drivetrain.tcFactor, slip, slipSpeed, this.wheels[driven[0]].tyre.peakSlipRatio * this.work[driven[0]].slip, h);
         if (drivetrain.tcFactor < 1) this.tcActive = true;
       } else drivetrain.tcFactor = 1;
 

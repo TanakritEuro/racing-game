@@ -5,7 +5,7 @@
 
 import { barrierOffset } from './geometry';
 import { terrainHeight, type Terrain } from './terrain';
-import { lateralOffset, nearestSample, type Track, type TrackSample } from './track';
+import { lateralOffset, nearestSample, sampleIndex, type Track, type TrackSample } from './track';
 
 export interface TvCamera {
   x: number;
@@ -67,7 +67,9 @@ export function placeTvCameras(track: Track, terrain: Terrain): TvCamera[] {
   const { samples } = track;
   const n = samples.length;
   const spacing = track.length / n;
-  const at = (i: number) => samples[((i % n) + n) % n];
+  const at = (i: number) => samples[sampleIndex(track, i)];
+  // Round a circuit a camera may cover past the start line; a stage's last one stops at the finish.
+  const end = (u: number) => (track.closed ? u + n : n);
   const cameras: TvCamera[] = [];
   let u = 0;
   while (u < n) {
@@ -77,7 +79,7 @@ export function placeTvCameras(track: Track, terrain: Terrain): TvCamera[] {
         const c = post(at(u + Math.round(ahead / spacing)), side, terrain);
         if (!beyondBarriers(track, c.x, c.z) || !cameraSees(c, at(u), terrain)) continue;
         let to = u;
-        while (to + 1 < u + n && cameraSees(c, at(to + 1), terrain)) to++;
+        while (to + 1 < end(u) && cameraSees(c, at(to + 1), terrain)) to++;
         if (!best || to > best.to) best = { ...c, from: u, to };
       }
     }

@@ -7,7 +7,7 @@ import { TUNING } from '../config';
 import { beyondBarriers } from './cameras';
 import { barrierOffset } from './geometry';
 import { terrainHeight, type Terrain } from './terrain';
-import type { Track, TrackSample } from './track';
+import { sampleIndex, type Track, type TrackSample } from './track';
 
 export interface Floodlight {
   /** The lamp head. */
@@ -65,8 +65,8 @@ export function lightNeeded(track: Track, i: number): number {
   const F = TUNING.night.floodlights;
   const n = track.samples.length;
   const spacing = track.length / n;
-  const a = track.samples[(i - 1 + n) % n];
-  const b = track.samples[(i + 1) % n];
+  const a = track.samples[sampleIndex(track, i - 1)];
+  const b = track.samples[sampleIndex(track, i + 1)];
   const turn = Math.abs(Math.atan2(a.tx * b.tz - a.tz * b.tx, a.tx * b.tx + a.tz * b.tz)) / (2 * spacing);
   const grid = (n - i) * spacing < F.grid || i * spacing < spacing;
   return turn > F.cornerCurvature || grid ? F.corner : F.min;
@@ -96,7 +96,10 @@ export function placeFloodlights(track: Track, terrain: Terrain): Floodlight[] {
   // Samples a tower could reach, either side of the one it stands beside.
   const span = Math.ceil((F.reach + 40) / spacing);
   const near = (k: number, f: (i: number) => void) => {
-    for (let d = -span; d <= span; d++) f((((k + d) % n) + n) % n);
+    for (let d = -span; d <= span; d++) {
+      // A stage's road ends: nothing beyond the start or the finish.
+      if (track.closed || (k + d >= 0 && k + d < n)) f(sampleIndex(track, k + d));
+    }
   };
 
   for (let guard = 0; guard < n; guard++) {
@@ -113,7 +116,7 @@ export function placeFloodlights(track: Track, terrain: Terrain): Floodlight[] {
     let best: Floodlight | null = null;
     let bestScore = 0;
     for (const ahead of F.ahead) {
-      const k = (dark + Math.round(ahead / spacing)) % n;
+      const k = sampleIndex(track, dark + Math.round(ahead / spacing));
       const p = samples[k];
       for (const side of [1, -1] as const) {
         const off = barrierOffset(p, side === 1 ? 'left' : 'right') + F.setback;

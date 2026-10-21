@@ -12,12 +12,12 @@
 import { TUNING } from '../config';
 import { GRAVITY } from '../constants';
 import { clamp, createRng, type Rng } from '../math';
-import { lateralOffset, nearestSample, type Track } from '../track/track';
+import { lateralOffset, nearestSample, sampleIndex, type Track } from '../track/track';
 import { puddles, puddleSpan } from '../track/puddles';
 import { boxOffset, fastLaneOffset, laneAlong, laneOpen, type PitLane } from '../track/pitLane';
 import type { PitState } from '../race/pits';
 import { wearGrip } from '../vehicle/wear';
-import { wetness, type Conditions } from '../track/weather';
+import { surfaceGrip, wetness, type Conditions } from '../track/weather';
 import { controls, type Car, type Controls } from '../vehicle/car';
 import { usableLock } from '../drivers/steeringAssist';
 import type { CarDef } from '../vehicle/carDef';
@@ -100,14 +100,16 @@ export class AiDriver {
     if (pit) aim = ((this.pit ? this.pitTarget(i) : null)?.offset ?? pit.offset) - line.offset[i];
     const lx = line.x[i] + s.nx * aim;
     const lz = line.z[i] + s.nz * aim;
-    const tx = line.x[(i + 1) % n] - line.x[(i - 1 + n) % n];
-    const tz = line.z[(i + 1) % n] - line.z[(i - 1 + n) % n];
+    // (Samples ahead and behind: wrapped round a circuit, held at a stage's ends.)
+    const at = (j: number) => sampleIndex(track, j);
+    const tx = line.x[at(i + 1)] - line.x[at(i - 1)];
+    const tz = line.z[at(i + 1)] - line.z[at(i - 1)];
     const tl = Math.hypot(tx, tz) || 1;
     // The line's heading relative to the car's, positive to the right; the car's right on the ground is (−fz, fx).
     const heading = Math.atan2((tx * -fz + tz * fx) / tl, (tx * fx + tz * fz) / tl);
     // How far left of the line the front axle is (the line's left is (tz, −tx)).
     const across = ((ax - lx) * tz - (az - lz) * tx) / tl;
-    const k = line.curvature[(i + Math.round((D.feedForward * v) / spacing)) % n];
+    const k = line.curvature[at(i + Math.round((D.feedForward * v) / spacing))];
     const yawRate = -car.body.angvel().y; // positive turning right
     // At speed, its steady body slip, so the heading error is from where it travels when
     // cornering steadily (and from its nose in a slide).
@@ -135,7 +137,7 @@ export class AiDriver {
 
     // Speed: where the profile wants it a moment ahead, and what it takes to get there.
     const lead = Math.max(4, D.speedLead * v);
-    const ahead = (this.index + Math.max(1, Math.round(lead / spacing))) % n;
+    const ahead = at(this.index + Math.max(1, Math.round(lead / spacing)));
     const offLineSpeed = pit ? pit.cap : this.offLineLimit(aim, faster, v, spacing);
     const here = Math.min(this.profile[this.index] * faster, this.speedCap, offLineSpeed);
     const target = Math.min(this.profile[ahead] * faster, this.speedCap, offLineSpeed);
@@ -186,12 +188,11 @@ export class AiDriver {
     const D = TUNING.ai.driver;
     if (Math.abs(aim) < 0.3) return Infinity;
     const { profile, line } = this;
-    const n = profile.length;
     const brake = this.env.brakingMu * G * D.offLineBraking;
     const reach = Math.round(Math.max(D.offLineLook, (v * v) / (2 * brake)) / spacing);
     let limit = Infinity;
     for (let k = 0; k <= reach; k += 2) {
-      const j = (this.index + k) % n;
+      const j = sampleIndex(this.track, this.index + k);
       // A parallel path `aim` left of the line: radius 1/κ + aim turning right (κ > 0), 1/|κ| − aim turning left.
       const scale = Math.sqrt(clamp(1 + line.curvature[j] * aim, 0.25, 1));
       if (scale > 0.999) continue;
@@ -283,12 +284,12 @@ export class AiDriver {
       const tau = M.wanderTime;
       this.wander += -(this.wander * dt) / tau + skill.precision * Math.sqrt((2 * dt) / tau) * gaussian(rng);
     }
-    if (this.mistake && (this.mistake.until - i + n) % n > n / 2) this.mistake = null;
+    if (this.mistake && (this.track.closed ? (this.mistake.until - i + n) % n > n / 2 : i >= this.mistake.until)) this.mistake = null;
     // A corner ahead: the profile falls by `cornerDrop` within `lookahead`.
     const reach = Math.round(M.lookahead / spacing);
     let slowest = i;
     for (let k = 1; k <= reach; k++) {
-      const j = (i + k) % n;
+      const j = sampleIndex(this.track, i + k);
       if (profile[j] < profile[slowest]) slowest = j;
     }
     const drop = profile[i] - profile[slowest];
@@ -299,11 +300,11 @@ export class AiDriver {
     this.mistakesMade++;
     const pick = (range: readonly number[]) => range[0] + (range[1] - range[0]) * rng();
     if (rng() < 0.5) {
-      this.mistake = { until: (slowest + Math.round(M.overcook.length / spacing)) % n, speed: pick(M.overcook.factor), wide: 0 };
+      this.mistake = { until: sampleIndex(this.track, slowest + Math.round(M.overcook.length / spacing)), speed: pick(M.overcook.factor), wide: 0 };
     } else {
       // The outside of the corner: left of a right-hander (positive curvature), right of a left-hander.
       const outside = line.curvature[slowest] > 0 ? 1 : -1;
-      this.mistake = { until: (slowest + Math.round(M.wide.length / spacing)) % n, speed: 1, wide: outside * pick(M.wide.offset) };
+      this.mistake = { until: sampleIndex(this.track, slowest + Math.round(M.wide.length / spacing)), speed: 1, wide: outside * pick(M.wide.offset) };
     }
   }
 }
@@ -316,6 +317,8 @@ export interface CircuitAi {
   line: RacingLine;
   env: CarEnvelope;
   water: Uint8Array | null;
+  /** The road's grip at each sample against asphalt's, where some of it is gravel (a stage); null on an all-asphalt road. */
+  grip: Float32Array | null;
 }
 
 const prepared = new WeakMap<Track, Map<CarDef, Map<Conditions, CircuitAi>>>();
@@ -330,10 +333,18 @@ export function circuitAi(track: Track, def: CarDef, conditions: Conditions = 'd
   if (!ai) {
     const line = byWeather.values().next().value?.line ?? racingLine(track, def.halfExtents.x);
     const wet = wetness(conditions);
-    ai = { line, env: carEnvelope(def, wet), water: wet >= 1 ? waterOnLine(track, line, def.halfExtents.x) : null };
+    ai = { line, env: carEnvelope(def, wet), water: wet >= 1 ? waterOnLine(track, line, def.halfExtents.x) : null, grip: roadGrip(track, wet) };
     byWeather.set(conditions, ai);
   }
   return ai;
+}
+
+/** Each sample's road grip against asphalt's at wetness `wet` (gravel on a stage), or null if it is all asphalt. */
+function roadGrip(track: Track, wet: number): Float32Array | null {
+  if (track.samples.every((p) => p.surface === 'asphalt')) return null;
+  const asphalt = surfaceGrip('asphalt', wet, 0).grip;
+  const dirt = surfaceGrip('dirt', wet, 0).grip / asphalt;
+  return Float32Array.from(track.samples, (p) => (p.surface === 'gravel' ? dirt : 1));
 }
 
 /** Samples where a car on `line` (half as wide as `halfWidth`) would be in standing water. */
@@ -352,7 +363,7 @@ function waterOnLine(track: Track, line: RacingLine, halfWidth: number): Uint8Ar
 
 /** A driver for `def` on `track` in `conditions` with `skill`, its mistakes drawn from `seed`. */
 export function createAiDriver(track: Track, def: CarDef, skill: Skill = PERFECT, seed = 1, conditions: Conditions = 'dry'): AiDriver {
-  const { line, env, water } = circuitAi(track, def, conditions);
-  const profile = brakeEarlier(speedProfile(line, env, { pace: skill.pace, water }), skill.braking, track.length / track.samples.length);
+  const { line, env, water, grip } = circuitAi(track, def, conditions);
+  const profile = brakeEarlier(speedProfile(line, env, { pace: skill.pace, water, grip }), skill.braking, track.length / track.samples.length);
   return new AiDriver(track, line, profile, env, skill, createRng(seed));
 }

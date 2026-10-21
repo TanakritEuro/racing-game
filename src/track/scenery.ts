@@ -15,6 +15,8 @@ export interface SceneryDef {
   grandstands?: readonly Span[];
   /** The pit building along this span. */
   pits?: Span;
+  /** A forest lining the road (a stage through the woods): a tree about every `spacing` m on each side, up to `depth` m back from the bank. */
+  forest?: { spacing: number; depth: number };
 }
 
 export interface Tree {
@@ -46,8 +48,9 @@ export interface SceneryLayout {
   pits: Building | null;
 }
 
-/** Trees keep at least this far beyond the barriers (m). */
+/** Trees keep at least this far beyond the barriers (m); a forest's come closer, right behind the bank. */
 export const TREE_CLEARANCE = 8;
+const FOREST_CLEARANCE = 2.5;
 /** Grandstands stand this far behind the barrier, the pit building this far (m). */
 const STAND_SETBACK = 4;
 const PITS_SETBACK = 10;
@@ -76,6 +79,28 @@ export function layoutScenery(track: Track, terrain: Terrain, def: SceneryDef): 
       const shade = rng();
       if (!clearOfTrack(track, x, z, TREE_CLEARANCE)) continue;
       trees.push({ x, y: terrainHeight(terrain, x, z), z, scale, shade });
+    }
+  }
+
+  // A forest: trees close behind the banks all along the road, thinning out with depth.
+  if (def.forest) {
+    const F = def.forest;
+    const { samples } = track;
+    const step = Math.max(1, Math.round(F.spacing / (track.length / samples.length)));
+    for (let i = 0; i < samples.length; i += step) {
+      const p = samples[i];
+      for (const side of [1, -1] as const) {
+        // Two trees a station: one near the bank, one further in.
+        for (let k = 0; k < 2; k++) {
+          const back = FOREST_CLEARANCE + (k === 0 ? rng() * 6 : 6 + rng() * F.depth);
+          const off = side * (barrierOffset(p, side === 1 ? 'left' : 'right') + back);
+          const along = (rng() - 0.5) * F.spacing;
+          const x = p.x + p.nx * off + p.tx * along;
+          const z = p.z + p.nz * off + p.tz * along;
+          if (!clearOfTrack(track, x, z, FOREST_CLEARANCE)) continue;
+          trees.push({ x, y: terrainHeight(terrain, x, z), z, scale: 0.8 + rng() * 0.8, shade: rng() });
+        }
+      }
     }
   }
 

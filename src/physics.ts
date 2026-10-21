@@ -1,14 +1,14 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { GRAVITY, PHYSICS_STEP } from './constants';
 import { uprightAlong } from './math';
-import { barriers, kerbs, road, runoff } from './track/geometry';
+import { barriers, kerbs, roadOf, runoff } from './track/geometry';
 import { puddleSweeps } from './track/puddles';
 import { laneSweep, pitLane, pitWall } from './track/pitLane';
 import { buildTerrain, type Terrain } from './track/terrain';
 import type { Track } from './track/track';
 
 /** What a collider is: the wheels read the surface under them from this. */
-export type SurfaceTag = 'asphalt' | 'kerb' | 'grass' | 'gravel' | 'water' | 'barrier' | 'car';
+export type SurfaceTag = 'asphalt' | 'kerb' | 'grass' | 'gravel' | 'dirt' | 'water' | 'barrier' | 'car';
 
 export interface Physics {
   world: RAPIER.World;
@@ -92,7 +92,9 @@ export function createPhysics(track: Track, water = false): Physics {
 
   const trimesh = (tag: SurfaceTag, r: { positions: Float32Array; indices: Uint32Array }) =>
     add(tag, RAPIER.ColliderDesc.trimesh(r.positions, r.indices).setFriction(0.5));
-  trimesh('asphalt', road(track));
+  // The road: asphalt, or on a rally stage gravel ('dirt') where it says.
+  for (const r of roadOf(track, 'asphalt')) trimesh('asphalt', r);
+  for (const r of roadOf(track, 'gravel')) trimesh('dirt', r);
   for (const k of kerbs(track)) trimesh('kerb', k);
   if (water) for (const p of puddleSweeps(track)) trimesh('water', p);
   const lane = pitLane(track);

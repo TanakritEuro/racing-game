@@ -5,7 +5,7 @@
 
 import { createRng } from '../math';
 import { barrierOffset } from './geometry';
-import type { Track, TrackSample } from './track';
+import { sampleIndex, type Track, type TrackSample } from './track';
 
 export interface Terrain {
   /** Corner of the grid with the smallest x and z (m), and the spacing between heights (m). */
@@ -112,7 +112,7 @@ export function buildTerrain(track: Track, def: TerrainDef = { hills: 0, seed: 1
         let bestD = SEARCH;
         for (let c = 0; c < candidates.length; c++) {
           const i = candidates[c];
-          if (distances[c] < bestD && parts.every((j) => Math.min(Math.abs(i - j), n - Math.abs(i - j)) > partGap)) {
+          if (distances[c] < bestD && parts.every((j) => (track.closed ? Math.min(Math.abs(i - j), n - Math.abs(i - j)) : Math.abs(i - j)) > partGap)) {
             best = i;
             bestD = distances[c];
           }
@@ -125,7 +125,7 @@ export function buildTerrain(track: Track, def: TerrainDef = { hills: 0, seed: 1
         let best = parts[0];
         let bestD = Math.hypot(samples[best].x - x, samples[best].z - z);
         for (let o = -STRIDE + 1; o < STRIDE; o++) {
-          const i = (((parts[0] + o) % n) + n) % n;
+          const i = sampleIndex(track, parts[0] + o);
           const d = Math.hypot(samples[i].x - x, samples[i].z - z);
           if (d < bestD) {
             best = i;

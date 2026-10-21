@@ -77,6 +77,12 @@ export const TUNING = {
     grass: { grip: 0.6, drag: 0.08 },
     // Loose stones: little grip and a great deal of drag, so a car sinks in and stops.
     gravel: { grip: 0.5, drag: 0.3 },
+    /**
+     * A gravel road (rally stages): packed and graded, less grip than asphalt, a little drag;
+     * and the tyre's curve stretched by `slip`: its grip peaks at that many times the slip
+     * angle and ratio it does on asphalt, and falls away as slowly, as the stones roll under it.
+     */
+    dirt: { grip: 0.72, drag: 0.025, slip: 1.6 },
   },
   /** Tyre wear (`vehicle/wear.ts`): rates, and grip against wear. */
   wear: {
@@ -159,7 +165,7 @@ export const TUNING = {
     /** How wet each condition is (0–1): every wet effect scales with it. */
     wetness: { dry: 0, damp: 0.5, wet: 1 },
     /** Each surface's grip when fully wet, as a share of its dry grip: painted kerbs are slippery. */
-    wetGrip: { asphalt: 0.72, kerb: 0.5, grass: 0.75, gravel: 0.9 },
+    wetGrip: { asphalt: 0.72, kerb: 0.5, grass: 0.75, gravel: 0.9, dirt: 0.7 },
     water: {
       /** Standing water's grip as a share of the wet road's, slowly, and its extra rolling drag (fraction of load). */
       grip: 0.85,
@@ -266,6 +272,20 @@ export const TUNING = {
       rise: 0.9,
       opacity: 0.28,
       colour: 0xdfe4e8,
+    },
+    /** Dust thrown up from a gravel road: more with speed (`minSpeed` to `fullSpeed` above it) and more again sliding. */
+    dust: {
+      capacity: 1400,
+      rate: 22,
+      minSpeed: 4,
+      fullSpeed: 30,
+      life: 1.6,
+      size: [1.2, 5.5],
+      rise: 0.6,
+      opacity: 0.32,
+      colour: 0xb39a76,
+      /** How much a slide adds, against full speed's. */
+      slide: 1.5,
     },
     /** A tyre slides once its slip passes this multiple of its peak (angle or ratio). */
     slideFrom: 1.15,
@@ -374,6 +394,38 @@ export const TUNING = {
       tail: 0.35,
       brake: 1,
     },
+  },
+  /** Rally stages (`race/stage.ts`). */
+  stage: {
+    /** Where the car stands at the start (samples into the road), and how much road runs on past the flying finish (m). */
+    startSample: 2,
+    finishRunout: 60,
+    /** The countdown to the start (s), and the time added for being put back on the road (s). */
+    countdown: 5,
+    penalty: 10,
+    /** Pace notes (`track/paceNotes.ts`). */
+    notes: {
+      /** Severity 1 to 6: a corner tighter than radii[s - 1] (m) is s; tighter than `hairpin` is a hairpin; looser than radii[5] isn't called. */
+      radii: [30, 45, 65, 95, 140, 220],
+      hairpin: 18,
+      /** A corner shorter than this isn't called (m); one longer than `long` is "long". */
+      minLength: 8,
+      long: 90,
+      /** The next call within `link` (m) is "into"; a gap of `callGap` (m) or more is called. */
+      link: 30,
+      callGap: 100,
+      /** A crest: the road's vertical curvature past this (1/m), measured over `crestSpan` (m) either side. */
+      crest: 0.0015,
+      crestSpan: 30,
+      /** Called this many seconds ahead of the car, at its speed (at least `ahead` m). */
+      callTime: 3.5,
+      ahead: 60,
+    },
+    /**
+     * The rivals' times (`ai/stageTimes.ts`): how many, the slack over their speed profile's time
+     * (what the AI really loses to gear changes and holding the line, measured), and a run's luck either way.
+     */
+    rivals: { count: 7, slack: 1.05, scatter: 0.015 },
   },
   /** Race replays: the race's moments (`race/raceMoments.ts`) and the director (`replay/director.ts`). */
   replay: {

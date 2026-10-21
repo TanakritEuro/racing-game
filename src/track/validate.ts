@@ -1,6 +1,7 @@
 // The rules every circuit keeps, built-in or drawn in the editor: a sensible length, no corner
 // tighter than 12 m, no grade over 12 %, no banking over 12°, no part of the circuit (with its
-// run-off) touching another, a straight start and grid, and a pit lane that fits. Each broken
+// run-off) touching another, a straight start and grid, and a pit lane that fits. A rally stage
+// keeps its own (STAGE_RULES): longer, hairpins down to 10 m and 15 % grades, no pits or grid. Each broken
 // rule comes back in words with where on the track it is, so the editor can mark it. Pure.
 
 import { TUNING } from '../config';
@@ -32,6 +33,13 @@ export const RULES = {
   grid: { length: 50, bend: 200 },
 } as const;
 
+/** A rally stage's rules: what differs from a circuit's. */
+export const STAGE_RULES = {
+  length: [2000, 12000],
+  radius: 10,
+  grade: 0.15,
+} as const;
+
 /** Every rule `track` breaks (none: it's a circuit). */
 export function validateTrack(track: Track): Problem[] {
   const { samples, length } = track;
@@ -39,9 +47,11 @@ export function validateTrack(track: Track): Problem[] {
   const spacing = length / n;
   const problems: Problem[] = [];
   const km = (m: number) => (m / 1000).toFixed(2);
+  const stage = !track.closed;
+  const R = stage ? { ...RULES, ...STAGE_RULES } : RULES;
 
-  if (length < RULES.length[0] || length > RULES.length[1]) {
-    problems.push({ rule: 'length', message: `It is ${km(length)} km long: a circuit is ${km(RULES.length[0])}–${km(RULES.length[1])} km.`, at: [] });
+  if (length < R.length[0] || length > R.length[1]) {
+    problems.push({ rule: 'length', message: `It is ${km(length)} km long: a ${stage ? 'stage' : 'circuit'} is ${km(R.length[0])}–${km(R.length[1])} km.`, at: [] });
   }
 
   /** The middle of each run of samples where `bad` holds, and the worst value in it. */
@@ -66,7 +76,7 @@ export function validateTrack(track: Track): Problem[] {
 
   const tight = runs((i) => {
     const k = Math.abs(curvature(track, i));
-    return k >= 1 / RULES.radius ? 1 / k : null;
+    return k >= 1 / R.radius ? 1 / k : null;
   });
   // (The worst of a tight run is its smallest radius: runs keeps the largest, so invert.)
   if (tight.length > 0) {
@@ -76,16 +86,17 @@ export function validateTrack(track: Track): Problem[] {
         return k > 0 ? 1 / k : Infinity;
       }),
     );
-    problems.push({ rule: 'radius', message: `${plural(tight.length, 'corner is', 'corners are')} tighter than ${RULES.radius} m (the tightest ${r.toFixed(1)} m).`, at: tight.map((t) => t.at) });
+    problems.push({ rule: 'radius', message: `${plural(tight.length, 'corner is', 'corners are')} tighter than ${R.radius} m (the tightest ${r.toFixed(1)} m).`, at: tight.map((t) => t.at) });
   }
 
   const steep = runs((i) => {
+    if (!track.closed && i === n - 1) return null;
     const g = Math.abs(samples[(i + 1) % n].y - samples[i].y) / spacing;
-    return g >= RULES.grade ? g : null;
+    return g >= R.grade ? g : null;
   });
   if (steep.length > 0) {
     const worst = Math.max(...steep.map((s) => s.worst));
-    problems.push({ rule: 'grade', message: `Too steep in ${plural(steep.length, 'place', 'places')}: ${Math.round(worst * 100)} % (at most ${RULES.grade * 100} %).`, at: steep.map((s) => s.at) });
+    problems.push({ rule: 'grade', message: `Too steep in ${plural(steep.length, 'place', 'places')}: ${Math.round(worst * 100)} % (at most ${Math.round(R.grade * 100)} %).`, at: steep.map((s) => s.at) });
   }
 
   const banked = runs((i) => (Math.abs(samples[i].bank) >= RULES.banking ? Math.abs(samples[i].bank) : null));
@@ -100,7 +111,7 @@ export function validateTrack(track: Track): Problem[] {
   const touching = new Set<number>();
   for (let i = 0; i < n; i += 2) {
     for (let j = i + 2; j < n; j += 2) {
-      if (Math.min(j - i, n - (j - i)) < near) continue;
+      if ((stage ? j - i : Math.min(j - i, n - (j - i))) < near) continue;
       const dx = samples[i].x - samples[j].x;
       const dz = samples[i].z - samples[j].z;
       const r = reach[i] + reach[j];
@@ -112,8 +123,11 @@ export function validateTrack(track: Track): Problem[] {
   }
   if (touching.size > 0) {
     const at = runs((i) => (touching.has(i) || touching.has(i - 1) ? 1 : null)).map((t) => t.at);
-    problems.push({ rule: 'overlap', message: `The circuit comes too close to itself in ${plural(at.length, 'place', 'places')} (its run-offs would touch).`, at });
+    problems.push({ rule: 'overlap', message: `The ${stage ? 'stage' : 'circuit'} comes too close to itself in ${plural(at.length, 'place', 'places')} (its run-offs would touch).`, at });
   }
+
+  // A stage has no grid or pits: its start is wherever the road begins.
+  if (stage) return problems;
 
   // A straight start and grid.
   const S = RULES.start;

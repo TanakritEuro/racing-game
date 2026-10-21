@@ -18,18 +18,21 @@ export function wetness(conditions: Conditions): number {
 export interface SurfaceGrip {
   grip: number;
   drag: number;
+  /** The tyre's curve stretched along slip (1 on a sealed surface; more on loose gravel: its peak comes later). */
+  slip: number;
 }
 
 /**
  * The grip and drag of surface `tag` at `wetness`, for a car at `speed` (m/s, for
  * aquaplaning). Dry, exactly the surfaces' own numbers. Writes into `out`.
  */
-export function surfaceGrip(tag: SurfaceTag | null, wet: number, speed: number, out: SurfaceGrip = { grip: 1, drag: 0 }): SurfaceGrip {
+export function surfaceGrip(tag: SurfaceTag | null, wet: number, speed: number, out: SurfaceGrip = { grip: 1, drag: 0, slip: 1 }): SurfaceGrip {
   const W = TUNING.weather;
-  const base = tag === 'kerb' || tag === 'grass' || tag === 'gravel' ? tag : 'asphalt';
-  const dry = TUNING.surfaces[base];
+  const base = tag === 'kerb' || tag === 'grass' || tag === 'gravel' || tag === 'dirt' ? tag : 'asphalt';
+  const dry: { grip: number; drag: number; slip?: number } = TUNING.surfaces[base];
   out.grip = dry.grip * (1 - wet * (1 - W.wetGrip[base]));
   out.drag = dry.drag;
+  out.slip = dry.slip ?? 1;
   if (tag === 'water' && wet > 0) {
     // Standing water: less grip even slowly, and above `from` the tyre starts to float.
     const A = W.water.aquaplane;

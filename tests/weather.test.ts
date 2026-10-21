@@ -12,10 +12,13 @@ const KMH_100 = 100 / 3.6;
 describe('surface grip in the weather', () => {
   it('is the surfaces’ own grip exactly when dry', () => {
     for (const tag of ['asphalt', 'kerb', 'grass', 'gravel'] as const) {
-      expect(surfaceGrip(tag, 0, 40)).toEqual(TUNING.surfaces[tag]);
+      expect(surfaceGrip(tag, 0, 40)).toEqual({ ...TUNING.surfaces[tag], slip: 1 });
     }
+    // A gravel road stretches the tyre's curve along slip.
+    expect(surfaceGrip('dirt', 0, 40)).toEqual(TUNING.surfaces.dirt);
+    expect(TUNING.surfaces.dirt.slip).toBeGreaterThan(1);
     // Water only stands on a wet road; dry, it is just road.
-    expect(surfaceGrip('water', 0, 40)).toEqual(TUNING.surfaces.asphalt);
+    expect(surfaceGrip('water', 0, 40)).toEqual({ ...TUNING.surfaces.asphalt, slip: 1 });
   });
 
   it('falls when wet, painted kerbs most, damp half way', () => {

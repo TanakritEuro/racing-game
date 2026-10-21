@@ -11,6 +11,7 @@
 // times come from those stamps at the sector lines, and the live delta compares the current
 // lap with the best lap's stamp at the same point on the track.
 
+import { TUNING } from '../config';
 import { nearestSample, type Track } from '../track/track';
 
 /** Three sectors: times, or null while not yet run. */
@@ -21,6 +22,12 @@ export interface ReferenceLap {
   time: number;
   sectors: [number, number, number];
   profile: Float32Array;
+}
+
+/** A stage's flying finish: the sample where the clock stops (`TUNING.stage.finishRunout` before the road ends). */
+export function finishSample(track: Track): number {
+  const n = track.samples.length;
+  return n - 1 - Math.round(TUNING.stage.finishRunout / (track.length / (n - 1)));
 }
 
 export class LapTimer {
@@ -36,6 +43,8 @@ export class LapTimer {
   lastValid = true;
   /** Sample indices where sectors 1 and 2 end (sector 3 ends at the line). */
   readonly sectorEnds: [number, number];
+  /** A stage's flying finish: the sample where the clock stops (a circuit's is the start line). */
+  readonly finish: number;
   /** The current lap's sector times so far. */
   sectors: Sectors = [null, null, null];
   /** The last completed lap's sectors and time profile. */
@@ -62,8 +71,21 @@ export class LapTimer {
     this.index = nearestSample(track, x, z);
     const n = track.samples.length;
     this.profile = new Float32Array(n);
-    const ends = track.def.sectors ?? [track.length / 3, (2 * track.length) / 3];
+    this.finish = track.closed ? 0 : finishSample(track);
+    // A stage's splits divide the timed road (start to flying finish) in three.
+    const timed = track.closed ? track.length : track.samples[this.finish].s;
+    const ends = track.def.sectors ?? [timed / 3, (2 * timed) / 3];
     this.sectorEnds = [Math.round((ends[0] / track.length) * n), Math.round((ends[1] / track.length) * n)];
+  }
+
+  /** A stage: the clock starts now (the countdown's zero), wherever the car is. */
+  startLap(time: number): void {
+    this.lapStart = time;
+    this.invalid = false;
+    this.sectors = [null, null, null];
+    this.profile.fill(0);
+    this.reached = this.index;
+    this.lastElapsed = 0;
   }
 
   /** Back to an out lap from (x, z), keeping the last and best laps. */
@@ -74,6 +96,11 @@ export class LapTimer {
     this.invalid = false;
     this.sectors = [null, null, null];
     this.reached = 0;
+  }
+
+  /** Add `seconds` to the run in progress (a stage's penalty): the clock reads that much more from now on. */
+  addPenalty(seconds: number): void {
+    if (this.lapStart !== null) this.lapStart -= seconds;
   }
 
   /** Void the lap in progress (e.g. the car was put back on the track). */
@@ -125,6 +152,13 @@ export class LapTimer {
     this.index = nearestSample(this.track, x, z, prev);
     const now = this.index;
     this.stamp(now, time);
+    // A stage: no laps, just the run from the start to the flying finish.
+    if (!this.track.closed) {
+      if (this.lapStart === null || now < this.finish) return false;
+      this.finishLap(time - this.lapStart);
+      this.lapStart = null;
+      return true;
+    }
 
     if (now > n * 0.4 && now < n * 0.6) this.passedHalf = true;
     const crossedForward = prev > n * 0.9 && now < n * 0.1;
