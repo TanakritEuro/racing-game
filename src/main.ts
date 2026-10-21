@@ -140,7 +140,7 @@ document.querySelector('#track-name')!.textContent = circuit.name.toUpperCase();
 // Race mode (?mode=race, Tab switches): ?difficulty=easy|medium|hard, ?opponents=0..7, ?laps=N.
 // The car: ?car=wren|kestrel|harrier (Kestrel by default). In a race everyone drives it, the
 // player with their setup for this circuit (?setup=default: as designed), the AI as designed.
-const carId = connected ? connected.setup.mine.toLowerCase() : season ? season.car.toLowerCase() : fromUrl ? params.get('car') : settings.start.car.toLowerCase();
+const carId = connected ? connected.setup.mine.toLowerCase() : season ? season.car.toLowerCase() : fromUrl ? params.get('car')?.toLowerCase() : settings.start.car.toLowerCase();
 const carDef = CARS.find((c) => c.name.toLowerCase() === carId) ?? KESTREL;
 const setups = new SetupStore();
 const setup: Setup = params.get('setup') === 'default' ? {} : setups.load(circuit.id, carDef.name);
@@ -179,7 +179,7 @@ async function connect(joining: boolean): Promise<{ link: Link; setup: OnlineSet
   const back = { label: 'Back to menu', onClick: () => goTo({}) };
   document.querySelector('#loading')?.remove();
   const names = CARS.map((c) => c.name);
-  const car = (CARS.find((c) => c.name.toLowerCase() === params.get('car')) ?? KESTREL).name;
+  const car = (CARS.find((c) => c.name.toLowerCase() === params.get('car')?.toLowerCase()) ?? KESTREL).name;
   try {
     if (!joining) {
       panel.show('Online race', 'Opening a room…', { buttons: [back] });
