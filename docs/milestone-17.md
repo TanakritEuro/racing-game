@@ -1,6 +1,9 @@
 # Milestone 17 plan: night racing
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (how dark, braking points and cars ahead at
+night, dusk to night's pace, the lamps) stay open.
 
 Approved as written: night racing, the AI unaffected by the dark, dusk to night as a race option.
 
