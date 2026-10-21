@@ -8,7 +8,8 @@ rear-, front- and all-wheel drive; synthesised engine and tyre sounds, skid mark
 sparks. A four-round championship against the same seven drivers, kept between visits. Race
 a friend online: one hosts and gets a four-character room code, the other joins with it,
 with or without AI drivers. Watch any race back as television, every car, with a director
-following the battles. Race by day, at dusk or at night under floodlights and headlights. Set
+following the battles. Race by day, at dusk or at night under floodlights and headlights. Rally: two stages of
+forest gravel and mountain hairpins against the clock, with a co-driver's pace notes. Set
 your car up in the garage (springs, anti-roll bars, dampers, ride height, wings, brake bias,
 differential, gearing) for each circuit. Race in the dry, the damp or the wet: less grip,
 slippery kerbs, standing water that floats the car at speed, rain and spray. In longer races

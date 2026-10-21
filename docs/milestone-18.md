@@ -1,6 +1,38 @@
 # Milestone 18 plan: rally stages
 
-## Status: planned, waiting for your approval
+## Status: built, in playtesting
+
+Approved as written: rally stages, pace notes spoken by the browser's voice (off by default),
+stages in the editor later.
+
+Measured (headless): on gravel the Kestrel corners at 0.75 g on the skidpad (0.98 on asphalt),
+its fronts gripping best at a larger slip angle (0.16 against 0.12 rad), stops from 100 km/h
+in 56 m (39 m), and corners at 0.51 g on wet gravel. The AI drives both stages to the finish
+in the Kestrel and the Osprey with nothing put back, its time among the hard rivals' (Kettle
+Wood in the Kestrel ~150 s against rivals of 146–152 s). Every circuit builds, validates and
+drives exactly as before. Pace notes for both stages: Kettle Wood fast (severity 4–6, two
+crests called), Hightor Pass with its hairpins.
+
+Checked in the browser: Rally in the start menu with the two stages; Kettle Wood in the
+Osprey (the countdown, the gravel road through the forest, dust, the notes coming up, the
+clock, splits, and at the flying finish 2:18.4, P1 against medium rivals); Hightor Pass in the
+Finch (tarmac hairpins up, gravel over the top, the notes and splits). No console errors.
+
+Where the build differs from the plan below:
+
+- **No jump starts:** through the countdown the car is held on its brakes (you can rev it),
+  as on a race grid. Held, a keyboard driver pressing W would otherwise always jump the start.
+- **Hightor Pass is 4.7 km**, not ~6: three hairpins up (tarmac) and the plateau and
+  descent on gravel.
+- **Gravel tyre behaviour** is one number on the surface (`slip`): the tyre's curve is
+  stretched along slip, so it grips best further into a slide and falls away more slowly;
+  ABS and traction control aim for the stretched peak.
+- **A stage has no track limits:** off the road is only slower; put back on it (R), the run
+  takes a 10 s penalty rather than being voided.
+- **The woods:** a `forest` option for scenery lines a stage with trees close behind its
+  banks (the circuits' trees stay scattered).
+- **One commit for the simulation side** (open roads, gravel, the stages, runs, notes and
+  rivals) rather than three: they were built and tested together.
 
 Every road today is a closed circuit of asphalt. This milestone adds rally: point-to-point
 stages on loose surfaces, run one car at a time against the clock, with a co-driver reading

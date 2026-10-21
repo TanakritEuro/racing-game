@@ -26,7 +26,8 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 Milestones 1–17 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing, car setup, weather, tyre
 wear and pit stops, a track editor, touch controls, career mode, front- and all-wheel drive, race
-replays, night racing) are done; **Milestone 18 (rally stages) is planned** (`docs/milestone-18.md`).
+replays, night racing) are done; **Milestone 18 (rally stages) is built and in playtesting**
+(`docs/milestone-18.md`).
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
@@ -68,6 +69,16 @@ light baked into the track, terrain and scenery (`render/nightLight.ts`); the sk
 fog (`render/lighting.ts`); towers (`render/floodlightView.ts`); every car's head, tail and
 brake lights, and real headlights on the four cars nearest the camera (`render/carLights.ts`).
 The start menu's Time row or `?time=`; championships draw it per round; online the host's.
+
+Rally (`?mode=rally&track=<stage>`, the start menu's Rally): two stages (`track/stages.ts`:
+**Kettle Wood**, 5.4 km of forest gravel; **Hightor Pass**, 4.7 km, tarmac hairpins up and
+gravel down), open roads (`TrackDef.closed: false`: samples from start to finish, nothing
+wrapping; `sampleIndex` holds an index at a stage's ends), gravel as a road surface (`dirt`:
+less grip, the tyre's curve stretched along slip). A run (`race/stage.ts`): a countdown held
+on the line, the clock from its zero to a flying finish, splits, 10 s for being put back, the
+best and ghost kept as on a circuit; pace notes worked out from the road
+(`track/paceNotes.ts`, on screen and optionally spoken: `ui/paceNotesHud.ts`); seven rivals'
+times from their speed profiles (`ai/stageTimes.ts`); dust; the stage HUD (`ui/stageHud.ts`).
 
 Race mode (`?mode=race`, or Tab): up to seven AI opponents (`ai/`) on a staggered grid,
 five red lights, positions, gaps and results (`race/race.ts`). Each circuit gets a
