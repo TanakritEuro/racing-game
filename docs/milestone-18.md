@@ -1,6 +1,9 @@
 # Milestone 18 plan: rally stages
 
-## Status: built, in playtesting
+## Status: done
+
+Closed without playtest answers; the questions (driving on gravel, the pace notes and the
+voice, Hightor's tarmac and gravel, the rivals' times, the forest and dust) stay open.
 
 Approved as written: rally stages, pace notes spoken by the browser's voice (off by default),
 stages in the editor later.

@@ -23,11 +23,11 @@ Requires Node 20.19+ or 22.12+ (Vite 8).
 
 ## Current state
 
-Milestones 1–17 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
+Milestones 1–18 (tyres and drivetrain, handling and controls, tracks, time trial and ghosts,
 AI drivers, presentation, a championship, two-player online racing, car setup, weather, tyre
 wear and pit stops, a track editor, touch controls, career mode, front- and all-wheel drive, race
-replays, night racing) are done; **Milestone 18 (rally stages) is built and in playtesting**
-(`docs/milestone-18.md`).
+replays, night racing, rally stages) are all done (`docs/milestone-1.md` to `milestone-18.md`);
+no milestone is in progress.
 
 Four circuits (`track/circuits.ts`): **Harrowmere** (4.6 km, fast and flowing, rolling
 farmland), **Saltmarsh** (3.1 km, tight and technical, gravel at the hairpins),
